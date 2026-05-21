@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>LINE Login Callback</title>
+</head>
+<body>
+  <script>
+    // รับ authorization code จาก URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+    const error = urlParams.get('error');
+
+    if (window.opener) {
+      // กรณีถูกเปิดด้วย Popup ให้ส่งกลับผ่าน postMessage เป็น JSON String ป้องกัน Dart JS Interop Error
+      if (error) {
+        window.opener.postMessage(JSON.stringify({ type: 'LINE_LOGIN_ERROR', error: error }), '*');
+      } else if (code) {
+        window.opener.postMessage(JSON.stringify({ type: 'LINE_LOGIN_SUCCESS', code: code, state: state }), '*');
+      }
+      // ปิดหน้าต่างตัวเอง
+      window.close();
+    } else {
+      // Fallback: ถ้าไม่ใช่ Popup ให้ Redirect กลับหน้าหลัก
+      if (error) {
+        window.location.replace('/#/line_error=' + encodeURIComponent(error));
+      } else if (code) {
+        window.location.replace('/#/line_code=' + encodeURIComponent(code) + '&line_state=' + encodeURIComponent(state || ''));
+      } else {
+        window.location.replace('/');
+      }
+    }
+  </script>
+</body>
+</html>

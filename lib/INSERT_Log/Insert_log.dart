@@ -1,0 +1,82 @@
+// ignore_for_file: unused_import, unused_local_variable, unnecessary_null_comparison, unused_field, override_on_non_overriding_member, duplicate_import, must_be_immutable, body_might_complete_normally_nullable
+import 'dart:convert';
+import 'dart:html' if (dart.library.io) 'package:chaoperty_user/fake_html.dart';
+
+import 'package:dart_ipify/dart_ipify.dart';
+import 'package:device_marketing_names/device_marketing_names.dart';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../Constant/Myconstant.dart';
+import 'dart:js' if (dart.library.io) 'package:chaoperty_user/fake_js.dart'
+    as js;
+
+class Insert_log {
+  static void Insert_logs(frm_, fdo_) async {
+    String day_ =
+        '${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}';
+    String Tim_ =
+        '${DateTime.now().hour}:${DateTime.now().minute}:${DateTime.now().second}';
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    var ren = preferences.getString('renTalSer');
+    var ciddoc_ = preferences.getString('usercid');
+    // var ser = preferences.getString('ser');
+    // var position = preferences.getString('position');
+    // var fname = preferences.getString('fname');
+    // var lname = preferences.getString('lname');
+    // var email = preferences.getString('email');
+    // var utype = preferences.getString('utype');
+    // var verify = preferences.getString('verify');
+    // var permission = preferences.getString('permission');
+    // Make an HTTP request to the IP geolocation API
+    http.Response response = await http.get(Uri.parse('https://api.ipdata.co'));
+
+    // Parse the response JSON
+    Map<String, dynamic> data = json.decode(response.body);
+
+    // Print the user's IP address and location
+    // print('IP address: ${data['ip']}');
+    //print('City: ${data['city']}');
+    // print('Region: ${data['region']}');
+    // print('Country: ${data['country_name']}');
+    final ipv4 = await Ipify.ipv4();
+    String singleDeviceName = "Unknown";
+    String singleDeviceNameFromModel = "Unknown";
+    String deviceNames = "Unknown";
+    String deviceNamesFromModel = "Unknown";
+    const model = "Device : ";
+    final deviceMarketingNames = DeviceMarketingNames();
+    final currentSingleDeviceName = await deviceMarketingNames.getSingleName();
+    final currentDeviceNames = await deviceMarketingNames.getNames();
+    singleDeviceName = currentSingleDeviceName;
+    deviceNames = currentDeviceNames;
+    singleDeviceNameFromModel =
+        deviceMarketingNames.getSingleNameFromModel(DeviceType.android, model);
+    deviceNamesFromModel =
+        deviceMarketingNames.getNamesFromModel(DeviceType.android, model);
+    String? atype = '0';
+    String datex = '$day_';
+    String? timex = '$Tim_';
+    String? ip = '$singleDeviceName:$ipv4';
+    String? uid = '1';
+    String? username = '$ciddoc_';
+    String? frm = '$frm_';
+    String? fdo = '$fdo_';
+
+    // print(ipv4);
+    String url =
+        '${MyConstant().domain}/Insyslog_ChaoUser.php?isAdd=true&ren=$ren&atype=$atype&datex=$datex&timex=$timex&ip=$ip&uid=$uid&username=$username&frm=$frm&fdo=$fdo';
+
+    try {
+      var response = await http.get(Uri.parse(url));
+
+      var result = json.decode(response.body);
+
+      if (result.toString() == 'true') {
+        //   print('true');
+      } else {}
+    } catch (e) {
+      //  print(e);
+    }
+  }
+}

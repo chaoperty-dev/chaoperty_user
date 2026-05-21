@@ -1,0 +1,303 @@
+name: chaoperty_user
+description: A new Flutter project.
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.9+9
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.2
+  cupertino_stepper: ^0.2.1
+  dio: ^5.0.1
+  # im_stepper: ^1.0.1+1
+  # slide_switcher: ^1.1.2
+  auto_size_text: ^3.0.0
+  dropdown_button2: ^2.3.9
+  flutter_admin_scaffold: ^1.1.2
+  side_sheet: ^1.0.3
+  scroll_pos: ^0.5.0
+  flutter_easy_table: ^0.0.1+1
+ 
+  # image_picker_web: ^3.1.1 #no web
+  # pluto_grid: ^5.4.8
+  data_tables: ^1.4.0
+  responsive_table: ^0.2.0+2
+  expandable_datatable: ^0.2.0
+  listview_ex: ^0.0.2
+  grouped_buttons_ns: ^1.0.0 #no web
+
+  group_radio_button: ^1.3.0
+  shared_preferences: ^2.0.15
+  fl_pin_code: ^0.0.9
+  random_string: ^2.3.1
+  email_otp: ^3.1.0
+  email_auth: ^2.0.0
+  tap_debouncer: ^2.0.2
+  image_picker: ^1.2.1
+  file_picker: ^10.3.10
+  # file_picker: ^8.0.0  # v2 embedding support
+  mysql1: ^0.20.0
+  # date_time_picker: ^2.1.0
+  printing: ^5.9.3
+  syncfusion_flutter_xlsio: ^32.2.4
+  file_saver: ^0.2.0
+  permission_handler: ^12.0.1  # Downgrade compatibility for Flutter 3.10.5
+  # permission_handler_web:  # Removed due to conflict with permission_handler 11.3.1
+  syncfusion_flutter_datagrid_export: ^32.2.4
+  # excel_dart: ^3.0.0  # Commented out due to archive dependency conflict with syncfusion_flutter_xlsio
+
+  image: ^4.0.17
+  pdf: ^3.10.1
+  syncfusion_flutter_pdf: ^32.2.4
+  font_awesome_flutter: ^10.3.0
+  # file_cryptor: ^0.0.3  # Commented out due to archive dependency conflict with syncfusion_flutter_xlsio
+  path_provider: ^2.0.9
+  # pdfjs: ^2.5.207+3
+  intl: 0.18.1
+  responsive_grid_list: ^1.3.0
+  crc: ^0.0.2
+  crc32_checksum: ^0.0.2
+  cached_network_image: ^3.3.1 # no windows
+  http_parser: ^4.0.0
+  syncfusion_flutter_signaturepad: ^32.2.4
+  url_launcher: 6.1.14
+  share_plus: ^12.0.1
+  pretty_qr_code: ^3.6.0
+  timer_builder: ^2.0.0
+  fast_image_resizer: ^0.0.2
+  # webviewx: ^0.2.2
+  grouped_list: ^6.0.0
+  group_button: ^5.3.0
+  provider: ^6.0.5
+  syncfusion_flutter_datepicker: ^32.2.4
+  syncfusion_localizations: ^32.2.4
+  flutter_image_compress: ^2.0.3
+  typed_data: ^1.3.2
+  syncfusion_flutter_pdfviewer: ^32.2.4
+  syncfusion_flutter_barcodes: ^32.2.4
+  # open_file_plus:  # Commented out - v1 embedding incompatible
+  # excel: ^2.1.0  # Commented out due to archive dependency conflict with syncfusion_flutter_xlsio
+  xml: 6.3.0
+  loading_indicator: ^3.1.1
+  bottom_sheet: ^4.0.0
+  pinput: ^6.0.2
+  top_snackbar_flutter: ^3.1.0
+  awesome_snackbar_content: ^0.1.3
+  x_message: ^0.1.0
+  widgets_to_image: ^2.0.1
+  ficonsax: ^0.0.3
+  webview_flutter: ^4.4.0
+  carousel_slider: ^5.0.0
+  marquee: ^2.2.3
+  animated_notch_bottom_bar: ^1.0.4
+  fluttertoast: ^9.0.0 # Downgraded for Dart SDK 3.0.5 compatibility
+  # font_awesome_flutter: ^10.1.0
+  flutter_rating_bar: ^4.0.1
+  # intl: ^0.17.0
+  animations: ^2.0.3
+  loading_animation_widget: ^1.2.1
+  image_downloader_web: ^2.0.2
+  # image_gallery_saver: ^2.0.3
+  gal: ^2.3.0
+  flutter_file_dialog: ^3.0.0
+  # pasteboard: ^0.4.0  # Removed - unused and incompatible SDK version
+  panara_dialogs: ^0.1.4
+  translator: ^1.0.0
+
+  flutter_timer_countdown: ^1.0.7
+
+  flutter_localizations:
+    sdk: flutter
+  device_marketing_names: ^1.1.7
+  dart_ipify: ^1.1.1
+  universal_html: ^2.2.4
+  im_stepper: ^1.0.0
+  otp_timer_button: ^1.1.1
+  qr: ^3.0.1
+  qr_flutter: ^4.1.0
+  chaoperty_floating_loader: ^0.1.9
+  floating_bottom_navigation_bar: ^1.5.2
+  # mobile_scanner: ^5.2.3
+  # syncfusion_flutter_pdfviewer: ^20.4.54
+
+dependency_overrides:
+  asn1lib: 1.5.0
+  uuid: 4.2.2
+  http: 1.1.0
+  intl: 0.18.1
+  win32: 5.0.0
+  xml: 6.3.0
+  js: 0.6.7
+
+  # อย่าใช้ ^
+  pdf_widget_wrapper: 1.0.4
+  # fading_edge_scrollview: ^4.1.1
+
+  # image_picker stack สำหรับ Dart 3.0.5 (ชุดที่นิ่ง)
+  # image_picker: 0.8.9
+  # image_picker_android: 0.8.9+3
+  # image_picker_ios: 0.8.9+1
+  # image_picker_for_web: 2.2.0
+  # image_picker_platform_interface: 2.9.3
+
+  # url_launcher web (กัน Dart>=3.1)
+  # url_launcher: 6.1.14
+  # url_launcher_platform_interface: 2.3.1
+  # url_launcher_web: 2.0.19
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+
+# For information on the generic Dart part of this file, see the
+# following page: https://dart.dev/tools/pub/pubspec
+
+# The following section is specific to Flutter packages.
+flutter:
+  # The following line ensures that the Material Icons font is
+  # included with your application, so that you can use the icons in
+  # the material Icons class.
+  uses-material-design: true
+
+  # To add assets to your application, add an assets section, like this:
+  assets:
+    - images/
+    - images/TP1/
+    - images/TP2/
+    - images/TP3/
+    - images/TP4/
+    - images/TP4_1/
+    - images/LogoBank/
+    - assets/images/LogoBank/
+    - images/card/
+    - assets/images/
+    - assets/design_course/
+    - assets/fitness_app/
+    - assets/hotel/
+    - assets/introduction_animation/
+    - images/icon_thaiqr.png
+
+  # An image asset can refer to one or more resolution-specific "variants", see
+  # https://flutter.dev/assets-and-images/#resolution-aware
+
+  # For details regarding adding assets from package dependencies, see
+  # https://flutter.dev/assets-and-images/#from-packages
+
+  # To add custom fonts to your application, add a fonts section here,
+  # in this "flutter" section. Each entry in this list should have a
+  # "family" key with the font family name, and a "fonts" key with a
+  # list giving the asset and other descriptors for the font. For
+  # example:
+  fonts:
+    - family: WorkSans
+      fonts:
+        - asset: assets/fonts/WorkSans-Regular.ttf
+        - asset: assets/fonts/WorkSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/WorkSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/WorkSans-Bold.ttf
+          weight: 700
+    - family: Roboto
+      fonts:
+        - asset: assets/fonts/Roboto-Bold.ttf
+        - asset: assets/fonts/Roboto-Regular.ttf
+        - asset: assets/fonts/Roboto-Medium.ttf
+          weight: 400
+
+    - family: ThaiFont
+      fonts:
+        - asset: fonts/Sarabun-Medium.ttf
+        - asset: fonts/Sarabun-Light.ttf
+        - asset: downloadFile/ใบเสนอราคาdownloadFile.pdf
+
+    - family: Pacifico
+      fonts:
+        - asset: fonts/Pacifico-Regular.ttf
+    #       - asset: fonts/Schyler-Italic.ttf
+    #         style: italic
+    - family: Bangers
+      fonts:
+        - asset: fonts/Bangers-Regular.ttf
+    #       - asset: fonts/TrajanPro_Bold.ttf
+    #         weight: 700
+
+    - family: LINESeed1
+      fonts:
+        - asset: fonts/LINESeedSansTH_XBd.ttf
+
+    - family: LINESeed2
+      fonts:
+        - asset: fonts/LINESeedSansTH_Rg.ttf
+
+    - family: DoHyeon
+      fonts:
+        - asset: fonts/DoHyeon-Regular.ttf
+
+    - family: Righteous
+      fonts:
+        - asset: fonts/Righteous-Regular.ttf
+
+    - family: Saysettha
+      fonts:
+        - asset: fonts/Saysettha-OT.ttf
+
+    - family: Phetsarath
+      fonts:
+        - asset: fonts/Phetsarath-OT.ttf
+
+    - family: THSarabunNew
+      fonts:
+        - asset: fonts/THSarabunNew.ttf
+
+    - family: Loas
+      fonts:
+        - asset: fonts/SAYSETTA.TTF
+
+    - family: NotoSansLaos
+      fonts:
+        - asset: fonts/NotoSansLao.ttf
+
+    - family: NotoSerif
+      fonts:
+        - asset: fonts/NotoSerif.ttf
+
+    - family: NotoSansLaoRegular
+      fonts:
+        - asset: fonts/NotoSansLao-Regular.ttf
+  # For details regarding fonts from package dependencies,
+  # see https://flutter.dev/custom-fonts/#from-packages

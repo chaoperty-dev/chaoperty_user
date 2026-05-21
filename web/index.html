@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  
+  <!-- ===== SEO Meta Tags ===== -->
+  <title>Chaoperty - ระบบจัดการอสังหาริมทรัพย์ | Property Management System</title>
+  <meta name="description" content="Chaoperty - ระบบจัดการอสังหาริมทรัพย์ครบวงจร สำหรับผู้เช่าและผู้ใช้งาน ติดตามค่าเช่า ชำระเงิน และจัดการสัญญาได้ง่ายผ่านระบบออนไลน์">
+  <meta name="keywords" content="chaoperty, property management, ระบบจัดการอสังหาริมทรัพย์, ผู้เช่า, tenant, ค่าเช่า, rent, สัญญาเช่า, contract">
+  <meta name="author" content="TraishiTech">
+  <meta name="robots" content="index, follow">
+  <meta name="googlebot" content="index, follow">
+  
+  <!-- ===== Canonical URL ===== -->
+  <link rel="canonical" href="/">
+  
+  <!-- ===== Open Graph / Facebook ===== -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="/">
+  <meta property="og:title" content="Chaoperty - ระบบจัดการอสังหาริมทรัพย์">
+  <meta property="og:description" content="ระบบจัดการอสังหาริมทรัพย์ครบวงจร สำหรับผู้เช่าและผู้ใช้งาน">
+  <meta property="og:image" content="/icons/Icon-512.png">
+  <meta property="og:locale" content="th_TH">
+  <meta property="og:site_name" content="Chaoperty">
+  
+  <!-- ===== Twitter Card ===== -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="/">
+  <meta name="twitter:title" content="Chaoperty - ระบบจัดการอสังหาริมทรัพย์">
+  <meta name="twitter:description" content="ระบบจัดการอสังหาริมทรัพย์ครบวงจร สำหรับผู้เช่าและผู้ใช้งาน">
+  <meta name="twitter:image" content="/icons/Icon-512.png">
+  
+  <!-- ===== Structured Data (JSON-LD) ===== -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Chaoperty",
+    "description": "ระบบจัดการอสังหาริมทรัพย์ครบวงจรสำหรับผู้เช่า",
+    "url": "/",
+    "applicationCategory": "BusinessApplication",
+    "operatingSystem": "Any",
+    "inLanguage": "th",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "THB"
+    }
+  }
+  </script>
+  
+  <!-- ===== Mobile & App Meta ===== -->
+  <meta name="flutter-renderer" content="canvaskit">
+  <meta name="theme-color" content="#4CAF50">
+  <meta name="msapplication-TileColor" content="#4CAF50">
+  <meta name="msapplication-navbutton-color" content="#4CAF50">
+  
+  <!-- ===== Preload Critical Resources ===== -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+  <link rel="preload" href="flutter.js" as="script">
+  <link rel="preload" href="main.dart.js" as="script">
+  <link rel="prefetch" href="/icons/Icon-192.png">
+
+  <!-- บังคับ browser ไม่ให้ cache index.html -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <!-- Viewport: ป้องกัน zoom และควบคุม touch บน LINE/Safari -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Chaoperty">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <style>
+    /* ป้องกัน LINE WebView pull-to-dismiss และ overscroll ทุก platform */
+    html, body {
+      overflow: hidden;
+      overscroll-behavior: none;
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      /* ป้องกัน browser จัดการ touch gesture เอง */
+      touch-action: none;
+    }
+    /* Flutter CanvasKit canvas */
+    flt-glass-pane {
+      touch-action: none !important;
+    }
+  </style>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png" />
+
+  <link rel="manifest" href="manifest.json">
+
+  <!-- flutter_build_config ต้องอยู่ก่อน flutter.js เสมอ (Flutter 3.22+) -->
+  <script>
+    {{flutter_build_config}}
+  </script>
+
+  <!-- This script adds the flutter initialization JS code -->
+  <script src="flutter.js" defer></script>
+
+  <!-- PDF.js -->
+  <script src="//cdnjs.cloudflare.com/ajax/libs/pdf.js/2.8.335/pdf.min.js"></script>
+  <script type="text/javascript">
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdnjs.cloudflare.com/ajax/libs/pdf.js/2.8.335/pdf.worker.min.js";
+  </script>
+
+  <!-- Security & Optimization (Production Only) -->
+  <script>
+    (function () {
+      // ใช้บน host ที่ไม่ใช่ localhost / 127.0.0.1 (Production)
+      var isProd =
+        location.hostname !== 'localhost' &&
+        location.hostname !== '127.0.0.1';
+
+      if (!isProd) {
+        return; // dev mode ไม่ต้องบล็อคอะไร
+      }
+
+      // บล็อคคีย์ลัด DevTools บางชุด
+      document.addEventListener('keydown', function (e) {
+        // normalize key (รองรับทั้ง keyCode กับ key ปกติ)
+        var key = e.key || e.keyCode;
+
+        // F12 / F5
+        if (key === 'F5' || key === 'F12' || key === 123) {
+          e.preventDefault();
+          return false;
+        }
+
+        // Ctrl+Shift+I / Ctrl+Shift+J
+        if (e.ctrlKey && e.shiftKey && (key === 'I' || key === 'J' || key === 73 || key === 74)) {
+          e.preventDefault();
+          return false;
+        }
+
+        // Ctrl+U
+        if (e.ctrlKey && (key === 'U' || key === 85)) {
+          e.preventDefault();
+          return false;
+        }
+      });
+
+      // บล็อคคลิกขวา
+      document.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+      });
+    })();
+  </script>
+</head>
+
+<body>
+  <noscript>
+    <div style="text-align: center; padding: 50px; font-family: sans-serif;">
+      <h1>Chaoperty</h1>
+      <p>กรุณาเปิดใช้งาน JavaScript เพื่อใช้งานระบบ</p>
+      <p>Please enable JavaScript to use this application.</p>
+    </div>
+  </noscript>
+  
+  <script>
+    // ป้องกัน LINE WebView pull-to-dismiss และ iOS Safari overscroll
+    // ต้องใช้ passive: false เพื่อให้ preventDefault() ทำงานได้
+    document.addEventListener('touchmove', function (e) {
+      e.preventDefault();
+    }, { passive: false });
+
+    // ป้องกัน double-tap zoom บน iOS
+    var lastTouchEnd = 0;
+    document.addEventListener('touchend', function (e) {
+      var now = Date.now();
+      if (now - lastTouchEnd < 300) {
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, { passive: false });
+  </script>
+
+  <script>
+    (function () {
+      if (!('serviceWorker' in navigator)) {
+        window.addEventListener('load', function () { _flutter.loader.load(); });
+        return;
+      }
+
+      // ทุก session ใหม่ → unregister SW เก่า + ล้าง cache → reload
+      // ทำให้แน่ใจว่าได้ version ล่าสุดทุกครั้งที่เปิด LINE ใหม่
+      if (!sessionStorage.getItem('_sw_done')) {
+        sessionStorage.setItem('_sw_done', '1');
+
+        Promise.all([
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }),
+          caches.keys().then(function (names) {
+            return Promise.all(names.map(function (n) { return caches.delete(n); }));
+          })
+        ]).then(function () {
+          window.location.reload(true);
+        });
+
+        return; // รอ reload — ไม่โหลด Flutter ในรอบนี้
+      }
+
+      // reload แล้ว → โหลด Flutter ปกติ
+      window.addEventListener('load', function () {
+        _flutter.loader.load();
+      });
+    })();
+  </script>
+</body>
+
+</html>

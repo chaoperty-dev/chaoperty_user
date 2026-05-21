@@ -1,0 +1,19 @@
+# Chaoperty User - Apache Cache Control
+# อัปโหลดไฟล์นี้ไปที่โฟลเดอร์ /user/ บน server พร้อมกับ build output
+
+# ไม่ cache index.html และ service worker เด็ดขาด
+<FilesMatch "^(index\.html|flutter_service_worker\.js)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires "0"
+</FilesMatch>
+
+# ไฟล์ที่มี hash ใน filename cache ได้ยาว (เปลี่ยน build ทุกครั้ง filename จะเปลี่ยนเอง)
+<FilesMatch "\.(js|css|wasm|png|jpg|jpeg|gif|ico|svg|ttf|woff|woff2)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+
+# manifest.json ไม่ต้อง cache นาน
+<FilesMatch "^manifest\.json$">
+    Header set Cache-Control "no-cache"
+</FilesMatch>

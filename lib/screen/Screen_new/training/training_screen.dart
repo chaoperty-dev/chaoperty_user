@@ -1,0 +1,549 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'package:loading_animation_widget/loading_animation_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../Constant/Myconstant.dart';
+import '../../../Model/GetCustomer_Model.dart';
+import '../../../Model/GetInvoice_Model.dart';
+import '../../../Model/GetTeNant_Model.dart';
+import '../../../main.dart';
+import '../fitness_app_theme.dart';
+import '../ui_view/area_list_view.dart';
+import '../ui_view/running_view.dart';
+import '../ui_view/title_view.dart';
+import '../ui_view/workout_view.dart';
+import 'package:http/http.dart' as http;
+
+class TrainingScreen extends StatefulWidget {
+  const TrainingScreen({Key? key, this.animationController}) : super(key: key);
+
+  final AnimationController? animationController;
+  @override
+  _TrainingScreenState createState() => _TrainingScreenState();
+}
+
+class _TrainingScreenState extends State<TrainingScreen>
+    with TickerProviderStateMixin {
+  Animation<double>? topBarAnimation;
+
+  List<Widget> listViews = <Widget>[];
+  List<CustomerModel> customerModels = [];
+  List<TeNantModel> teNantModels = [];
+  List<InvoiceModel> _InvoiceModels = [];
+  final ScrollController scrollController = ScrollController();
+  double topBarOpacity = 0.0;
+  DateTime _DateTimeNew = DateTime.now();
+  String? Ser_re,
+      renTal_user,
+      renTal_name,
+      Value_cid,
+      custno_,
+      cus_ser,
+      cus_cname,
+      cus_sname,
+      cus_email,
+      cus_photo,
+      cus_address,
+      cus_contact,
+      cus_stype,
+      cus_tel,
+      cus_tax,
+      cus_imglogo_,
+      cus_foder,
+      cus_username,
+      cus_password,
+      cus_lintid,
+      cus_lang;
+  @override
+  void initState() {
+    super.initState();
+    checkPreferance()
+        .then((value) => read_GC_tenant())
+        .then((value) => red_Trans_bill().then((value) {
+              if (!mounted) return;
+              if (widget.animationController == null) return;
+              topBarAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+                  CurvedAnimation(
+                      parent: widget.animationController!,
+                      curve: Interval(0, 0.5, curve: Curves.fastOutSlowIn)));
+              addAllListData();
+
+              scrollController.addListener(() {
+                if (!mounted) return;
+                if (scrollController.offset >= 24) {
+                  if (topBarOpacity != 1.0) {
+                    setState(() {
+                      topBarOpacity = 1.0;
+                    });
+                  }
+                } else if (scrollController.offset <= 24 &&
+                    scrollController.offset >= 0) {
+                  if (topBarOpacity != scrollController.offset / 24) {
+                    setState(() {
+                      topBarOpacity = scrollController.offset / 24;
+                    });
+                  }
+                } else if (scrollController.offset <= 0) {
+                  if (topBarOpacity != 0.0) {
+                    setState(() {
+                      topBarOpacity = 0.0;
+                    });
+                  }
+                }
+              });
+            }))
+        // ป้องกัน unhandled exception crash บน iOS Safari
+        .catchError((e) {
+      if (mounted) addAllListData();
+    });
+  }
+
+  Future<Null> checkPreferance() async {
+    DateTime currentDate = DateTime.now();
+    String new_Url = MyConstant().domain_chao;
+
+    String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
+
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    String? DateLogin;
+    setState(() {
+      Ser_re = preferences.getString('renTalSer');
+      renTal_user = preferences.getString('renTalSer');
+      renTal_name = preferences.getString('renTalName');
+      custno_ = preferences.getString('custno');
+      DateLogin = preferences.getString('Date_Login');
+      cus_ser = preferences.getString('ser');
+      cus_cname = preferences.getString('cname');
+      cus_sname = preferences.getString('sname');
+      cus_email = preferences.getString('email');
+      cus_photo = preferences.getString('photo');
+      cus_address = preferences.getString('address');
+      cus_contact = preferences.getString('contact');
+      cus_stype = preferences.getString('stype');
+      cus_tel = preferences.getString('tel');
+      cus_tax = preferences.getString('tax');
+      cus_foder = preferences.getString('foder');
+      cus_username = preferences.getString('UsernameUSer');
+      cus_password = preferences.getString('pass_word');
+      cus_lintid = preferences.getString('lintid');
+      cus_lang = preferences.getString('lang');
+    });
+    if (cus_photo != null ||
+        cus_photo.toString() != '' ||
+        cus_photo.toString() != 'null') {
+      cus_imglogo_ = '$new_Url/files/$cus_foder/contract/$cus_photo';
+    }
+    String url =
+        '${MyConstant().domain}/Gc_customer_user.php?isAdd=true&ren=$Ser_re&cusno=$custno_';
+
+    try {
+      var response = await http.get(Uri.parse(url));
+      var result = json.decode(response.body);
+      for (var map in result) {
+        CustomerModel customerModel = CustomerModel.fromJson(map);
+        if (mounted) {
+          setState(() {
+            customerModels.add(customerModel);
+          });
+        }
+      }
+    } catch (e) {
+      // ป้องกัน crash บน iOS Safari เมื่อ API ล้มเหลว
+    }
+  }
+
+  Future<Null> read_GC_tenant() async {
+    if (teNantModels.isNotEmpty) {
+      setState(() {
+        teNantModels.clear();
+      });
+    }
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    double total = 0.00;
+    var ren = preferences.getString('renTalSer');
+    var custno_S = preferences.getString('custno');
+    String url =
+        '${MyConstant().domain}/GC_tenantAll.php?isAdd=true&ren=$ren&custno=$custno_S';
+    //  '${MyConstant().domain}/GC_tenantAll.php?isAdd=true&ren=$ren&zone=$zone';
+
+    try {
+      var response = await http.get(Uri.parse(url));
+
+      var result = json.decode(response.body);
+      // //print(result);
+      if (result != null) {
+        for (var map in result) {
+          TeNantModel teNantModel = TeNantModel.fromJson(map);
+          if (teNantModel.cid != null ||
+              teNantModel.cid.toString() != '' ||
+              teNantModel.cid.toString() != 'null') {
+            setState(() {
+              teNantModels.add(teNantModel);
+            });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  /////////////////////////////////////////////////////////////////////
+  List<String> total_list = [];
+  double All_total = 0.00, totaltoday = 0.00;
+
+  Future<Null> red_Trans_bill() async {
+    if (_InvoiceModels.length != 0) {
+      setState(() {
+        _InvoiceModels.clear();
+        totaltoday = 0;
+      });
+    }
+    ////////////////------------------------------------------------------>
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    var ren = preferences.getString('renTalSer');
+    // var ciddoc_ = preferences.getString('usercid');
+    var qutser_ = preferences.getString('qutser');
+    ////////////////------------------------------------------------------>
+    double total = 0.00;
+    for (int index = 0; index < teNantModels.length; index++) {
+      var ciddoc_ = teNantModels[index].cid;
+      String url =
+          '${MyConstant().domain_chao}/GC_bill_invoice.php?isAdd=true&ren=$ren&ciddoc=$ciddoc_&qutser=$qutser_';
+      print('training_screen');
+      print(url);
+      try {
+        var response = await http.get(Uri.parse(url));
+
+        var result = json.decode(response.body);
+
+        if (result.toString() != 'null') {
+          for (var map in result) {
+            InvoiceModel _InvoiceModel = InvoiceModel.fromJson(map);
+            var in_amtx = double.parse(_InvoiceModel.amtall!);
+            var in_docnox = _InvoiceModel.docno;
+            var in_ser = _InvoiceModel.ser;
+            var in_amtall = _InvoiceModel.amtall;
+            var disendbill = double.parse(_InvoiceModel.disendbill!);
+
+            setState(() {
+              if (_InvoiceModel.billdate ==
+                  DateFormat('yyy-MM-dd').format(_DateTimeNew)) {
+                totaltoday = totaltoday + in_amtx;
+              }
+              // sum_disamt_in = sum_disamt_in + disendbill;
+              total = total + in_amtx;
+              // invoicePayModels.add(invoicePayModel);
+              _InvoiceModels.add(_InvoiceModel);
+            });
+          }
+        }
+
+        setState(() {
+          total_list.add(total.toString());
+          total = 0.00;
+        });
+      } catch (e) {}
+    }
+  }
+
+  void addAllListData() {
+    const int count = 5;
+
+    // listViews.add(
+    //   TitleView(
+    //     titleTxt: cus_lang == 'EN' ? 'Infomatiom User' : 'ข้อมูลผู้ใช้',
+    //     subTxt: 'X',
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 0, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //   ),
+    // );
+    // listViews.add(
+    //   RunningView(
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 3, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //     cuslang: cus_lang,
+    //      customerModel: customerModels,
+    //   ),
+    // );
+    // listViews.add(
+    //   WorkoutView(
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 2, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //     customerModel: customerModels,
+    //     cuslang: cus_lang,
+    //     teNantModel: teNantModels,
+    //     invoiceModels: _InvoiceModels,
+    //   ),
+    // );
+
+    // listViews.add(
+    //   TitleView(
+    //     titleTxt: 'Area of focus',
+    //     subTxt: 'more',
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 4, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //   ),
+    // );
+
+    listViews.add(
+      AreaListView(
+        mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
+            CurvedAnimation(
+                parent: widget.animationController!,
+                curve: Interval((1 / count) * 5, 1.0,
+                    curve: Curves.fastOutSlowIn))),
+        mainScreenAnimationController: widget.animationController!,
+        cuslang: cus_lang,
+        customerModel: customerModels,
+      ),
+    );
+  }
+
+  Future<bool> getData() async {
+    await Future<dynamic>.delayed(const Duration(milliseconds: 50));
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: FitnessAppTheme.background,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: listViews.length == 0
+            ? Center(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: CircleAvatar(
+                        backgroundColor: Colors.transparent,
+                        radius: 30, // ปรับขนาดของ CircleAvatar
+                        backgroundImage: ResizeImage(
+                          const AssetImage('assets/images/Icon-chao.png'),
+                          width: 150, // ลด Memory Usage บน iOS Safari
+                        ),
+                      ),
+                    ),
+                    LoadingAnimationWidget.inkDrop(
+                      color: Colors.green,
+                      size: 70,
+                    ),
+                  ],
+                ),
+              )
+            : Stack(
+                children: <Widget>[
+                  getMainListViewUI(),
+                  getAppBarUI(),
+                  // SizedBox(
+                  //   height: MediaQuery.of(context).padding.bottom - 100,
+                  // )
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget getMainListViewUI() {
+    return FutureBuilder<bool>(
+      future: getData(),
+      builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
+        if (!snapshot.hasData) {
+          return const SizedBox();
+        } else {
+          return ListView.builder(
+            controller: scrollController,
+            padding: EdgeInsets.only(
+              top: AppBar().preferredSize.height +
+                  MediaQuery.of(context).padding.top +
+                  24,
+              bottom: 62 + MediaQuery.of(context).padding.bottom,
+            ),
+            itemCount: listViews.length,
+            scrollDirection: Axis.vertical,
+            itemBuilder: (BuildContext context, int index) {
+              widget.animationController?.forward();
+              return listViews[index];
+            },
+          );
+        }
+      },
+    );
+  }
+
+  Widget getAppBarUI() {
+    return Container(
+      decoration: BoxDecoration(
+        color: FitnessAppTheme.white.withOpacity(topBarOpacity),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+              color: FitnessAppTheme.grey.withOpacity(0.4 * topBarOpacity),
+              offset: const Offset(1.1, 1.1),
+              blurRadius: 10.0),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          SizedBox(
+            height: MediaQuery.of(context).padding.top,
+          ),
+          Padding(
+            padding: const EdgeInsets.only(
+              left: 16,
+              right: 16,
+            ),
+            child: SizedBox(
+              height: kToolbarHeight,
+              child: Row(
+                children: [
+                  const CircleAvatar(
+                    backgroundImage: ResizeImage(
+                      const AssetImage('assets/images/Icon-chao.png'),
+                      width: 150, // ลด Memory Usage บน iOS Safari
+                    ),
+                    radius: 16,
+                    backgroundColor: Colors.transparent,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    cus_lang == 'EN' ? 'Other' : 'ข้อมูลอื่นๆ',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                      color: FitnessAppTheme.darkerText,
+                      letterSpacing: 0.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+// ================== WIDGETS ==================
+
+class _HeaderBar extends SliverPersistentHeaderDelegate {
+  _HeaderBar({required this.opacity, required this.title});
+  final double opacity;
+  final String title;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      decoration: BoxDecoration(
+        color: FitnessAppTheme.white.withOpacity(opacity),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+              color: FitnessAppTheme.grey.withOpacity(0.4 * opacity),
+              offset: const Offset(1.1, 1.1),
+              blurRadius: 10.0),
+        ],
+      ),
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: MediaQuery.of(context).padding.top,
+      ),
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        height: kToolbarHeight,
+        child: Row(
+          children: [
+            const CircleAvatar(
+              backgroundImage: ResizeImage(
+                const AssetImage('assets/images/Icon-chao.png'),
+                width: 150, // ลด Memory Usage บน iOS Safari
+              ),
+              radius: 16,
+              backgroundColor: Colors.transparent,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 22,
+                color: FitnessAppTheme.darkerText,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const Spacer(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  double get maxExtent =>
+      kToolbarHeight +
+      16 +
+      MediaQueryData.fromView(
+              WidgetsBinding.instance.platformDispatcher.views.first)
+          .padding
+          .top;
+  @override
+  double get minExtent =>
+      kToolbarHeight +
+      16 +
+      MediaQueryData.fromView(
+              WidgetsBinding.instance.platformDispatcher.views.first)
+          .padding
+          .top;
+  @override
+  bool shouldRebuild(covariant _HeaderBar oldDelegate) =>
+      oldDelegate.opacity != opacity || oldDelegate.title != title;
+}
+
+class _EmptyHint extends StatelessWidget {
+  const _EmptyHint({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: HexColor('#F8FAFC'),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: HexColor('#E2E8F0')),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+        child: Row(
+          children: [
+            Icon(icon, color: HexColor('#64748B')),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Text(text,
+                    style: TextStyle(
+                        color: HexColor('#475569'),
+                        fontWeight: FontWeight.w600))),
+          ],
+        ),
+      ),
+    );
+  }
+}
