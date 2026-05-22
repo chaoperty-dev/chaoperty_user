@@ -302,10 +302,10 @@ Future<http.Response?> postPaymentIntents(
         "channel": chanNel,
         "amount": requestedAmount,
         "receiving_account": {
-          "account_type": "123123",
-          "account_number": "123",
-          "account_name_th": "123",
-          "account_name_en": "123"
+          "account_type": "02001",
+          "account_number": "0806027357",
+          "account_name_th": "พศิกา สรรเสริญ",
+          "account_name_en": "Pasika Sunsern"
         },
 
         "late_fee": lateFee,

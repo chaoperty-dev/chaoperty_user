@@ -1,5 +1,6 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
+import 'package:chaoperty_user/video_player_helper.dart';
 import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
 import 'package:chaoperty_user/screen_Intents/payment_subV2_InvAll.dart';
 import 'package:chaoperty_user/screen_Intents_V3/payment_subV3_InvAll.dart';
@@ -75,8 +76,11 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
   int ref_new = 0;
   String? return_qr_img, invoiceAll, return_qr_refapi, return_img;
   bool _isLoading = true;
+  bool _showGuideCard = false;
   Timer? _timer;
   String countdownText = '';
+  Offset _fabPos = Offset.zero;
+  Offset _cardPos = Offset.zero;
 
   // ✅ Cached totals (computed once per data load)
   double _cachedTotalAll = 0;
@@ -102,12 +106,23 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     // red_Invoice().then((value) => Check_genref_pay());
     Check_time();
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final size = MediaQuery.of(context).size;
+      setState(() {
+        _fabPos = Offset(size.width - 64, size.height - 220);
+        _cardPos = Offset(size.width - 268, size.height - 680);
+      });
+      Future.delayed(const Duration(milliseconds: 800), () {
+        if (mounted) setState(() => _showGuideCard = true);
+      });
+    });
   }
 
   ////--------------------->
   @override
   void dispose() {
-    _timer?.cancel(); // Make sure to cancel the timer when widget is disposed
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -328,95 +343,428 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     final groups = inv.data ?? const <Data>[];
     if (groups.isEmpty) return _buildEmptyState();
 
-    return AnimatedBuilder(
-      animation: widget.mainScreenAnimationController!,
-      builder: (_, __) => FadeTransition(
-        opacity: widget.mainScreenAnimation!,
-        child: Transform.translate(
-          offset: Offset(0, 30 * (1 - widget.mainScreenAnimation!.value)),
-          child: RefreshIndicator(
-            onRefresh: red_Invoice,
-            child: CustomScrollView(
-              shrinkWrap: !widget.isMainScreen, // [NEW] Shrink wrap if nested
-              physics: widget.isMainScreen
-                  ? const AlwaysScrollableScrollPhysics()
-                  : const NeverScrollableScrollPhysics(), // [NEW] Disable scroll if nested
-              slivers: [
-                if (widget.isMainScreen) getAppBarUI(),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (widget.teNantModel!.length > 1) ...[
-                          RunningViewPay(
-                            animation: Tween<double>(begin: 0.0, end: 1.0)
-                                .animate(CurvedAnimation(
-                                    parent:
-                                        widget.mainScreenAnimationController!,
-                                    curve: Interval((1 / 5) * 3, 1.0,
-                                        curve: Curves.fastOutSlowIn))),
-                            animationController:
-                                widget.mainScreenAnimationController!,
-                            cuslang: widget.cuslang,
-                            customerModel: widget.customerModel,
-                          ),
-                        ],
-                        _summaryCard(inv),
-                        const SizedBox(height: 8),
-                        Row(
+    return Stack(
+      children: [
+        AnimatedBuilder(
+          animation: widget.mainScreenAnimationController!,
+          builder: (_, __) => FadeTransition(
+            opacity: widget.mainScreenAnimation!,
+            child: Transform.translate(
+              offset: Offset(0, 30 * (1 - widget.mainScreenAnimation!.value)),
+              child: RefreshIndicator(
+                onRefresh: red_Invoice,
+                child: CustomScrollView(
+                  shrinkWrap: !widget.isMainScreen,
+                  physics: widget.isMainScreen
+                      ? const AlwaysScrollableScrollPhysics()
+                      : const NeverScrollableScrollPhysics(),
+                  slivers: [
+                    if (widget.isMainScreen) getAppBarUI(),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 2, vertical: 2),
-                              decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.8),
-                                  borderRadius: BorderRadius.circular(8)),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.list_sharp,
-                                    color: Colors.orange.shade700,
+                            if (widget.teNantModel!.length > 1) ...[
+                              RunningViewPay(
+                                animation: Tween<double>(begin: 0.0, end: 1.0)
+                                    .animate(CurvedAnimation(
+                                        parent: widget
+                                            .mainScreenAnimationController!,
+                                        curve: Interval((1 / 5) * 3, 1.0,
+                                            curve: Curves.fastOutSlowIn))),
+                                animationController:
+                                    widget.mainScreenAnimationController!,
+                                cuslang: widget.cuslang,
+                                customerModel: widget.customerModel,
+                              ),
+                            ],
+                            _summaryCard(inv),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.symmetric(
+                                      horizontal: 2, vertical: 2),
+                                  decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.8),
+                                      borderRadius: BorderRadius.circular(8)),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.list_sharp,
+                                        color: Colors.orange.shade700,
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8),
+                                        child: Text(
+                                          widget.cuslang == 'EN'
+                                              ? 'Outstanding/Pending Payments'
+                                              : 'รายการค้าง/รอชำระ',
+                                          maxLines: 2,
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.orange.shade700,
+                                              fontFamily: Font_.Fonts_T),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8),
-                                    child: Text(
-                                      widget.cuslang == 'EN'
-                                          ? 'Outstanding/Pending Payments'
-                                          : 'รายการค้าง/รอชำระ',
-                                      maxLines: 2,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.orange.shade700,
-                                          fontFamily: Font_.Fonts_T),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (BuildContext context, int index) {
+                            return _groupTile(
+                                (inv.data ?? const <Data>[])[index]);
+                          },
+                          childCount: (inv.data ?? const <Data>[]).length,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: _fabPos.dy,
+          left: _fabPos.dx,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onPanUpdate: (d) {
+              final size = MediaQuery.of(context).size;
+              setState(() {
+                _fabPos = Offset(
+                  (_fabPos.dx + d.delta.dx).clamp(0, size.width - 64),
+                  (_fabPos.dy + d.delta.dy).clamp(0, size.height - 120),
+                );
+              });
+            },
+            child: _buildGuideFABWithLabel(),
+          ),
+        ),
+        Positioned(
+          top: _cardPos.dy,
+          left: _cardPos.dx,
+          width: 260,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onPanUpdate: (d) {
+              final size = MediaQuery.of(context).size;
+              setState(() {
+                _cardPos = Offset(
+                  (_cardPos.dx + d.delta.dx).clamp(0, size.width - 260),
+                  (_cardPos.dy + d.delta.dy).clamp(0, size.height - 200),
+                );
+              });
+            },
+            child: IgnorePointer(
+              ignoring: !_showGuideCard,
+              child: AnimatedOpacity(
+                opacity: _showGuideCard ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 220),
+                child: AnimatedScale(
+                  scale: _showGuideCard ? 1.0 : 0.88,
+                  duration: const Duration(milliseconds: 220),
+                  alignment: Alignment.bottomRight,
+                  child: _buildGuideCard(),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGuideFAB() {
+    return GestureDetector(
+      onTap: () => setState(() => _showGuideCard = !_showGuideCard),
+      child: Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Colors.deepPurple, Color(0xFF4527A0)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.deepPurple.withValues(alpha: 0.45),
+              blurRadius: 14,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child:
+            const Icon(Icons.live_help_rounded, color: Colors.white, size: 24),
+      ),
+    );
+  }
+
+  // label ใต้ FAB
+  Widget _buildGuideFABWithLabel() {
+    final isEN = widget.cuslang == 'EN';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildGuideFAB(),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.deepPurple.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            isEN ? 'Guide' : 'คู่มือ',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGuideCard() {
+    final isEN = widget.cuslang == 'EN';
+    return Material(
+      color: Colors.transparent,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.65,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 3,
+                      height: 16,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        isEN ? 'Payment Guide' : 'วิธีการชำระเงิน',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _showGuideCard = false),
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.close_rounded,
+                            size: 15, color: Colors.grey.shade600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => showDialog(
+                          context: context,
+                          barrierColor: Colors.black87,
+                          builder: (_) => Dialog(
+                            backgroundColor: Colors.transparent,
+                            insetPadding: const EdgeInsets.all(12),
+                            child: Stack(
+                              alignment: Alignment.topRight,
+                              children: [
+                                InteractiveViewer(
+                                  minScale: 0.8,
+                                  maxScale: 5.0,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Image.network(
+                                      'https://chaoperties.com/user/guide_user/img/img_payment.jpg',
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () =>
+                                      Navigator.of(context, rootNavigator: true)
+                                          .pop(),
+                                  child: Container(
+                                    margin: const EdgeInsets.all(8),
+                                    width: 32,
+                                    height: 32,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close_rounded,
+                                        color: Colors.white, size: 18),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Stack(
+                            alignment: Alignment.bottomRight,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  'https://chaoperties.com/user/guide_user/img/img_payment.jpg',
+                                  fit: BoxFit.contain,
+                                  loadingBuilder: (_, child, progress) =>
+                                      progress == null
+                                          ? child
+                                          : Container(
+                                              height: 140,
+                                              alignment: Alignment.center,
+                                              child:
+                                                  const CircularProgressIndicator(
+                                                      color: Colors.deepPurple),
+                                            ),
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 140,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Center(
+                                        child: Icon(Icons.broken_image,
+                                            color: Colors.grey, size: 40)),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                margin: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black45,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.zoom_in_rounded,
+                                        color: Colors.white, size: 14),
+                                    SizedBox(width: 4),
+                                    Text('ขยาย',
+                                        style: TextStyle(
+                                            color: Colors.white, fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                        child: Container(
+                          width: double.infinity,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Colors.deepPurple, Color(0xFF4527A0)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    Colors.deepPurple.withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => showInlineVideoDialog(
+                                context,
+                                'https://chaoperties.com/user/guide_user/vdo/vdo_payment.mp4',
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.play_circle_rounded,
+                                      color: Colors.white, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isEN
+                                        ? 'Watch Tutorial Video'
+                                        : 'ดูวิดีโอสอนการชำระเงิน',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        return _groupTile((inv.data ?? const <Data>[])[index]);
-                      },
-                      childCount: (inv.data ?? const <Data>[]).length,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -840,274 +1188,273 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
 
     return Card(
       elevation: 0.4,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          childrenPadding: const EdgeInsets.only(left: 6, right: 6, bottom: 12),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          title: Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: Colors.white,
-                child: logoFile != null
-                    ? Image.asset(
-                        'assets/images/LogoBank/$logoFile',
-                        height: 26,
-                        errorBuilder: (_, __, ___) => const Icon(
-                            Icons.account_balance,
-                            size: 20,
-                            color: Colors.grey),
-                      )
-                    : const Icon(Icons.account_balance,
-                        size: 20, color: Colors.grey),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                    widget.cuslang == 'EN'
-                        ? bankEn! + ' ($bankCode)'
-                        : bank! + ' ($bankCode)',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15.5)),
-              ),
-              const SizedBox(width: 4),
-              chip(widget.cuslang == 'EN' ? 'Bills' : 'ใบแจ้งหนี้',
-                  Colors.indigo.withOpacity(.08), Colors.indigo.shade700),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            childrenPadding:
+                const EdgeInsets.only(left: 6, right: 6, bottom: 12),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            title: Row(
               children: [
-                if (bno.isNotEmpty)
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.white,
+                  child: logoFile != null
+                      ? Image.asset(
+                          'assets/images/LogoBank/$logoFile',
+                          height: 26,
+                          errorBuilder: (_, __, ___) => const Icon(
+                              Icons.account_balance,
+                              size: 20,
+                              color: Colors.grey),
+                        )
+                      : const Icon(Icons.account_balance,
+                          size: 20, color: Colors.grey),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                      widget.cuslang == 'EN'
+                          ? bankEn! + ' ($bankCode)'
+                          : bank! + ' ($bankCode)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15.5)),
+                ),
+                const SizedBox(width: 4),
+                chip(widget.cuslang == 'EN' ? 'Bills' : 'ใบแจ้งหนี้',
+                    Colors.indigo.shade50, Colors.indigo.shade700),
+              ],
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (bno.isNotEmpty)
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.account_balance,
+                          size: 15, color: Colors.black54),
+                      const SizedBox(width: 6),
+                      Text(bno,
+                          style: const TextStyle(
+                              fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                    ]),
+                  // if (bno.isNotEmpty)
+                  //   Row(mainAxisSize: MainAxisSize.min, children: [
+                  //     const Icon(Icons.confirmation_number_outlined,
+                  //         size: 15, color: Colors.black54),
+                  //     const SizedBox(width: 6),
+                  //     Text(bno,
+                  //         style: const TextStyle(
+                  //             fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                  //   ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.receipt_long,
+                  //       size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text(
+                  //       '${widget.cuslang == "EN" ? "PVAT" : "ก่อน VAT"}: ${fmtInt(g.pvatBill)}',
+                  //       style: const TextStyle(
+                  //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                  // ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.percent, size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text('VAT: ${fmtMoney(g.vatBill ?? 0)}',
+                  //       style: const TextStyle(
+                  //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                  // ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.money_off_csred_outlined,
+                  //       size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text('WHT: ${fmtInt(g.whtBill)}',
+                  //       style: const TextStyle(
+                  //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                  // ]),
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.account_balance,
-                        size: 15, color: Colors.black54),
+                    const Icon(Icons.note, size: 15, color: Colors.black54),
                     const SizedBox(width: 6),
-                    Text(bno,
+                    Text(bname,
                         style: const TextStyle(
                             fontFamily: Font_.Fonts_T, fontSize: 12.5)),
                   ]),
-                // if (bno.isNotEmpty)
-                //   Row(mainAxisSize: MainAxisSize.min, children: [
-                //     const Icon(Icons.confirmation_number_outlined,
-                //         size: 15, color: Colors.black54),
-                //     const SizedBox(width: 6),
-                //     Text(bno,
-                //         style: const TextStyle(
-                //             fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                //   ]),
-                // Row(mainAxisSize: MainAxisSize.min, children: [
-                //   const Icon(Icons.receipt_long,
-                //       size: 15, color: Colors.black54),
-                //   const SizedBox(width: 6),
-                //   Text(
-                //       '${widget.cuslang == "EN" ? "PVAT" : "ก่อน VAT"}: ${fmtInt(g.pvatBill)}',
-                //       style: const TextStyle(
-                //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                // ]),
-                // Row(mainAxisSize: MainAxisSize.min, children: [
-                //   const Icon(Icons.percent, size: 15, color: Colors.black54),
-                //   const SizedBox(width: 6),
-                //   Text('VAT: ${fmtMoney(g.vatBill ?? 0)}',
-                //       style: const TextStyle(
-                //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                // ]),
-                // Row(mainAxisSize: MainAxisSize.min, children: [
-                //   const Icon(Icons.money_off_csred_outlined,
-                //       size: 15, color: Colors.black54),
-                //   const SizedBox(width: 6),
-                //   Text('WHT: ${fmtInt(g.whtBill)}',
-                //       style: const TextStyle(
-                //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                // ]),
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.note, size: 15, color: Colors.black54),
-                  const SizedBox(width: 6),
-                  Text(bname,
-                      style: const TextStyle(
-                          fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                ]),
-                if (serPayweb.toString() == '0') ...[
+                  if (serPayweb.toString() == '0') ...[
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(
+                        Icons.warning_amber,
+                        size: 15,
+                        color: Colors.red.shade800,
+                      ),
+                      const SizedBox(width: 6),
+                      chip(
+                          widget.cuslang == 'EN'
+                              ? "The payment is not available at this time."
+                              : "ระบบปิดการชำระเงินชั่วคราว ",
+                          Colors.red.withOpacity(.08),
+                          Colors.red.shade700),
+                    ]),
+                  ],
+
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(
-                      Icons.warning_amber,
-                      size: 15,
-                      color: Colors.red.shade800,
-                    ),
+                    Spacer(),
+                    const Icon(Icons.receipt, size: 15, color: Colors.black54),
                     const SizedBox(width: 6),
-                    chip(
-                        widget.cuslang == 'EN'
-                            ? "The payment is not available at this time."
-                            : "ระบบปิดการชำระเงินชั่วคราว ",
-                        Colors.red.withOpacity(.08),
-                        Colors.red.shade700),
+                    Text(
+                        '${widget.cuslang == "EN" ? "Bill All  : ${g.bill!.length ?? 0} " : "บิลทั้งหมด  : ${g.bill!.length ?? 0} "}',
+                        style: const TextStyle(
+                            color: Colors.grey,
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700)),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Text(
+                        widget.cuslang == "EN" ? "Press to pay" : "กดเพื่อชำระ",
+                        style: TextStyle(
+                          color: Colors.green.shade700,
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.green.shade700,
+                        ),
+                      ),
+                      onTap: () async {
+                        if (serPayweb.toString() == '1') {
+                          List<String>? selectedDocNos;
+                          if ((g.bill ?? []).length > 1) {
+                            selectedDocNos =
+                                await _showBillSelectionDialog(g.bill!);
+                            if (selectedDocNos == null)
+                              return; // User cancelled
+                          } else {
+                            selectedDocNos = (g.bill ?? [])
+                                .map((b) => b.docno ?? '')
+                                .where((d) => d.isNotEmpty)
+                                .toList();
+                          }
+
+                          setState(() {
+                            tap_pay = 1;
+                            _serPayment = payser;
+                            _serptPayment = payptser;
+                          });
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => paymentSubV3InvAll(
+                                mainScreenAnimation:
+                                    Tween<double>(begin: 0.0, end: 1.0).animate(
+                                        CurvedAnimation(
+                                            parent: widget
+                                                .mainScreenAnimationController!,
+                                            curve: Interval(
+                                                (1 / count) * 5, 1.0,
+                                                curve: Curves.fastOutSlowIn))),
+                                mainScreenAnimationController:
+                                    widget.mainScreenAnimationController!,
+                                teNantModel: widget.teNantModel,
+                                cuslang: widget.cuslang,
+                                serPayment: payser.toString(),
+                                serptPayment: payptser.toString(),
+                                selectedDocNos: selectedDocNos,
+                              ),
+                            ),
+                          );
+                        } else {
+                          PanaraInfoDialog.showAnimatedGrow(
+                            context,
+                            title: widget.cuslang == 'EN' ? "Sorry" : "ขออภัย",
+                            message: widget.cuslang == 'EN'
+                                ? "The payment is not available at this time. Please contact the system administrator."
+                                : "ไม่สามารถชำระเงินได้ขณะนี้ระบบปิดการชำระเงินชั่วคราว กรุณาติดต่อฝ่ายบริการลูกค้า",
+                            buttonText: widget.cuslang == 'EN'
+                                ? "Acknowledge"
+                                : "รับทราบ",
+                            onTapDismiss: () async {
+                              Navigator.of(context, rootNavigator: true).pop();
+                            },
+                            panaraDialogType: PanaraDialogType.warning,
+                            barrierDismissible: false,
+                          );
+                        }
+                      },
+                    ),
+                    // IconButton(
+                    //   icon: const Icon(
+                    //     Icons.chevron_right,
+                    //     color: Colors.green,
+                    //   ),
+                    //   onPressed: () async {
+                    //     setState(() {
+                    //       tap_pay = 1;
+                    //       _serPayment = payser;
+                    //       _serptPayment = payptser;
+                    //     });
+                    //     Navigator.push(
+                    //       context,
+                    //       MaterialPageRoute(
+                    //         builder: (context) => paymentSubV2InvAll(
+                    //           mainScreenAnimation:
+                    //               Tween<double>(begin: 0.0, end: 1.0).animate(
+                    //                   CurvedAnimation(
+                    //                       parent: widget
+                    //                           .mainScreenAnimationController!,
+                    //                       curve: Interval((1 / count) * 5, 1.0,
+                    //                           curve: Curves.fastOutSlowIn))),
+                    //           mainScreenAnimationController:
+                    //               widget.mainScreenAnimationController!,
+                    //           teNantModel: widget.teNantModel,
+                    //           cuslang: widget.cuslang,
+                    //           serPayment: payser.toString(),
+                    //           serptPayment: payptser.toString(),
+                    //         ),
+                    //       ),
+                    //     );
+                    //   },
+                    // )
                   ]),
                 ],
-
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Spacer(),
-                  const Icon(Icons.receipt, size: 15, color: Colors.black54),
-                  const SizedBox(width: 6),
+              ),
+            ),
+            children: [
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              ...(g.bill ?? const <Bill>[]).map(_billRow).toList(),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(width: 8),
                   Text(
-                      '${widget.cuslang == "EN" ? "Bill All  : ${g.bill!.length ?? 0} " : "บิลทั้งหมด  : ${g.bill!.length ?? 0} "}',
-                      style: const TextStyle(
-                          color: Colors.grey,
-                          fontFamily: Font_.Fonts_T,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    child: SizedBox(
-                      // width: 100,
-                      child: Row(
-                        children: [
-                          Text(
-                              '${widget.cuslang == "EN" ? "Press to pay" : "กดเพื่อชำระ"}',
-                              style: const TextStyle(
-                                  decoration: TextDecoration.underline,
-                                  // decorationThickness: 2.0,
-                                  // decorationStyle: TextDecorationStyle.wavy,
-                                  color: Colors.green,
-                                  fontFamily: Font_.Fonts_T,
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w700)),
-                          Icon(
-                            Icons.chevron_right,
-                            color: Colors.green,
-                          )
-                        ],
-                      ),
+                    widget.cuslang == "EN"
+                        ? 'Note: The amount shown does not include any penalties/overdue payments that may occur.'
+                        : 'หมายเหตุ:ยอดที่แสดงยังไม่รวมค่าปรับ/ชำระเกินกำหนดที่อาจเกิดขึ้น',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontFamily: Font_.Fonts_T,
+                      // fontWeight: FontWeight.w800,
+                      fontSize: 10,
                     ),
-                    onTap: () async {
-                      if (serPayweb.toString() == '1') {
-                        List<String>? selectedDocNos;
-                        if ((g.bill ?? []).length > 1) {
-                          selectedDocNos =
-                              await _showBillSelectionDialog(g.bill!);
-                          if (selectedDocNos == null) return; // User cancelled
-                        } else {
-                          selectedDocNos = (g.bill ?? [])
-                              .map((b) => b.docno ?? '')
-                              .where((d) => d.isNotEmpty)
-                              .toList();
-                        }
-
-                        setState(() {
-                          tap_pay = 1;
-                          _serPayment = payser;
-                          _serptPayment = payptser;
-                        });
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => paymentSubV3InvAll(
-                              mainScreenAnimation:
-                                  Tween<double>(begin: 0.0, end: 1.0).animate(
-                                      CurvedAnimation(
-                                          parent: widget
-                                              .mainScreenAnimationController!,
-                                          curve: Interval((1 / count) * 5, 1.0,
-                                              curve: Curves.fastOutSlowIn))),
-                              mainScreenAnimationController:
-                                  widget.mainScreenAnimationController!,
-                              teNantModel: widget.teNantModel,
-                              cuslang: widget.cuslang,
-                              serPayment: payser.toString(),
-                              serptPayment: payptser.toString(),
-                              selectedDocNos: selectedDocNos,
-                            ),
-                          ),
-                        );
-                      } else {
-                        PanaraInfoDialog.showAnimatedGrow(
-                          context,
-                          title: widget.cuslang == 'EN' ? "Sorry" : "ขออภัย",
-                          message: widget.cuslang == 'EN'
-                              ? "The payment is not available at this time. Please contact the system administrator."
-                              : "ไม่สามารถชำระเงินได้ขณะนี้ระบบปิดการชำระเงินชั่วคราว กรุณาติดต่อฝ่ายบริการลูกค้า",
-                          buttonText: widget.cuslang == 'EN'
-                              ? "Acknowledge"
-                              : "รับทราบ",
-                          onTapDismiss: () async {
-                            Navigator.of(context, rootNavigator: true).pop();
-                          },
-                          panaraDialogType: PanaraDialogType.warning,
-                          barrierDismissible: false,
-                        );
-                      }
-                    },
                   ),
-                  // IconButton(
-                  //   icon: const Icon(
-                  //     Icons.chevron_right,
-                  //     color: Colors.green,
-                  //   ),
-                  //   onPressed: () async {
-                  //     setState(() {
-                  //       tap_pay = 1;
-                  //       _serPayment = payser;
-                  //       _serptPayment = payptser;
-                  //     });
-                  //     Navigator.push(
-                  //       context,
-                  //       MaterialPageRoute(
-                  //         builder: (context) => paymentSubV2InvAll(
-                  //           mainScreenAnimation:
-                  //               Tween<double>(begin: 0.0, end: 1.0).animate(
-                  //                   CurvedAnimation(
-                  //                       parent: widget
-                  //                           .mainScreenAnimationController!,
-                  //                       curve: Interval((1 / count) * 5, 1.0,
-                  //                           curve: Curves.fastOutSlowIn))),
-                  //           mainScreenAnimationController:
-                  //               widget.mainScreenAnimationController!,
-                  //           teNantModel: widget.teNantModel,
-                  //           cuslang: widget.cuslang,
-                  //           serPayment: payser.toString(),
-                  //           serptPayment: payptser.toString(),
-                  //         ),
-                  //       ),
-                  //     );
-                  //   },
-                  // )
-                ]),
-              ],
-            ),
+                ],
+              ),
+            ],
           ),
-          children: [
-            const Divider(height: 1),
-            const SizedBox(height: 8),
-            ...(g.bill ?? const <Bill>[]).map(_billRow).toList(),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(width: 8),
-                Text(
-                  widget.cuslang == "EN"
-                      ? 'Note: The amount shown does not include any penalties/overdue payments that may occur.'
-                      : 'หมายเหตุ:ยอดที่แสดงยังไม่รวมค่าปรับ/ชำระเกินกำหนดที่อาจเกิดขึ้น',
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontFamily: Font_.Fonts_T,
-                    // fontWeight: FontWeight.w800,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-          ],
         ),
       ),
     );

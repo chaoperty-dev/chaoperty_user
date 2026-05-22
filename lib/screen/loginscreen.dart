@@ -803,53 +803,53 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 16),
 
                           // LINE Login Button (Official OAuth)
-                          Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              // color: const Color(0xFF06C755), // LINE Green
-                              borderRadius: BorderRadius.circular(30),
-                              // boxShadow: [
-                              //   BoxShadow(
-                              //     color:
-                              //         const Color(0xFF06C755).withOpacity(0.3),
-                              //     blurRadius: 12,
-                              //     offset: const Offset(0, 6),
-                              //   ),
-                              // ],
-                            ),
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                // LINE Official OAuth Login
-                                _lineLoginOAuth();
-                              },
-                              icon: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: Image.asset(
-                                  'images/line_company_thailand_logo.webp',
-                                  width: 20,
-                                  height: 20,
-                                ),
-                              ),
-                              label: const Text(
-                                "เข้าสู่ระบบด้วย LINE",
-                                style: TextStyle(
-                                  fontFamily: Font_.Fonts_T,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                            ),
-                          ),
+                          // Container(
+                          //   width: double.infinity,
+                          //   decoration: BoxDecoration(
+                          //     // color: const Color(0xFF06C755), // LINE Green
+                          //     borderRadius: BorderRadius.circular(30),
+                          //     // boxShadow: [
+                          //     //   BoxShadow(
+                          //     //     color:
+                          //     //         const Color(0xFF06C755).withOpacity(0.3),
+                          //     //     blurRadius: 12,
+                          //     //     offset: const Offset(0, 6),
+                          //     //   ),
+                          //     // ],
+                          //   ),
+                          //   child: ElevatedButton.icon(
+                          //     onPressed: () {
+                          //       // LINE Official OAuth Login
+                          //       _lineLoginOAuth();
+                          //     },
+                          //     icon: ClipRRect(
+                          //       borderRadius: BorderRadius.circular(4),
+                          //       child: Image.asset(
+                          //         'images/line_company_thailand_logo.webp',
+                          //         width: 20,
+                          //         height: 20,
+                          //       ),
+                          //     ),
+                          //     label: const Text(
+                          //       "เข้าสู่ระบบด้วย LINE",
+                          //       style: TextStyle(
+                          //         fontFamily: Font_.Fonts_T,
+                          //         fontWeight: FontWeight.bold,
+                          //         fontSize: 14,
+                          //         color: Colors.grey,
+                          //       ),
+                          //     ),
+                          //     style: ElevatedButton.styleFrom(
+                          //       backgroundColor: Colors.transparent,
+                          //       shadowColor: Colors.transparent,
+                          //       shape: RoundedRectangleBorder(
+                          //         borderRadius: BorderRadius.circular(30),
+                          //       ),
+                          //       padding:
+                          //           const EdgeInsets.symmetric(vertical: 16),
+                          //     ),
+                          //   ),
+                          // ),
                         ],
                       ),
                     ),

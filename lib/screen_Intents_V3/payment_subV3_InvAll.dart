@@ -187,6 +187,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   String? numinvoice, paymentSer1, paymentName1, paymentSer2, paymentName2;
   final Form_payment1 = TextEditingController();
   final Form_payment2 = TextEditingController();
+  final Form_paymentNote = TextEditingController();
   List<TeNantModel> teNantModels = [];
   List<IntentsContractxFineModel> contractxFineModels = [];
   List<TransFineModel> transFineModels = [];
@@ -289,6 +290,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       _localAnimation = AlwaysStoppedAnimation(1.0);
     }
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showAttachSlipWarning();
+    });
+
     checkPreferance().then((value) {
       Value_newDateY1 = DateFormat('yyyy-MM-dd').format(newDatetime);
       Value_newDateD1 = DateFormat('dd-MM-yyyy').format(newDatetime);
@@ -297,6 +302,196 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
       _initData();
     });
+  }
+
+  void _showAttachSlipWarning() {
+    final isEN = widget.cuslang == 'EN';
+    double dx = 0.0;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (_, setSS) => Dialog(
+          backgroundColor: Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.warning_rounded,
+                      color: Colors.red, size: 38),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  isEN ? 'Important Notice' : 'ประกาศสำคัญสำหรับผู้เช่า',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isEN
+                      ? 'After making a payment, tenants must attach payment evidence via the tenant app every time.'
+                      : 'หลังจากทำการชำระเงินแล้ว\nผู้เช่าจะต้องแนบหลักฐานการชำระเงิน\nผ่านแอปผู้เช่าทุกครั้ง',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14, height: 1.6),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.4), width: 1.5),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // const Icon(Icons.cancel_rounded,
+                      //     color: Colors.red, size: 24),
+                      // const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          isEN
+                              ? 'If no evidence is attached,\nthe system will treat it as\n"No Payment Made" in all cases'
+                              : 'หากไม่แนบหลักฐานในแอปผู้เช่า\nระบบจะถือว่า\n"ยังไม่มีการชำระเงิน" ทุกกรณี',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red,
+                            height: 1.65,
+                          ),
+                        ),
+                      ),
+                      // const SizedBox(width: 10),
+                      // const Icon(Icons.cancel_rounded,
+                      //     color: Colors.red, size: 24),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // ── Slide-to-dismiss button ──
+                LayoutBuilder(builder: (_, constraints) {
+                  const double handleSize = 46.0;
+                  const double trackHeight = 52.0;
+                  const double pad = 4.0;
+                  final double maxDrag =
+                      constraints.maxWidth - handleSize - pad * 2;
+                  final double pct = (dx / maxDrag).clamp(0.0, 1.0);
+
+                  return Container(
+                    height: trackHeight,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Color.lerp(Colors.grey, Colors.grey.shade800, pct)!,
+                          Colors.grey.shade800,
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(trackHeight / 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withValues(alpha: 0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        // label — จางลงเมื่อเลื่อน
+                        Center(
+                          child: Opacity(
+                            opacity: (1.0 - pct * 2).clamp(0.0, 1.0),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  isEN ? 'Slide to close' : 'เลื่อนเพื่อปิด',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                // const SizedBox(width: 6),
+                                // const Icon(Icons.arrow_forward_rounded,
+                                //     color: Colors.white70, size: 18),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // handle
+                        AnimatedPositioned(
+                          duration: dx == 0
+                              ? const Duration(milliseconds: 300)
+                              : Duration.zero,
+                          curve: Curves.elasticOut,
+                          left: pad + dx,
+                          child: GestureDetector(
+                            onHorizontalDragUpdate: (d) {
+                              setSS(() {
+                                dx = (dx + d.delta.dx).clamp(0.0, maxDrag);
+                              });
+                            },
+                            onHorizontalDragEnd: (_) {
+                              if (dx >= maxDrag * 0.72) {
+                                Navigator.of(ctx, rootNavigator: true).pop();
+                              } else {
+                                setSS(() => dx = 0.0);
+                              }
+                            },
+                            child: Container(
+                              width: handleSize,
+                              height: handleSize,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black26,
+                                    blurRadius: 6,
+                                    offset: Offset(2, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.arrow_forward_rounded,
+                                color: Colors.grey.shade700,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -2097,31 +2292,49 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
   Widget _howToBox() {
     Widget step(int i, String t) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.only(bottom: 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 26,
-                height: 26,
+                width: 28,
+                height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.indigo.withOpacity(.08),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                      color: Colors.indigo.withOpacity(.25), width: .7),
+                  color: Colors.deepPurple.shade300,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.deepPurple.shade300.withValues(alpha: 0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                child: Text('$i',
-                    style: TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.indigo.shade700)),
+                child: Text(
+                  '$i',
+                  style: const TextStyle(
+                    fontFamily: Font_.Fonts_T,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
+                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
-                  child: Text(t,
-                      style: const TextStyle(
-                          fontFamily: Font_.Fonts_T, fontSize: 13.5))),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    t,
+                    style: const TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );
@@ -2972,93 +3185,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                 return;
                               }
 
-                              // Special handling for PrettyQR (payment_tser '5' and '6')
-                              // Generate PNG directly from QR data (avoid toImage() issues on iOS Safari)
-                              if (kIsWeb &&
-                                  (payment_tser == '5' ||
-                                      payment_tser == '6')) {
-                                final ua = html.window.navigator.userAgent
-                                    .toLowerCase();
-                                final isIOS = ua.contains('iphone') ||
-                                    ua.contains('ipad') ||
-                                    ua.contains('ipod');
-
-                                // FINAL SAFE MODE: Direct CPU Generation (No Text)
-                                // Avoids all Capture/Canvas issues on iOS Web.
-                                try {
-                                  // Gen QR Data
-                                  final qrData = (payment_tser == '6')
-                                      ? '|$selectedValue\r$QR_Ref1\r$QR_Ref2\r${Form_payment1.text.replaceAll('.', '')}\r'
-                                      : generateQRCode(
-                                          promptPayID: "$selectedValue",
-                                          amount: double.parse(
-                                              Form_payment1.text.isEmpty
-                                                  ? "0"
-                                                  : Form_payment1.text));
-
-                                  // // Prepare footer content
-                                  final bank = _PayMentModels.isNotEmpty
-                                      ? (_PayMentModels[0].bank ?? '')
-                                      : '';
-                                  final bankInfo = bankCodeMap[bank];
-
-                                  final bankCode = bankInfo?['code'];
-
-                                  final cpuQrBytes =
-                                      await buildQrPngWithCenterLogo(
-                                    data: qrData,
-                                    assetLogoPath: 'images/icon_thaiqr.png',
-                                    sizePx: 400,
-                                    bottomText:
-                                        '฿${nFormat.format(double.parse(Form_payment1.text ?? '0'))}',
-                                    bottomname: '$bankCode',
-                                    bottombankno: '$selectedValue',
-                                    bottomRef: '$QR_Ref1',
-                                    activeQrExpire:
-                                        '${activeQrSessionSoftExpire != null ? DateFormat('dd-MM-yyyy HH:mm').format(DateTime.parse(activeQrSessionSoftExpire!).toLocal()) : ''}',
-                                  );
-
-                                  // Save
-                                  if (isIOS) {
-                                    showIOSSaveOverlay(cpuQrBytes,
-                                        isEN: widget.cuslang == 'EN');
-                                  } else {
-                                    final blob =
-                                        html.Blob([cpuQrBytes], 'image/png');
-                                    final url =
-                                        html.Url.createObjectUrlFromBlob(blob);
-                                    final a = html.AnchorElement(href: url)
-                                      ..download = "payment_qr.png";
-                                    html.document.body?.append(a);
-                                    a.click();
-                                    a.remove();
-                                    html.Url.revokeObjectUrl(url);
-                                  }
-
-                                  // Notify User
-                                  if (isIOS) {
-                                    Fluttertoast.showToast(
-                                        msg: widget.cuslang == 'EN'
-                                            ? "Saved (Text not supported on iOS Web)"
-                                            : "บันทึกแล้ว (ไม่รองรับข้อความบน iOS Web)",
-                                        toastLength: Toast.LENGTH_LONG);
-                                  }
-                                } catch (e) {
-                                  debugPrint("CPU SAVE FAIL: $e");
-                                  Fluttertoast.showToast(msg: "Save Error: $e");
-                                } finally {
-                                  // Cleanup
-                                  if (mounted) {
-                                    setState(() {
-                                      _isExporting = false;
-                                      _exportQrBytes = null;
-                                    });
-                                  }
-                                }
-                                return;
-                              }
-
-                              // Fallback: For other cases, use screenshot with iOS-safe approach
+                              // Use screenshot approach for all platforms (iOS + non-iOS)
+                              // The on-screen QR (captured via qrBlockKey) is the scannable one
                               // Wait for frames to ensure fully rendered (critical for iOS Safari)
                               await Future.delayed(
                                   const Duration(milliseconds: 120));
@@ -4456,39 +4584,149 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 leading: IconButton(
                   icon: Icon(Icons.arrow_back_ios, color: Colors.black),
                   onPressed: () async {
-                    PanaraConfirmDialog.showAnimatedGrow(
-                      context,
-                      title: widget.cuslang == 'EN' ? "Warning" : "แจ้งเตือน",
-                      message: widget.cuslang == 'EN'
-                          ? "If paid, please attach proof and confirm. Or close to pay later."
-                          : "หากชำระแล้ว กรุณาแนบหลักฐานและยืนยัน",
-                      confirmButtonText: widget.cuslang == 'EN'
-                          ? "Attach Proof"
-                          : "แนบหลักฐาน",
-                      cancelButtonText:
-                          widget.cuslang == 'EN' ? "Pay Later" : "ชำระภายหลัง",
-                      onTapConfirm: () async {
-                        Navigator.of(
-                          context,
-                          rootNavigator: true,
-                        ).pop();
-                        // _showPaymentConfirmationSheet(context);
-                      },
-                      onTapCancel: () async {
-                        SharedPreferences preferences =
-                            await SharedPreferences.getInstance();
-                        var custno = preferences.getString('custno');
-                        Navigator.of(
-                          context,
-                          rootNavigator: true,
-                        ).pop();
-                        Navigator.pushAndRemoveUntil(context,
-                            MaterialPageRoute(builder: (context) {
-                          return FitnessAppHomeScreen(custno_s: custno);
-                        }), (route) => false);
-                      },
-                      panaraDialogType: PanaraDialogType.warning,
+                    showDialog(
+                      context: context,
                       barrierDismissible: true,
+                      builder: (ctx) {
+                        final isEN = widget.cuslang == 'EN';
+                        return Dialog(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24)),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 28, vertical: 28),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.orange.shade200,
+                                        width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                          color: Colors.orange
+                                              .withValues(alpha: 0.25),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 4))
+                                    ],
+                                  ),
+                                  child: Icon(Icons.warning_amber_rounded,
+                                      color: Colors.orange.shade700, size: 38),
+                                ),
+                                const SizedBox(height: 18),
+                                Text(
+                                  isEN ? 'Warning' : 'แจ้งเตือน',
+                                  style: TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade900,
+                                      fontFamily: Font_.Fonts_T),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  isEN
+                                      ? 'If paid, please attach proof and confirm.\nOr close to pay later.'
+                                      : 'หากชำระแล้ว กรุณาแนบหลักฐานและยืนยัน',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                      fontFamily: Font_.Fonts_T,
+                                      height: 1.6),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 24),
+                                // Primary: แนบหลักฐาน
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                          colors: [
+                                            Colors.deepPurple,
+                                            Color(0xFF4527A0)
+                                          ],
+                                          begin: Alignment.centerLeft,
+                                          end: Alignment.centerRight),
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color: Colors.deepPurple
+                                                .withValues(alpha: 0.35),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4))
+                                      ],
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(14),
+                                        onTap: () async {
+                                          Navigator.of(ctx, rootNavigator: true)
+                                              .pop();
+                                        },
+                                        child: Center(
+                                            child: Text(
+                                                isEN
+                                                    ? 'Attach Proof'
+                                                    : 'แนบหลักฐาน',
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 15,
+                                                    fontWeight:
+                                                        FontWeight.bold))),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                // Secondary: ชำระภายหลัง
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(
+                                          color: Colors.grey.shade400),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                    ),
+                                    onPressed: () async {
+                                      final nav = Navigator.of(ctx,
+                                          rootNavigator: true);
+                                      final rootNav = Navigator.of(context);
+                                      SharedPreferences preferences =
+                                          await SharedPreferences.getInstance();
+                                      var custno =
+                                          preferences.getString('custno');
+                                      nav.pop();
+                                      rootNav.pushAndRemoveUntil(
+                                          MaterialPageRoute(
+                                              builder: (_) =>
+                                                  FitnessAppHomeScreen(
+                                                      custno_s: custno)),
+                                          (route) => false);
+                                    },
+                                    child: Text(
+                                        isEN ? 'Pay Later' : 'ชำระภายหลัง',
+                                        style: TextStyle(
+                                            color: Colors.grey.shade700,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
@@ -4538,34 +4776,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                           if (!mounted) return;
                                           setState(
                                               () => _expireDialogShown = true);
-                                          PanaraConfirmDialog.showAnimatedGrow(
-                                            context,
-                                            title: widget.cuslang == 'EN'
-                                                ? "Expired"
-                                                : "หมดเวลา",
-                                            message: widget.cuslang == 'EN'
-                                                ? "Payment time expired. If paid, please attach proof. If not, please renew QR."
-                                                : "หมดเวลาการชำระแล้ว หากชำระแล้วกรุณาแนบหลักฐานและชำระและยืนยัน หรือยังไม่ได้ชำระกรุณากดแสดง QR อีกครั้ง",
-                                            confirmButtonText:
-                                                widget.cuslang == 'EN'
-                                                    ? "Attach Proof"
-                                                    : "แนบหลักฐาน",
-                                            cancelButtonText:
-                                                widget.cuslang == 'EN'
-                                                    ? "Close"
-                                                    : "ปิด",
-                                            onTapConfirm: () {
-                                              Navigator.pop(context);
-                                              _showPaymentConfirmationSheet(
-                                                  context);
-                                            },
-                                            onTapCancel: () {
-                                              Navigator.pop(context);
-                                            },
-                                            panaraDialogType:
-                                                PanaraDialogType.warning,
-                                            barrierDismissible: true,
-                                          );
+                                          _showExpiredDialog();
                                         });
                                       }
 
@@ -4828,86 +5039,124 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 //     ? null
                 //     :
                 Container(
-              padding: EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.3),
-                    spreadRadius: 1,
-                    blurRadius: 10,
-                    offset: Offset(0, -2),
+                    color: Colors.black.withValues(alpha: 0.08),
+                    spreadRadius: 0,
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
                   ),
                 ],
               ),
               child: SafeArea(
-                child: SizedBox(
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: (_InvoiceModels.length == 0)
-                        ? () {
-                            PanaraInfoDialog.showAnimatedGrow(
-                              context,
-                              title: "Oops",
-                              message: widget.cuslang == 'EN'
-                                  ? "No payment amount!!!"
-                                  : "ไม่มียอดชำระ !!!",
-                              buttonText: widget.cuslang == 'EN'
-                                  ? "acknowledge"
-                                  : "รับทราบ",
-                              onTapDismiss: () async {
-                                Navigator.of(
-                                  context,
-                                  rootNavigator: true,
-                                ).pop();
-                              },
-                              panaraDialogType: PanaraDialogType.error,
-                              barrierDismissible: false,
-                            );
-                          }
-                        : (paymentSer1 != null &&
-                                gopay != 0 &&
-                                qr_expiresAt != null)
-                            ? () async {
-                                _showPaymentConfirmationSheet(context);
-                              }
-                            : () async {
-                                await CreatePaymentItem();
+                child: () {
+                  final bool noInvoice = _InvoiceModels.isEmpty;
+                  final bool isConfirm =
+                      paymentSer1 != null && gopay != 0 && qr_expiresAt != null;
+                  final bool isEN = widget.cuslang == 'EN';
 
-                                return;
-                              },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: Text(
-                      (_InvoiceModels.length == 0)
-                          ? widget.cuslang == 'EN'
-                              ? "No payment amount"
-                              : "ไม่มียอดชำระ"
+                  final List<Color> grad = noInvoice
+                      ? [Colors.grey.shade300, Colors.grey.shade400]
+                      : isConfirm
+                          ? [
+                              const Color(0xFFFF8F00),
+                              const Color(0xFFE65100),
+                            ]
+                          : [
+                              const Color(0xFF43A047),
+                              const Color(0xFF00897B),
+                            ];
+
+                  final IconData icon = noInvoice
+                      ? Icons.remove_circle_outline_rounded
+                      : isConfirm
+                          ? Icons.attach_file_rounded
                           : select_pay == 0
-                              ? (widget.cuslang == 'EN'
-                                  ? 'Payment Next'
-                                  : 'ชำระเงินต่อไป')
-                              : (paymentSer1 != null &&
-                                      gopay != 0 &&
-                                      qr_expiresAt != null)
-                                  ? (widget.cuslang == 'EN'
-                                      ? 'Confirm Payment'
-                                      : 'กดเพื่อ “แนบหลักฐานและยืนยัน”')
-                                  : (widget.cuslang == 'EN'
-                                      ? 'Start Payment'
-                                      : 'กดเพื่อ “เริ่มการชำระ”'),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: Font_.Fonts_T,
+                              ? Icons.arrow_forward_rounded
+                              : Icons.payment_rounded;
+
+                  final String label = noInvoice
+                      ? (isEN ? 'No Payment Amount' : 'ไม่มียอดชำระ')
+                      : select_pay == 0
+                          ? (isEN ? 'Payment Next' : 'ชำระเงินต่อไป')
+                          : isConfirm
+                              ? (isEN
+                                  ? 'Confirm Payment'
+                                  : 'กดเพื่อ “แนบหลักฐานและยืนยัน”')
+                              : (isEN
+                                  ? 'Start Payment'
+                                  : 'กดเพื่อ “เริ่มการชำระ”');
+
+                  return Container(
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: grad,
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: noInvoice
+                          ? []
+                          : [
+                              BoxShadow(
+                                color: grad.last.withValues(alpha: 0.45),
+                                blurRadius: 14,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: noInvoice
+                            ? () {
+                                PanaraInfoDialog.showAnimatedGrow(
+                                  context,
+                                  title: 'Oops',
+                                  message: isEN
+                                      ? 'No payment amount!!!'
+                                      : 'ไม่มียอดชำระ !!!',
+                                  buttonText: isEN ? 'acknowledge' : 'รับทราบ',
+                                  onTapDismiss: () async {
+                                    Navigator.of(context, rootNavigator: true)
+                                        .pop();
+                                  },
+                                  panaraDialogType: PanaraDialogType.error,
+                                  barrierDismissible: false,
+                                );
+                              }
+                            : isConfirm
+                                ? () async {
+                                    _showPaymentConfirmationSheet(context);
+                                  }
+                                : () async {
+                                    await CreatePaymentItem();
+                                  },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(icon, color: Colors.white, size: 22),
+                            const SizedBox(width: 10),
+                            Text(
+                              label,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: Font_.Fonts_T,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }(),
               ),
             ),
           );
@@ -5495,6 +5744,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       'payby': payby,
       'paybywidget': paybywidget,
       'user_bill': user_bill,
+      'paymentNote': Form_paymentNote.text.trim(),
     };
 
     var uri = Uri.parse('${MyConstant().domain_chao}/In_tran_financet_User.php')
@@ -5596,6 +5846,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       'payby': payby,
       'paybywidget': paybywidget,
       'user_bill': user_bill,
+      'paymentnote': Form_paymentNote.text.trim(),
     };
 
     var uri = Uri.parse('${MyConstant().domain_chao}/In_tran_financet_User.php')
@@ -5676,182 +5927,238 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       context: context, // uses this.context
       barrierDismissible: true,
       builder: (BuildContext ctx) {
-        return AlertDialog(
+        return Dialog(
+          backgroundColor: Colors.white,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          contentPadding: EdgeInsets.zero,
-          content: Container(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(children: [
+                      Container(
+                        width: 4,
+                        height: 22,
+                        margin: const EdgeInsets.only(right: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                       Text(
                         widget.cuslang == 'EN'
                             ? 'Confirm Payment'
                             : 'ยืนยันการชำระเงิน',
-                        style: TextStyle(
-                            fontFamily: Font_.Fonts_T,
+                        style: const TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold),
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: Colors.grey),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
+                    ]),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
                 ),
-                Divider(height: 1),
-                SizedBox(height: 10),
-                if (_uploadedSlipData != null)
-                  Container(
-                    height: 250,
-                    width: double.infinity,
-                    color: Colors.black12,
+              ),
+              const Divider(height: 1),
+              const SizedBox(height: 14),
+              if (_uploadedSlipData != null)
+                Container(
+                  height: 240,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(13),
                     child: InteractiveViewer(
                       panEnabled: true,
                       minScale: 0.1,
                       maxScale: 4.0,
-                      child: Image.memory(
-                        _uploadedSlipData!,
-                        fit: BoxFit.contain,
-                      ),
+                      child:
+                          Image.memory(_uploadedSlipData!, fit: BoxFit.contain),
                     ),
                   ),
-                SizedBox(height: 16),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: _SlideToConfirm(
-                    label: widget.cuslang == 'EN'
-                        ? 'Slide to Confirm'
-                        : 'เลื่อนเพื่อยืนยัน',
-                    enabled: true,
-                    onConfirmation: () async {
-                      if (_isProcessingLink) return;
-                      setState(() => _isProcessingLink = true);
-
-                      try {
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (BuildContext context) {
-                            return Center(
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.all(8.0),
-                                    child: const CircleAvatar(
-                                      backgroundColor: Colors.transparent,
-                                      radius: 30,
-                                      backgroundImage: AssetImage(
-                                          'assets/images/Icon-chao.png'),
-                                    ),
-                                  ),
-                                  LoadingAnimationWidget.inkDrop(
-                                    color: Colors.green,
-                                    size: 70,
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-                        // _processPaymentConfirmation(ctx);
-
-                        final success = await _processPaymentConfirmation(ctx);
-
-                        if (!mounted) return;
-
-                        // Close loading dialog
-                        Navigator.of(context).pop();
-
-                        if (success) {
-                          Navigator.of(ctx).pop(); // Close Alert dialog
-
-                          // Show success dialog and navigate
-                          sucress(onDismiss: () {
-                            // Use 'cid' from TeNantModel, or fallback
-                            // Note: In in_Trans_invoice, it used 'custno' from SharedPreferences.
-                            // FitnessAppHomeScreen likely expects 'custno'.
-                            // If TeNantModel.cid isn't the custno, we should grab it from Prefs or use 'cid' if it maps.
-                            // Looking at GetTeNant_Model.dart, 'cid' exists.
-                            // Let's safe bet: fetch custno from prefs again as in_Trans_invoice did,
-                            // OR just use widget.teNantModel?[0].cid if appropriate.
-                            // Given the context, let's use the safer Prefs approach if we can, or just null since
-                            // FitnessAppHomeScreen might handle it.
-                            // But wait, we can't be async here easily in onDismiss without mounting issues?
-                            // Actually, onDismiss is synchronous callback.
-                            // Let's just use widget.teNantModel?[0].cid as a best effort,
-                            // or just pass null if it's optional.
-
-                            Navigator.pushAndRemoveUntil(context,
-                                MaterialPageRoute(builder: (context) {
-                              return FitnessAppHomeScreen(
-                                  custno_s: widget.teNantModel?[0].cid);
-                            }), (route) => false);
-                          });
-                        }
-                      } finally {
-                        if (mounted) {
-                          setState(() => _isProcessingLink = false);
-                        }
-                      }
-                    },
-                    // onConfirmation: () async {
-                    //   // Reset uploaded data to allow new upload
-                    //   setState(() {
-                    //     _uploadedSlipData = null;
-                    //   });
-                    //   // Trigger file picker
-                    //   // final success = await _pickSlipImage();
-                    //   if (base64_Slip != null) {
-                    //     if (!mounted) return;
-                    //     showDialog(
-                    //       context: context,
-                    //       barrierDismissible: false,
-                    //       builder: (BuildContext context) {
-                    //         return const Center(
-                    //           child: CircularProgressIndicator(),
-                    //         );
-                    //       },
-                    //     );
-                    //     final successUp = await _uploadSlipImage(
-                    //         amtRawSlip: sum_amt.toString());
-                    //     if (mounted) {
-                    //       Navigator.of(context).pop(); // Close dialog
-                    //       Navigator.of(context).pop(); // Close dialog
-                    //       Navigator.pushAndRemoveUntil(context,
-                    //           MaterialPageRoute(builder: (context) {
-                    //         return FitnessAppHomeScreen(custno_s: custno);
-                    //       }), (route) => false);
-                    //       if (successUp) {
-                    //         Fluttertoast.showToast(
-                    //             timeInSecForIosWeb: 3,
-                    //             msg: widget.cuslang == 'EN'
-                    //                 ? "Slip upload successful"
-                    //                 : 'อัปโหลดสลิปสำเร็จ',
-                    //             backgroundColor: Colors.black,
-                    //             textColor: Colors.white,
-                    //             webPosition: "center",
-                    //             webBgColor: "#000000",
-                    //             toastLength: Toast.LENGTH_SHORT);
-                    //       }
-                    //     }
-                    //   }
-                    //   // _processPaymentConfirmation(ctx);
-                    // },
-                  ),
                 ),
-                SizedBox(height: 8),
-              ],
-            ),
+              const SizedBox(height: 12),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.deepPurple.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded,
+                        color: Colors.green, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.cuslang == 'EN'
+                          ? 'Slip attached'
+                          : 'หลักฐานแนบแล้ว',
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.green.shade700,
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          widget.cuslang == 'EN'
+                              ? "${nFormat.format(double.parse(Form_payment1.text))} THB"
+                              : "${nFormat.format(double.parse(Form_payment1.text))} บาท",
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.deepPurple),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: _SlideToConfirm(
+                  label: widget.cuslang == 'EN'
+                      ? 'Slide to Confirm'
+                      : 'เลื่อนเพื่อยืนยัน',
+                  enabled: true,
+                  onConfirmation: () async {
+                    if (_isProcessingLink) return;
+                    setState(() => _isProcessingLink = true);
+
+                    try {
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (BuildContext context) {
+                          return Center(
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: const CircleAvatar(
+                                    backgroundColor: Colors.transparent,
+                                    radius: 30,
+                                    backgroundImage: AssetImage(
+                                        'assets/images/Icon-chao.png'),
+                                  ),
+                                ),
+                                LoadingAnimationWidget.inkDrop(
+                                  color: Colors.green,
+                                  size: 70,
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      );
+                      // _processPaymentConfirmation(ctx);
+
+                      final success = await _processPaymentConfirmation(ctx);
+
+                      if (!mounted) return;
+
+                      // Close loading dialog
+                      Navigator.of(context).pop();
+
+                      if (success) {
+                        Navigator.of(ctx).pop(); // Close Alert dialog
+
+                        // Show success dialog and navigate
+                        sucress(onDismiss: () {
+                          // Use 'cid' from TeNantModel, or fallback
+                          // Note: In in_Trans_invoice, it used 'custno' from SharedPreferences.
+                          // FitnessAppHomeScreen likely expects 'custno'.
+                          // If TeNantModel.cid isn't the custno, we should grab it from Prefs or use 'cid' if it maps.
+                          // Looking at GetTeNant_Model.dart, 'cid' exists.
+                          // Let's safe bet: fetch custno from prefs again as in_Trans_invoice did,
+                          // OR just use widget.teNantModel?[0].cid if appropriate.
+                          // Given the context, let's use the safer Prefs approach if we can, or just null since
+                          // FitnessAppHomeScreen might handle it.
+                          // But wait, we can't be async here easily in onDismiss without mounting issues?
+                          // Actually, onDismiss is synchronous callback.
+                          // Let's just use widget.teNantModel?[0].cid as a best effort,
+                          // or just pass null if it's optional.
+
+                          Navigator.pushAndRemoveUntil(context,
+                              MaterialPageRoute(builder: (context) {
+                            return FitnessAppHomeScreen(
+                                custno_s: widget.teNantModel?[0].cid);
+                          }), (route) => false);
+                        });
+                      }
+                    } finally {
+                      if (mounted) {
+                        setState(() => _isProcessingLink = false);
+                      }
+                    }
+                  },
+                  // onConfirmation: () async {
+                  //   // Reset uploaded data to allow new upload
+                  //   setState(() {
+                  //     _uploadedSlipData = null;
+                  //   });
+                  //   // Trigger file picker
+                  //   // final success = await _pickSlipImage();
+                  //   if (base64_Slip != null) {
+                  //     if (!mounted) return;
+                  //     showDialog(
+                  //       context: context,
+                  //       barrierDismissible: false,
+                  //       builder: (BuildContext context) {
+                  //         return const Center(
+                  //           child: CircularProgressIndicator(),
+                  //         );
+                  //       },
+                  //     );
+                  //     final successUp = await _uploadSlipImage(
+                  //         amtRawSlip: sum_amt.toString());
+                  //     if (mounted) {
+                  //       Navigator.of(context).pop(); // Close dialog
+                  //       Navigator.of(context).pop(); // Close dialog
+                  //       Navigator.pushAndRemoveUntil(context,
+                  //           MaterialPageRoute(builder: (context) {
+                  //         return FitnessAppHomeScreen(custno_s: custno);
+                  //       }), (route) => false);
+                  //       if (successUp) {
+                  //         Fluttertoast.showToast(
+                  //             timeInSecForIosWeb: 3,
+                  //             msg: widget.cuslang == 'EN'
+                  //                 ? "Slip upload successful"
+                  //                 : 'อัปโหลดสลิปสำเร็จ',
+                  //             backgroundColor: Colors.black,
+                  //             textColor: Colors.white,
+                  //             webPosition: "center",
+                  //             webBgColor: "#000000",
+                  //             toastLength: Toast.LENGTH_SHORT);
+                  //       }
+                  //     }
+                  //   }
+                  //   // _processPaymentConfirmation(ctx);
+                  // },
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
         );
       },
@@ -5964,19 +6271,109 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
   Future<dynamic> sucress({VoidCallback? onDismiss}) async {
     if (!mounted) return;
-    return PanaraInfoDialog.show(
-      context,
-      title: widget.cuslang == 'EN' ? 'Completed' : "ดำเนินการเสร็จสิ้น",
-      message: widget.cuslang == 'EN'
-          ? 'You can check your payment within 1-3 business days.'
-          : "สามารถตรวจสอบการชำระภายใน 1-3 วันทำการ",
-      buttonText: widget.cuslang == 'EN' ? 'OK' : "ตกลง",
-      onTapDismiss: () {
-        Navigator.pop(context);
-        if (onDismiss != null) onDismiss();
-      },
-      panaraDialogType: PanaraDialogType.success,
+    final isEN = widget.cuslang == 'EN';
+    return showDialog(
+      context: context,
       barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF43A047), Color(0xFF1B5E20)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.green.withValues(alpha: 0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.check_rounded,
+                    color: Colors.white, size: 44),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                isEN ? 'Completed' : 'ดำเนินการเสร็จสิ้น',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade900,
+                  fontFamily: Font_.Fonts_T,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isEN
+                    ? 'You can check your payment within 1-3 business days.'
+                    : 'สามารถตรวจสอบการชำระภายใน\n1-3 วันทำการ',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                  fontFamily: Font_.Fonts_T,
+                  height: 1.6,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Colors.deepPurple, Color(0xFF4527A0)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.deepPurple.withValues(alpha: 0.35),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        if (onDismiss != null) onDismiss();
+                      },
+                      child: Center(
+                        child: Text(
+                          isEN ? 'OK' : 'ตกลง',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -6437,33 +6834,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                     Future.microtask(() async {
                                       if (!mounted) return;
                                       setState(() => _expireDialogShown = true);
-                                      PanaraConfirmDialog.showAnimatedGrow(
-                                        context,
-                                        title: widget.cuslang == 'EN'
-                                            ? "Expired"
-                                            : "หมดเวลา",
-                                        message: widget.cuslang == 'EN'
-                                            ? "Payment time expired. If paid, please attach proof. If not, please renew QR."
-                                            : "หมดเวลาการชำระแล้ว หากชำระแล้วกรุณาแนบหลักฐานและชำระและยืนยัน หรือยังไม่ได้ชำระกรุณากดแสดง QR อีกครั้ง",
-                                        confirmButtonText:
-                                            widget.cuslang == 'EN'
-                                                ? "Attach Proof"
-                                                : "แนบหลักฐาน",
-                                        cancelButtonText: widget.cuslang == 'EN'
-                                            ? "Close"
-                                            : "ปิด",
-                                        onTapConfirm: () {
-                                          Navigator.pop(context);
-                                          _showPaymentConfirmationSheet(
-                                              context);
-                                        },
-                                        onTapCancel: () {
-                                          Navigator.pop(context);
-                                        },
-                                        panaraDialogType:
-                                            PanaraDialogType.warning,
-                                        barrierDismissible: true,
-                                      );
+                                      _showExpiredDialog();
                                     });
                                   }
 
@@ -6529,6 +6900,110 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     );
   }
 
+  void _showExpiredDialog() {
+    final isEN = widget.cuslang == 'EN';
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dCtx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.shade50,
+                    shape: BoxShape.circle,
+                    border:
+                        Border.all(color: Colors.deepPurple.shade200, width: 2),
+                  ),
+                  child: Icon(Icons.timer_off_rounded,
+                      color: Colors.deepPurple.shade700, size: 38),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isEN ? 'Expired' : 'หมดเวลา',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepPurple.shade900,
+                    fontFamily: Font_.Fonts_T,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isEN
+                      ? 'Payment time expired. If paid, please attach proof. If not, please renew QR.'
+                      : 'หมดเวลาการชำระแล้ว หากชำระแล้วกรุณาแนบหลักฐานและยืนยัน หรือยังไม่ได้ชำระกรุณากดแสดง QR อีกครั้ง',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: Colors.grey.shade700,
+                    height: 1.5,
+                    fontFamily: Font_.Fonts_T,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(color: Colors.deepPurple.shade200),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => Navigator.pop(dCtx),
+                        child: Text(
+                          isEN ? 'Close' : 'ปิด',
+                          style: TextStyle(
+                              color: Colors.deepPurple.shade700,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: Font_.Fonts_T),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.deepPurple,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(dCtx);
+                          _showPaymentConfirmationSheet(context);
+                        },
+                        child: Text(
+                          isEN ? 'Attach Proof' : 'แนบหลักฐาน',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontFamily: Font_.Fonts_T),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showPaymentConfirmationSheet(BuildContext parentContext) {
     Widget chip(String text, Color bg, Color fg) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -6572,17 +7047,31 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              widget.cuslang == 'EN'
-                                  ? 'Payment Confirmation'
-                                  : 'ยืนยันการชำระเงิน',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: Font_.Fonts_T),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 22,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.deepPurple,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                Text(
+                                  widget.cuslang == 'EN'
+                                      ? 'Payment Confirmation'
+                                      : 'ยืนยันการชำระเงิน',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.deepPurple,
+                                      fontFamily: Font_.Fonts_T),
+                                ),
+                              ],
                             ),
                             IconButton(
-                              icon: Icon(Icons.close, color: Colors.grey),
+                              icon: const Icon(Icons.close, color: Colors.grey),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
@@ -6992,17 +7481,31 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              widget.cuslang == 'EN'
-                                  ? 'Payment Confirmation'
-                                  : 'ยืนยันการชำระเงิน',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: Font_.Fonts_T),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 22,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.deepPurple,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                Text(
+                                  widget.cuslang == 'EN'
+                                      ? 'Payment Confirmation'
+                                      : 'ยืนยันการชำระเงิน',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.deepPurple,
+                                      fontFamily: Font_.Fonts_T),
+                                ),
+                              ],
                             ),
                             IconButton(
-                              icon: Icon(Icons.close, color: Colors.grey),
+                              icon: const Icon(Icons.close, color: Colors.grey),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
@@ -7019,46 +7522,468 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             children: [
                               // Instructions
                               Container(
-                                padding: EdgeInsets.all(12),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 14),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border:
-                                      Border.all(color: Colors.orange.shade200),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.orange.shade100,
+                                      Colors.orange.shade50
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                      color: Colors.orange.shade300,
+                                      width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.orange.withValues(alpha: 0.18),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
                                 ),
-                                child: Column(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.info_outline,
-                                            color: Colors.orange.shade800),
-                                        SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            widget.cuslang == 'EN'
-                                                ? "Please upload proof of payment to complete the transaction."
-                                                : "กรุณาแนบหลักฐานการโอนเงินเพื่อดำเนินการให้เสร็จสมบูรณ์",
-                                            style: TextStyle(
-                                                color: Colors.orange.shade900,
-                                                fontFamily: Font_.Fonts_T,
-                                                fontWeight: FontWeight.bold),
-                                          ),
+                                    Container(
+                                      margin: const EdgeInsets.only(
+                                          top: 1, right: 12),
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade200,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(Icons.info_rounded,
+                                          color: Colors.orange.shade800,
+                                          size: 18),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        widget.cuslang == 'EN'
+                                            ? "Please upload proof of payment to complete the transaction and confirm your payment."
+                                            : "กรุณาแนบหลักฐานการโอนเงินเพื่อดำเนินการให้เสร็จสมบูรณ์ และยืนยันการชำระเงิน",
+                                        style: TextStyle(
+                                          color: Colors.orange.shade900,
+                                          fontFamily: Font_.Fonts_T,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.5,
+                                          height: 1.5,
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
                               SizedBox(height: 20),
                               Row(children: [
-                                Text(
-                                  widget.cuslang == 'EN'
-                                      ? "Upload Slip"
-                                      : "อัปโหลดสลิป",
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: Font_.Fonts_T,
-                                      fontSize: 16),
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.upload_file_rounded,
+                                          color: Colors.deepPurple, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        widget.cuslang == 'EN'
+                                            ? "Upload Slip"
+                                            : "อัปโหลดสลิป",
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.deepPurple,
+                                            fontSize: 16),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          border: Border.all(
+                                              color: Colors.red.shade200),
+                                        ),
+                                        child: Text(
+                                          widget.cuslang == 'EN'
+                                              ? 'Required'
+                                              : 'จำเป็น',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.red.shade700,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: InkWell(
+                                      onTap: () async {
+                                        await showDialog(
+                                          context: context,
+                                          builder: (dCtx) => StatefulBuilder(
+                                            builder: (_, setDialog) => Dialog(
+                                              shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          16)),
+                                              child: ConstrainedBox(
+                                                constraints: BoxConstraints(
+                                                  maxWidth: 420,
+                                                  maxHeight: MediaQuery.of(dCtx)
+                                                          .size
+                                                          .height *
+                                                      0.8,
+                                                ),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    // Header
+                                                    Padding(
+                                                      padding: const EdgeInsets
+                                                          .fromLTRB(
+                                                          16, 14, 8, 8),
+                                                      child: Row(
+                                                        children: [
+                                                          Container(
+                                                            width: 4,
+                                                            height: 20,
+                                                            margin:
+                                                                const EdgeInsets
+                                                                    .only(
+                                                                    right: 10),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: Colors
+                                                                  .deepPurple,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          2),
+                                                            ),
+                                                          ),
+                                                          Expanded(
+                                                            child: Text(
+                                                              widget.cuslang ==
+                                                                      'EN'
+                                                                  ? 'Help'
+                                                                  : 'ช่วยเหลือ',
+                                                              style: const TextStyle(
+                                                                  fontSize: 17,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  color: Colors
+                                                                      .deepPurple),
+                                                            ),
+                                                          ),
+                                                          IconButton(
+                                                            icon: const Icon(
+                                                                Icons.close,
+                                                                color: Colors
+                                                                    .grey),
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                                    dCtx),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const Divider(height: 1),
+                                                    Flexible(
+                                                      child:
+                                                          SingleChildScrollView(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .all(12),
+                                                        child: Column(
+                                                          children: [
+                                                            ClipRRect(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          12),
+                                                              child: Theme(
+                                                                data: Theme.of(
+                                                                        dCtx)
+                                                                    .copyWith(
+                                                                  dividerColor:
+                                                                      Colors
+                                                                          .transparent,
+                                                                ),
+                                                                child:
+                                                                    ExpansionTile(
+                                                                  backgroundColor: Colors
+                                                                      .deepPurple
+                                                                      .shade50,
+                                                                  collapsedBackgroundColor: Colors
+                                                                      .deepPurple
+                                                                      .shade50,
+                                                                  iconColor: Colors
+                                                                      .deepPurple,
+                                                                  collapsedIconColor:
+                                                                      Colors
+                                                                          .deepPurple,
+                                                                  shape: RoundedRectangleBorder(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                              12)),
+                                                                  collapsedShape:
+                                                                      RoundedRectangleBorder(
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(12)),
+                                                                  title: Text(
+                                                                    widget.cuslang ==
+                                                                            'EN'
+                                                                        ? 'Already paid but forgot to attach proof'
+                                                                        : 'ชำระแล้วแต่ลืมแนบหลักฐาน',
+                                                                    style: const TextStyle(
+                                                                        fontSize:
+                                                                            14,
+                                                                        fontWeight:
+                                                                            FontWeight
+                                                                                .bold,
+                                                                        color: Colors
+                                                                            .deepPurple),
+                                                                  ),
+                                                                  children: [
+                                                                    Padding(
+                                                                      padding: const EdgeInsets
+                                                                          .fromLTRB(
+                                                                          14,
+                                                                          0,
+                                                                          14,
+                                                                          14),
+                                                                      child:
+                                                                          Column(
+                                                                        crossAxisAlignment:
+                                                                            CrossAxisAlignment.start,
+                                                                        children: [
+                                                                          Text(
+                                                                            widget.cuslang == 'EN'
+                                                                                ? 'If you have already paid but forgot to attach proof of payment, please select the actual payment date below.'
+                                                                                : 'หากท่านได้ชำระเงินไปแล้ว แต่ลืมแนบหลักฐานการชำระ กรุณาเลือกวันที่ชำระจริงด้านล่าง',
+                                                                            style: TextStyle(
+                                                                                fontSize: 13,
+                                                                                color: Colors.black87,
+                                                                                height: 1.5),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 12),
+                                                                          // Selected date display
+                                                                          Container(
+                                                                            padding:
+                                                                                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                                            decoration:
+                                                                                BoxDecoration(
+                                                                              color: Colors.white,
+                                                                              borderRadius: BorderRadius.circular(8),
+                                                                              border: Border.all(color: Colors.deepPurple.shade200),
+                                                                            ),
+                                                                            child:
+                                                                                Row(
+                                                                              children: [
+                                                                                const Icon(Icons.event, size: 18, color: Colors.deepPurple),
+                                                                                const SizedBox(width: 8),
+                                                                                Expanded(
+                                                                                  child: Text(
+                                                                                    '${widget.cuslang == 'EN' ? 'Payment date: ' : 'วันที่ชำระ: '}${Value_newDateD1 ?? '-'}',
+                                                                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                                                                  ),
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 12),
+                                                                          // Pick date button
+                                                                          SizedBox(
+                                                                            width:
+                                                                                double.infinity,
+                                                                            child:
+                                                                                ElevatedButton.icon(
+                                                                              style: ElevatedButton.styleFrom(
+                                                                                backgroundColor: Colors.deepPurple,
+                                                                                foregroundColor: Colors.white,
+                                                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                                              ),
+                                                                              icon: const Icon(Icons.calendar_month, size: 18),
+                                                                              label: Text(
+                                                                                widget.cuslang == 'EN' ? 'Select date' : 'เลือกวันที่',
+                                                                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                                                              ),
+                                                                              onPressed: () async {
+                                                                                final picked = await showDatePicker(
+                                                                                  context: dCtx,
+                                                                                  locale: const Locale('th', 'TH'),
+                                                                                  helpText: widget.cuslang == 'EN' ? 'Select payment date' : 'เลือกวันที่ชำระ',
+                                                                                  confirmText: widget.cuslang == 'EN' ? 'OK' : 'ตกลง',
+                                                                                  cancelText: widget.cuslang == 'EN' ? 'Cancel' : 'ยกเลิก',
+                                                                                  initialDate: newDatetime,
+                                                                                  firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                                                                                  lastDate: DateTime.now().add(const Duration(days: 120)), // TEST: future 120 days
+                                                                                  // lastDate: DateTime.now(), // production
+                                                                                  builder: (ctx, child) => Theme(
+                                                                                    data: Theme.of(ctx).copyWith(
+                                                                                      colorScheme: const ColorScheme.light(
+                                                                                        primary: Colors.deepPurple,
+                                                                                        onPrimary: Colors.white,
+                                                                                        onSurface: Colors.black87,
+                                                                                      ),
+                                                                                    ),
+                                                                                    child: child!,
+                                                                                  ),
+                                                                                );
+                                                                                if (picked != null) {
+                                                                                  newDatetime = picked;
+                                                                                  Value_newDateY1 = DateFormat('yyyy-MM-dd').format(picked);
+                                                                                  Value_newDateD1 = DateFormat('dd-MM-yyyy').format(picked);
+                                                                                  setDialog(() {});
+                                                                                  setStateSheet(() {});
+                                                                                  if (mounted) setState(() {});
+                                                                                }
+                                                                              },
+                                                                            ),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 14),
+                                                                          // Note label + required chip
+                                                                          Row(
+                                                                            children: [
+                                                                              Text(
+                                                                                widget.cuslang == 'EN' ? 'Note' : 'หมายเหตุ',
+                                                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                                                                              ),
+                                                                              const SizedBox(width: 6),
+                                                                              Container(
+                                                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                                                decoration: BoxDecoration(
+                                                                                  color: Colors.red.shade50,
+                                                                                  borderRadius: BorderRadius.circular(6),
+                                                                                  border: Border.all(color: Colors.red.shade200),
+                                                                                ),
+                                                                                child: Text(
+                                                                                  widget.cuslang == 'EN' ? 'Min 10 chars' : 'อย่างน้อย 10 ตัว',
+                                                                                  style: TextStyle(fontSize: 11, color: Colors.red.shade700, fontWeight: FontWeight.bold),
+                                                                                ),
+                                                                              ),
+                                                                            ],
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 6),
+                                                                          TextField(
+                                                                            controller:
+                                                                                Form_paymentNote,
+                                                                            maxLines:
+                                                                                3,
+                                                                            maxLength:
+                                                                                200,
+                                                                            decoration:
+                                                                                InputDecoration(
+                                                                              hintText: widget.cuslang == 'EN' ? 'e.g. Transferred from another account, slip lost...' : 'เช่น โอนจากบัญชีอื่น, สลิปหาย...',
+                                                                              hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                                                                              filled: true,
+                                                                              fillColor: Colors.white,
+                                                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                                              border: OutlineInputBorder(
+                                                                                borderRadius: BorderRadius.circular(10),
+                                                                                borderSide: BorderSide(color: Colors.deepPurple.shade200),
+                                                                              ),
+                                                                              enabledBorder: OutlineInputBorder(
+                                                                                borderRadius: BorderRadius.circular(10),
+                                                                                borderSide: BorderSide(color: Colors.deepPurple.shade200),
+                                                                              ),
+                                                                              focusedBorder: OutlineInputBorder(
+                                                                                borderRadius: BorderRadius.circular(10),
+                                                                                borderSide: const BorderSide(color: Colors.deepPurple, width: 1.5),
+                                                                              ),
+                                                                            ),
+                                                                            onChanged: (_) =>
+                                                                                setDialog(() {}),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 8),
+                                                                          // Confirm button
+                                                                          SizedBox(
+                                                                            width:
+                                                                                double.infinity,
+                                                                            child:
+                                                                                ElevatedButton.icon(
+                                                                              style: ElevatedButton.styleFrom(
+                                                                                backgroundColor: Colors.green.shade600,
+                                                                                foregroundColor: Colors.white,
+                                                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                                              ),
+                                                                              icon: const Icon(Icons.check_circle_outline, size: 18),
+                                                                              label: Text(
+                                                                                widget.cuslang == 'EN' ? 'Confirm' : 'ยืนยัน',
+                                                                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                                                              ),
+                                                                              onPressed: () {
+                                                                                final note = Form_paymentNote.text.trim();
+                                                                                if (note.length < 10) {
+                                                                                  Fluttertoast.showToast(
+                                                                                    msg: widget.cuslang == 'EN' ? 'Please enter at least 10 characters' : 'กรุณากรอกหมายเหตุอย่างน้อย 10 ตัวอักษร',
+                                                                                    backgroundColor: Colors.red,
+                                                                                    textColor: Colors.white,
+                                                                                  );
+                                                                                  return;
+                                                                                }
+                                                                                Navigator.pop(dCtx);
+                                                                                setStateSheet(() {});
+                                                                                if (mounted) setState(() {});
+                                                                              },
+                                                                            ),
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.deepPurple.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          border: Border.all(
+                                              color:
+                                                  Colors.deepPurple.shade200),
+                                        ),
+                                        child: Text(
+                                          widget.cuslang == 'EN'
+                                              ? 'Help'
+                                              : 'ช่วยเหลือ',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.deepPurple.shade700,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ]),
                               // Upload Section Check
@@ -7474,35 +8399,57 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   width: double.infinity,
                                   height: 250,
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.deepPurple.shade50,
+                                    borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
-                                        color: Colors.grey.shade300, width: 2),
+                                        color: Colors.deepPurple.shade200,
+                                        width: 1.5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.deepPurple
+                                            .withValues(alpha: 0.06),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
                                   ),
                                   child: base64_Slip == null
                                       ? Column(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            Icon(
-                                              Icons.cloud_upload_outlined,
-                                              size: 60,
-                                              color: Colors.blue.shade300,
+                                            Container(
+                                              width: 72,
+                                              height: 72,
+                                              decoration: BoxDecoration(
+                                                color: Colors.deepPurple
+                                                    .withValues(alpha: 0.1),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.cloud_upload_outlined,
+                                                size: 38,
+                                                color: Colors.deepPurple,
+                                              ),
                                             ),
-                                            SizedBox(height: 10),
+                                            const SizedBox(height: 14),
                                             Text(
                                               widget.cuslang == 'EN'
                                                   ? "Tap to upload payment slip"
                                                   : "กดเพื่ออัปโหลดสลิป",
                                               style: TextStyle(
-                                                  color: Colors.grey.shade600,
+                                                  color: Colors
+                                                      .deepPurple.shade700,
                                                   fontFamily: Font_.Fonts_T,
-                                                  fontWeight: FontWeight.bold),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 15),
                                             ),
+                                            const SizedBox(height: 4),
                                             Text(
                                               "JPG, PNG (Max 10MB)",
                                               style: TextStyle(
-                                                  color: Colors.grey.shade400,
+                                                  color: Colors
+                                                      .deepPurple.shade300,
                                                   fontSize: 12),
                                             ),
                                           ],
@@ -7570,18 +8517,138 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           ),
                         ),
                       ),
-                      SizedBox(height: 2),
-                      Text(
-                        widget.cuslang == 'EN'
-                            ? "Total amount to be paid: ${nFormat.format(double.parse(Form_payment1.text ?? "0"))} THB"
-                            : "รวมจำนวนเงินที่ต้องชำระ: ${nFormat.format(double.parse(Form_payment1.text ?? "0"))} บาท",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                          fontFamily: Font_.Fonts_T,
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(children: [
+                              Icon(Icons.event_rounded,
+                                  color: Colors.deepPurple.shade400, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                widget.cuslang == 'EN'
+                                    ? 'Payment Received Date'
+                                    : 'วันที่รับชำระ',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade700,
+                                    fontFamily: Font_.Fonts_T),
+                              ),
+                            ]),
+                            Text(
+                              Value_newDateD1 ?? '-',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.deepPurple.shade700,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      SizedBox(height: 2),
+                      if (Form_paymentNote.text.trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.amber.shade300),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Theme(
+                              data: Theme.of(context).copyWith(
+                                dividerColor: Colors.transparent,
+                              ),
+                              child: ExpansionTile(
+                                initiallyExpanded: false,
+                                dense: true,
+                                visualDensity: VisualDensity.compact,
+                                tilePadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 0),
+                                childrenPadding:
+                                    const EdgeInsets.fromLTRB(36, 0, 12, 4),
+                                iconColor: Colors.amber.shade800,
+                                collapsedIconColor: Colors.amber.shade800,
+                                title: Row(
+                                  children: [
+                                    Icon(Icons.sticky_note_2_rounded,
+                                        size: 16, color: Colors.amber.shade800),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Note'
+                                          : 'หมายเหตุ',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.amber.shade900),
+                                    ),
+                                  ],
+                                ),
+                                children: [
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      Form_paymentNote.text.trim(),
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade800,
+                                          height: 1.4),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: Colors.deepPurple.shade200, width: 1),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(children: [
+                              const Icon(Icons.receipt_long_rounded,
+                                  color: Colors.deepPurple, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                widget.cuslang == 'EN'
+                                    ? 'Total Amount'
+                                    : 'จำนวนที่ต้องชำระ',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.deepPurple.shade700,
+                                    fontFamily: Font_.Fonts_T),
+                              ),
+                            ]),
+                            Text(
+                              widget.cuslang == 'EN'
+                                  ? "${nFormat.format(double.parse(Form_payment1.text))} THB"
+                                  : "${nFormat.format(double.parse(Form_payment1.text))} บาท",
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.deepPurple,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
                       // Footer Action
                       Container(
                         padding: EdgeInsets.all(16),
@@ -7603,7 +8670,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             child: _SlideToConfirm(
                               label: widget.cuslang == 'EN'
                                   ? 'Slide to Confirm'
-                                  : 'เลื่อนเพื่อยืนยันการชำระเงิน1234',
+                                  : 'เลื่อนเพื่อยืนยันการชำระเงิน',
                               enabled: base64_Slip != null,
                               onConfirmation: () async {
                                 if (_isProcessingLink) return;
@@ -8023,98 +9090,133 @@ class _SlideToConfirm extends StatefulWidget {
 class __SlideToConfirmState extends State<_SlideToConfirm> {
   double _position = 0.0;
   bool _confirmed = false;
-  final double _height = 55.0;
-  final double _handleWidth = 55.0;
+  bool _isDragging = false;
+  final double _height = 56.0;
+  final double _handleWidth = 48.0;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final maxDrag = maxWidth - _handleWidth;
+        const double pad = 4.0;
+        final double maxDrag = constraints.maxWidth - _handleWidth - pad * 2;
+        final double pct = (_position / maxDrag).clamp(0.0, 1.0);
 
         return Container(
           height: _height,
-          width: maxWidth,
           decoration: BoxDecoration(
-            color: widget.enabled
-                ? widget.color.withOpacity(0.2)
-                : Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(30),
+            gradient: LinearGradient(
+              colors: widget.enabled
+                  ? [
+                      Color.lerp(
+                          Colors.deepPurple, Colors.deepPurple.shade800, pct)!,
+                      Colors.deepPurple.shade800,
+                    ]
+                  : [Colors.grey.shade500, Colors.grey.shade700],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(_height / 2),
+            boxShadow: [
+              BoxShadow(
+                color:
+                    (widget.enabled ? Colors.deepPurple : Colors.grey.shade600)
+                        .withValues(alpha: 0.35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Stack(
             children: [
               Center(
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: widget.enabled ? widget.color : Colors.grey,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: Font_.Fonts_T,
-                    fontSize: 16,
+                child: Opacity(
+                  opacity: (1.0 - pct * 2).clamp(0.0, 1.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
               if (!_confirmed)
-                Positioned(
-                  left: _position,
+                AnimatedPositioned(
+                  duration: _isDragging
+                      ? Duration.zero
+                      : const Duration(milliseconds: 300),
+                  curve: Curves.elasticOut,
+                  left: pad + _position,
+                  top: (_height - _handleWidth) / 2,
                   child: GestureDetector(
                     onHorizontalDragUpdate: (details) {
                       if (!widget.enabled) return;
                       setState(() {
-                        _position += details.delta.dx;
-                        _position = _position.clamp(0.0, maxDrag);
+                        _isDragging = true;
+                        _position =
+                            (_position + details.delta.dx).clamp(0.0, maxDrag);
                       });
                     },
-                    onHorizontalDragEnd: (details) {
+                    onHorizontalDragEnd: (_) {
                       if (!widget.enabled) return;
-                      if (_position >= maxDrag * 0.85) {
+                      if (_position >= maxDrag * 0.72) {
                         setState(() {
+                          _isDragging = false;
                           _position = maxDrag;
                           _confirmed = true;
                         });
                         widget.onConfirmation();
                       } else {
                         setState(() {
+                          _isDragging = false;
                           _position = 0.0;
                         });
                       }
                     },
                     child: Container(
-                      height: _height,
                       width: _handleWidth,
-                      decoration: BoxDecoration(
-                        color: widget.enabled ? widget.color : Colors.grey,
+                      height: _handleWidth,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 4,
-                            offset: Offset(2, 2),
-                          )
+                              color: Colors.black26,
+                              blurRadius: 6,
+                              offset: Offset(2, 2))
                         ],
                       ),
                       child: Icon(
-                        Icons.chevron_right,
-                        color: Colors.white,
-                        size: 30,
+                        Icons.arrow_forward_rounded,
+                        color: widget.enabled ? Colors.deepPurple : Colors.grey,
+                        size: 24,
                       ),
                     ),
                   ),
                 ),
               if (_confirmed)
                 Positioned(
-                  right: 0,
+                  right: pad,
+                  top: (_height - _handleWidth) / 2,
                   child: Container(
-                    height: _height,
-                    width: _height,
-                    decoration: BoxDecoration(
-                      color: widget.color,
+                    width: _handleWidth,
+                    height: _handleWidth,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.check, color: Colors.white),
+                    child: const Icon(Icons.check_rounded,
+                        color: Colors.deepPurple, size: 26),
                   ),
-                )
+                ),
             ],
           ),
         );
@@ -8426,7 +9528,7 @@ Future<Uint8List?> _processMergeImages(MergeParams params) async {
 
           for (int x = 0; x < moduleCount; x++) {
             for (int y = 0; y < moduleCount; y++) {
-              if (qrImage.isDark(y, x)) {
+              if (qrImage.isDark(x, y)) {
                 img.fillRect(
                   merged,
                   x1: qrX + (x * scale),
@@ -8461,19 +9563,28 @@ Future<Uint8List> buildQrPngWithCenterLogo({
   String? activeQrExpire,
   int sizePx = 400, // Higher res for clear small text
 }) async {
-  // 1) QR matrix
-  final qrCode = qr_lib.QrCode(10, qr_lib.QrErrorCorrectLevel.M);
-  qrCode.addData(data);
-  // qrCode.make(); // ✅ สำคัญมาก
-  final qrImage = qr_lib.QrImage(qrCode);
-
-  final moduleCount = qrImage.moduleCount;
-  const int quietModule = 4;
-  final int totalModules = moduleCount + (quietModule * 2);
-
-  int scale = (sizePx / totalModules).floor();
-  if (scale < 1) scale = 1;
-  final int qrSize = totalModules * scale;
+  // 1) QR — use QrPainter (same renderer as on-screen QrImageView) → guaranteed scannable
+  final qrPainter = QrPainter(
+    data: data,
+    version: QrVersions.auto,
+    errorCorrectionLevel: qr_lib.QrErrorCorrectLevel.H,
+    gapless: true,
+    color: const Color(0xFF000000),
+    emptyColor: const Color(0xFFFFFFFF),
+  );
+  final qrImageData = await qrPainter.toImageData(
+    sizePx.toDouble(),
+    format: ui.ImageByteFormat.png,
+  );
+  if (qrImageData == null) {
+    throw Exception('Failed to render QR via QrPainter');
+  }
+  final qrPngBytes = qrImageData.buffer.asUint8List();
+  final qrImg = img.decodePng(qrPngBytes);
+  if (qrImg == null) {
+    throw Exception('Failed to decode QR PNG');
+  }
+  final int qrSize = qrImg.width;
 
   // Fonts (large/small)
   final fontTitle = img.arial14; // Big header
@@ -8533,23 +9644,8 @@ Future<Uint8List> buildQrPngWithCenterLogo({
   img.fill(qrCanvas, color: img.ColorRgba8(255, 255, 255, 255));
   final black = img.ColorRgba8(0, 0, 0, 255);
 
-  // 3) draw modules
-  for (int y = 0; y < moduleCount; y++) {
-    for (int x = 0; x < moduleCount; x++) {
-      if (qrImage.isDark(y, x)) {
-        final xPos = (quietModule + x) * scale;
-        final yPos = (quietModule + y) * scale;
-        img.fillRect(
-          qrCanvas,
-          x1: xPos,
-          y1: yPos,
-          x2: xPos + scale - 1,
-          y2: yPos + scale - 1,
-          color: black,
-        );
-      }
-    }
-  }
+  // 3) composite the pre-rendered QR (from QrPainter) onto the canvas
+  img.compositeImage(qrCanvas, qrImg, dstX: 0, dstY: 0);
 
   // Draw Footer
   if (refs.isNotEmpty) {
@@ -8654,34 +9750,7 @@ Future<Uint8List> buildQrPngWithCenterLogo({
     drawLine();
   }
 
-  // 4) center logo
-  try {
-    final bytes = await rootBundle.load(assetLogoPath);
-    final logoInput = img.decodePng(bytes.buffer.asUint8List());
-    if (logoInput != null) {
-      final int logoW = (qrSize * 0.22).round();
-      final logoResized =
-          img.copyResize(logoInput, width: logoW, height: logoW);
-
-      final int qrCenter = (qrSize / 2).round();
-      final int half = (logoW / 2).round();
-      final int bgPad = (logoW * 0.10).round();
-
-      img.fillRect(
-        qrCanvas,
-        x1: qrCenter - half - bgPad,
-        y1: qrCenter - half - bgPad,
-        x2: qrCenter + half + bgPad,
-        y2: qrCenter + half + bgPad,
-        color: img.ColorRgba8(255, 255, 255, 255),
-      );
-
-      img.compositeImage(qrCanvas, logoResized,
-          dstX: qrCenter - half, dstY: qrCenter - half);
-    }
-  } catch (e) {
-    debugPrint("Logo CPU Error: $e");
-  }
+  // 4) center logo — removed (logo blocks QR scan)
 
   // 5) Draw Footer Icon (if space permits)
   // try {

@@ -354,7 +354,7 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
               customerModel: customerModels,
               teNantModel: teNantModels,
               cuslang: cus_lang,
-              isMainScreen: false, // [NEW] Fix nested scroll error
+              isMainScreen: true,
             ),
       // PaybillMainScreen(
       //   mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -388,6 +388,7 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
       //    customerModel: customerModels,
       // ),
     );
+    _effectiveController.forward();
   }
 
   Future<bool> getData() async {
@@ -422,26 +423,7 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
                   ],
                 ),
               )
-            : CustomScrollView(
-                controller: scrollController,
-                slivers: <Widget>[
-                  getAppBarUI(),
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        _effectiveController.forward();
-                        return listViews[index];
-                      },
-                      childCount: listViews.length,
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 62 + MediaQuery.of(context).padding.bottom,
-                    ),
-                  ),
-                ],
-              ),
+            : listViews.first,
       ),
     );
   }
