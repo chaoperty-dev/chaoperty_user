@@ -41,9 +41,9 @@ class MarketService {
       prefs.setString('tel', cm.tel.toString());
       prefs.setString('tax', cm.tax.toString());
       prefs.setString('foder', cm.foder.toString());
-      prefs.setString('pay_token', model.payToken.toString());
-      prefs.setString('pay_encoded64', model.payEncoded64.toString());
-      prefs.setString('fid', model.fid.toString());
+      prefs.setString('pay_token', model.payToken ?? '');
+      prefs.setString('pay_encoded64', model.payEncoded64 ?? '');
+      prefs.setString('fid', model.fid ?? '');
 
       await _storeCustomerToken(cusno, rser);
     }
@@ -59,10 +59,9 @@ class MarketService {
 
   static Future<void> _storeCustomerToken(String? cusno, String? rser) async {
     if (cusno == null || rser == null) return;
-    int toU16(String? v) => (int.tryParse((v ?? '0').trim()) ?? 0) + 65535;
     await getCustomerToken(
-      customerNo: toU16(cusno).toString(),
-      propertyNo: toU16(rser).toString(),
+      customerNo: cusno.trim(),
+      propertyNo: rser.trim(),
     );
   }
 }

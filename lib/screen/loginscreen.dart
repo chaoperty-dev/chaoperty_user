@@ -1066,10 +1066,9 @@ class _LoginScreenState extends State<LoginScreen> {
         preferences.setString('tax', customerModel.tax.toString());
         preferences.setString('foder', customerModel.foder.toString());
         preferences.setString('lang', cregisModel.language.toString());
-        preferences.setString('pay_token', cregisModel.payToken.toString());
-        preferences.setString(
-            'pay_encoded64', cregisModel.payEncoded64.toString());
-        preferences.setString('fid', cregisModel.fid.toString());
+        preferences.setString('pay_token', cregisModel.payToken ?? '');
+        preferences.setString('pay_encoded64', cregisModel.payEncoded64 ?? '');
+        preferences.setString('fid', cregisModel.fid ?? '');
 
         // Get customer JWT token for payment API
         await _getAndStoreCustomerToken(cusno, rser);
@@ -1096,10 +1095,9 @@ class _LoginScreenState extends State<LoginScreen> {
         preferences.setString('tel', customerModel.tel.toString());
         preferences.setString('tax', customerModel.tax.toString());
         preferences.setString('foder', customerModel.foder.toString());
-        preferences.setString('pay_token', cregisModel.payToken.toString());
-        preferences.setString(
-            'pay_encoded64', cregisModel.payEncoded64.toString());
-        preferences.setString('fid', cregisModel.fid.toString());
+        preferences.setString('pay_token', cregisModel.payToken ?? '');
+        preferences.setString('pay_encoded64', cregisModel.payEncoded64 ?? '');
+        preferences.setString('fid', cregisModel.fid ?? '');
 
         // Get customer JWT token for payment API
         await _getAndStoreCustomerToken(cusno, rser);
@@ -1123,11 +1121,9 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Convert to 16-bit format (same as used in payment APIs)
-    int _toU16(String? v) => (int.tryParse((v ?? '0').trim()) ?? 0) + 65535;
-
-    final customerNo16 = _toU16(cusno).toString();
-    final propertyNo16 = _toU16(rser).toString();
+    // Keep raw custno/rser as-is (preserve leading zeros e.g. "00008")
+    final customerNo16 = cusno.trim();
+    final propertyNo16 = rser.trim();
 
     print(
         '🔑 Getting customer token for customer_no: $customerNo16, property_no: $propertyNo16');
