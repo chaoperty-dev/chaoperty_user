@@ -302,9 +302,7 @@ class _paymentSubV2InvAllState extends State<paymentSubV2InvAll>
     super.dispose();
   }
 
-  int _toU16(String? v) =>
-      (int.tryParse((v ?? '0').trim()) ?? 0) +
-      65535; // ✅ 16-bit unsigned (0..65535)
+  String _toU16(String? v) => (v ?? '0').trim();
   Future<void> _initData() async {
     setState(() {
       isLoading = true;
@@ -323,8 +321,8 @@ class _paymentSubV2InvAllState extends State<paymentSubV2InvAll>
 
     var renPreferences = await preferences.getString('renTalSer');
 
-    String? custno16Bit = await _toU16('$custnoPreferences').toString();
-    final ren16Bit = await _toU16('$renPreferences');
+    String? custno16Bit = _toU16('$custnoPreferences');
+    final ren16Bit = _toU16('$renPreferences');
     debugPrint(
         '_initData Step: redPaymentIntents: cusno=$custnoPreferences, propertyno=$renPreferences');
     debugPrint(
@@ -5583,8 +5581,7 @@ class _paymentSubV2InvAllState extends State<paymentSubV2InvAll>
   }
 
   Future<Map<String, dynamic>?> _DetailsPaymentIntentsReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
+    String _toU16(String? v) => (v ?? '0').trim();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -5619,8 +5616,7 @@ class _paymentSubV2InvAllState extends State<paymentSubV2InvAll>
   }
 
   Future<bool> _renewQrAndReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
+    String _toU16(String? v) => (v ?? '0').trim();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -5992,9 +5988,7 @@ class _paymentSubV2InvAllState extends State<paymentSubV2InvAll>
         });
 
         if (!mounted) return false;
-        int _toU16(String? v) =>
-            (int.tryParse((v ?? '0').trim()) ?? 0) +
-            65535; // ✅ 16-bit unsigned (0..65535)
+        String _toU16(String? v) => (v ?? '0').trim();
 
         String? custno16Bit = _toU16('$custno').toString();
         final ren16Bit = _toU16('$renTal_user');

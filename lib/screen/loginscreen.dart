@@ -803,53 +803,53 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 16),
 
                           // LINE Login Button (Official OAuth)
-                          Container(
-                            width: double.infinity,
-                            decoration: BoxDecoration(
-                              // color: const Color(0xFF06C755), // LINE Green
-                              borderRadius: BorderRadius.circular(30),
-                              // boxShadow: [
-                              //   BoxShadow(
-                              //     color:
-                              //         const Color(0xFF06C755).withOpacity(0.3),
-                              //     blurRadius: 12,
-                              //     offset: const Offset(0, 6),
-                              //   ),
-                              // ],
-                            ),
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                // LINE Official OAuth Login
-                                _lineLoginOAuth();
-                              },
-                              icon: ClipRRect(
-                                borderRadius: BorderRadius.circular(4),
-                                child: Image.asset(
-                                  'images/line_company_thailand_logo.webp',
-                                  width: 20,
-                                  height: 20,
-                                ),
-                              ),
-                              label: const Text(
-                                "เข้าสู่ระบบด้วย LINE",
-                                style: TextStyle(
-                                  fontFamily: Font_.Fonts_T,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(30),
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                              ),
-                            ),
-                          ),
+                          // Container(
+                          //   width: double.infinity,
+                          //   decoration: BoxDecoration(
+                          //     // color: const Color(0xFF06C755), // LINE Green
+                          //     borderRadius: BorderRadius.circular(30),
+                          //     // boxShadow: [
+                          //     //   BoxShadow(
+                          //     //     color:
+                          //     //         const Color(0xFF06C755).withOpacity(0.3),
+                          //     //     blurRadius: 12,
+                          //     //     offset: const Offset(0, 6),
+                          //     //   ),
+                          //     // ],
+                          //   ),
+                          //   child: ElevatedButton.icon(
+                          //     onPressed: () {
+                          //       // LINE Official OAuth Login
+                          //       _lineLoginOAuth();
+                          //     },
+                          //     icon: ClipRRect(
+                          //       borderRadius: BorderRadius.circular(4),
+                          //       child: Image.asset(
+                          //         'images/line_company_thailand_logo.webp',
+                          //         width: 20,
+                          //         height: 20,
+                          //       ),
+                          //     ),
+                          //     label: const Text(
+                          //       "เข้าสู่ระบบด้วย LINE",
+                          //       style: TextStyle(
+                          //         fontFamily: Font_.Fonts_T,
+                          //         fontWeight: FontWeight.bold,
+                          //         fontSize: 14,
+                          //         color: Colors.grey,
+                          //       ),
+                          //     ),
+                          //     style: ElevatedButton.styleFrom(
+                          //       backgroundColor: Colors.transparent,
+                          //       shadowColor: Colors.transparent,
+                          //       shape: RoundedRectangleBorder(
+                          //         borderRadius: BorderRadius.circular(30),
+                          //       ),
+                          //       padding:
+                          //           const EdgeInsets.symmetric(vertical: 16),
+                          //     ),
+                          //   ),
+                          // ),
                         ],
                       ),
                     ),
@@ -1066,10 +1066,9 @@ class _LoginScreenState extends State<LoginScreen> {
         preferences.setString('tax', customerModel.tax.toString());
         preferences.setString('foder', customerModel.foder.toString());
         preferences.setString('lang', cregisModel.language.toString());
-        preferences.setString('pay_token', cregisModel.payToken.toString());
-        preferences.setString(
-            'pay_encoded64', cregisModel.payEncoded64.toString());
-        preferences.setString('fid', cregisModel.fid.toString());
+        preferences.setString('pay_token', cregisModel.payToken ?? '');
+        preferences.setString('pay_encoded64', cregisModel.payEncoded64 ?? '');
+        preferences.setString('fid', cregisModel.fid ?? '');
 
         // Get customer JWT token for payment API
         await _getAndStoreCustomerToken(cusno, rser);
@@ -1096,10 +1095,9 @@ class _LoginScreenState extends State<LoginScreen> {
         preferences.setString('tel', customerModel.tel.toString());
         preferences.setString('tax', customerModel.tax.toString());
         preferences.setString('foder', customerModel.foder.toString());
-        preferences.setString('pay_token', cregisModel.payToken.toString());
-        preferences.setString(
-            'pay_encoded64', cregisModel.payEncoded64.toString());
-        preferences.setString('fid', cregisModel.fid.toString());
+        preferences.setString('pay_token', cregisModel.payToken ?? '');
+        preferences.setString('pay_encoded64', cregisModel.payEncoded64 ?? '');
+        preferences.setString('fid', cregisModel.fid ?? '');
 
         // Get customer JWT token for payment API
         await _getAndStoreCustomerToken(cusno, rser);
@@ -1123,11 +1121,9 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // Convert to 16-bit format (same as used in payment APIs)
-    int _toU16(String? v) => (int.tryParse((v ?? '0').trim()) ?? 0) + 65535;
-
-    final customerNo16 = _toU16(cusno).toString();
-    final propertyNo16 = _toU16(rser).toString();
+    // Keep raw custno/rser as-is (preserve leading zeros e.g. "00008")
+    final customerNo16 = cusno.trim();
+    final propertyNo16 = rser.trim();
 
     print(
         '🔑 Getting customer token for customer_no: $customerNo16, property_no: $propertyNo16');

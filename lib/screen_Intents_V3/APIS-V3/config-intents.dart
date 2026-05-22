@@ -40,9 +40,8 @@ class MyHeadersIntents {
         return null;
       }
 
-      // Convert to 16-bit format
-      int _toU16(String? v) => (int.tryParse((v ?? '0').trim()) ?? 0) + 65535;
-      final customerNo16 = _toU16(custno).toString();
+      // Keep raw custno as-is (preserve leading zeros)
+      final customerNo16 = custno.trim();
 
       final url = Uri.parse(
         '${MyconfigIntents().domainIntents}/v1/payment/customer-token',

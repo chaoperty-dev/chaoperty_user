@@ -307,9 +307,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     super.dispose();
   }
 
-  int _toU16(String? v) =>
-      (int.tryParse((v ?? '0').trim()) ?? 0) +
-      65535; // ✅ 16-bit unsigned (0..65535)
+  String _toU16(String? v) => (v ?? '0').trim();
   Future<void> _initData() async {
     setState(() {
       isLoading = true;
@@ -328,8 +326,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
     var renPreferences = await preferences.getString('renTalSer');
 
-    String? custno16Bit = await _toU16('$custnoPreferences').toString();
-    final ren16Bit = await _toU16('$renPreferences');
+    String? custno16Bit = _toU16('$custnoPreferences');
+    final ren16Bit = _toU16('$renPreferences');
     debugPrint(
         '_initData Step: redPaymentIntents: cusno=$custnoPreferences, propertyno=$renPreferences');
     debugPrint(
@@ -620,9 +618,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
       // 0) Prepare fine data once
       await read_GC_fine();
-      if (contractxFineModels.isNotEmpty) {
-        await in_Trans_fine_re();
-      }
+      // Always populate invoicePayModels — handles both with/without fine internally
+      await in_Trans_fine_re();
 
       // ---------- dteilData ----------
       for (var Indexinv = 0; Indexinv < _InvoiceModels.length; Indexinv++) {
@@ -5859,17 +5856,15 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   }
 
   Future<Map<String, dynamic>?> _DetailsPaymentIntentsReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
-
     try {
       final prefs = await SharedPreferences.getInstance();
       final ren = prefs.getString('renTalSer');
       final String custnoLocal =
           _TransModels.isNotEmpty ? '${_TransModels.first.custno ?? ''}' : '';
 
-      final custno16Bit = _toU16(custnoLocal).toString();
-      final ren16Bit = _toU16('$ren').toString();
+      // Keep raw values as-is (preserve leading zeros)
+      final custno16Bit = custnoLocal.trim();
+      final ren16Bit = (ren ?? '').trim();
 
       final intentsUuid = numinvoice.toString();
 
@@ -5895,8 +5890,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   }
 
   Future<bool> _renewQrAndReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
+    String _toU16(String? v) => (v ?? '0').trim();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -6280,9 +6274,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
         });
 
         if (!mounted) return false;
-        int _toU16(String? v) =>
-            (int.tryParse((v ?? '0').trim()) ?? 0) +
-            65535; // ✅ 16-bit unsigned (0..65535)
+        String _toU16(String? v) => (v ?? '0').trim();
 
         String? custno16Bit = _toU16('$custno').toString();
         final ren16Bit = _toU16('$renTal_user');

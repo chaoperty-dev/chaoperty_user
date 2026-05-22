@@ -306,9 +306,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     super.dispose();
   }
 
-  int _toU16(String? v) =>
-      (int.tryParse((v ?? '0').trim()) ?? 0) +
-      65535; // ✅ 16-bit unsigned (0..65535)
+  String _toU16(String? v) => (v ?? '0').trim();
   Future<void> _initData() async {
     setState(() {
       isLoading = true;
@@ -327,8 +325,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
     var renPreferences = await preferences.getString('renTalSer');
 
-    String? custno16Bit = await _toU16('$custnoPreferences').toString();
-    final ren16Bit = await _toU16('$renPreferences');
+    String? custno16Bit = _toU16('$custnoPreferences');
+    final ren16Bit = _toU16('$renPreferences');
     debugPrint(
         '_initData Step: redPaymentIntents: cusno=$custnoPreferences, propertyno=$renPreferences');
     debugPrint(
@@ -375,9 +373,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       sum_disamt_in = 0;
     });
     await read_GC_fine();
-    if (contractxFineModels.isNotEmpty) {
-      await in_Trans_fine_re();
-    } // ---------- dteilData ----------
+    // Always populate invoicePayModels — handles both with/without fine internally
+    await in_Trans_fine_re();
+    // ---------- dteilData ----------
     for (var Indexinv = 0; Indexinv < _InvoiceModels.length; Indexinv++) {
       final rowInv = _InvoiceModels[Indexinv];
 
@@ -600,9 +598,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
       // 0) Prepare fine data once
       await read_GC_fine();
-      if (contractxFineModels.isNotEmpty) {
-        await in_Trans_fine_re();
-      }
+      // Always populate invoicePayModels — handles both with/without fine internally
+      await in_Trans_fine_re();
 
       // ---------- dteilData ----------
       for (var Indexinv = 0; Indexinv < _InvoiceModels.length; Indexinv++) {
@@ -4813,16 +4810,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                       await CreatePaymentItem();
                                     },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: select_pay == 0
-                                ? Colors.black87 // Colors.green.shade900
-                                : (QR_Ref1 == null ||
-                                        QR_Ref1 == 'null' ||
-                                        QR_Ref1 == '' ||
-                                        selectedValue == null ||
-                                        selectedValue == 'null' ||
-                                        selectedValue == '')
-                                    ? Colors.grey
-                                    : Colors.black87,
+                            backgroundColor: Colors.green,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -5727,8 +5715,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   }
 
   Future<Map<String, dynamic>?> _DetailsPaymentIntentsReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
+    String _toU16(String? v) => (v ?? '0').trim();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -5763,8 +5750,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   }
 
   Future<bool> _renewQrAndReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
+    String _toU16(String? v) => (v ?? '0').trim();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -6291,9 +6277,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         });
 
         if (!mounted) return false;
-        int _toU16(String? v) =>
-            (int.tryParse((v ?? '0').trim()) ?? 0) +
-            65535; // ✅ 16-bit unsigned (0..65535)
+        String _toU16(String? v) => (v ?? '0').trim();
 
         String? custno16Bit = _toU16('$custno').toString();
         final ren16Bit = _toU16('$renTal_user');

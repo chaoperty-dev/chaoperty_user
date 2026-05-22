@@ -251,12 +251,7 @@ Future<http.Response?> DeletePaymentIntents_UuidCanceled({
 // ----------------------
 // Helpers (ไม่แยกไฟล์)
 // ----------------------
-int _toU16(dynamic v) {
-  final n = int.tryParse('$v') ?? 0;
-  return n & 0xFFFF; // unsigned 16-bit
-}
-
-String _toU16Str(dynamic v) => _toU16(v).toString();
+String _toU16Str(dynamic v) => '$v'.trim();
 Future<http.Response?> postPaymentIntents(
     {required String cusNo,
     required String propertyNo,
