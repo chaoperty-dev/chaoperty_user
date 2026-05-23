@@ -82,6 +82,9 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
   Offset _fabPos = Offset.zero;
   Offset _cardPos = Offset.zero;
 
+  static const String _guideCardLastShownKey = 'guideCardLastShownV3';
+  static const Duration _guideCardCooldown = Duration(minutes: 5);
+
   // ✅ Cached totals (computed once per data load)
   double _cachedTotalAll = 0;
   double _cachedTotalDiscount = 0;
@@ -106,16 +109,25 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     // red_Invoice().then((value) => Check_genref_pay());
     Check_time();
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final size = MediaQuery.of(context).size;
       setState(() {
         _fabPos = Offset(size.width - 64, size.height - 220);
         _cardPos = Offset(size.width - 268, size.height - 680);
       });
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) setState(() => _showGuideCard = true);
-      });
+      // ✅ ตรวจสอบว่าเคยแสดง Guide Card ภายใน 5 นาทีที่ผ่านมาหรือยัง
+      final prefs = await SharedPreferences.getInstance();
+      final lastShown = prefs.getInt(_guideCardLastShownKey) ?? 0;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final canShow = (now - lastShown) >= _guideCardCooldown.inMilliseconds;
+      if (canShow) {
+        Future.delayed(const Duration(milliseconds: 800), () {
+          if (!mounted) return;
+          setState(() => _showGuideCard = true);
+          prefs.setInt(_guideCardLastShownKey, now);
+        });
+      }
     });
   }
 
@@ -492,27 +504,37 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
 
   Widget _buildGuideFAB() {
     return GestureDetector(
-      onTap: () => setState(() => _showGuideCard = !_showGuideCard),
+      onTap: () async {
+        setState(() => _showGuideCard = !_showGuideCard);
+        if (_showGuideCard) {
+          final prefs = await SharedPreferences.getInstance();
+          prefs.setInt(
+              _guideCardLastShownKey, DateTime.now().millisecondsSinceEpoch);
+        }
+      },
       child: Container(
-        width: 52,
-        height: 52,
+        width: 44,
+        height: 44,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Colors.deepPurple, Color(0xFF4527A0)],
+          gradient: LinearGradient(
+            colors: [
+              Colors.indigo.withValues(alpha: 0.7),
+              const Color(0xFF283593).withValues(alpha: 0.7),
+            ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.deepPurple.withValues(alpha: 0.45),
-              blurRadius: 14,
-              offset: const Offset(0, 5),
+              color: Colors.indigo.withValues(alpha: 0.25),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
-        child:
-            const Icon(Icons.live_help_rounded, color: Colors.white, size: 24),
+        child: const Icon(Icons.live_help_rounded,
+            color: Colors.white70, size: 20),
       ),
     );
   }
@@ -528,7 +550,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: Colors.deepPurple.withValues(alpha: 0.85),
+            color: Colors.indigo.withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
@@ -576,7 +598,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       height: 16,
                       margin: const EdgeInsets.only(right: 6),
                       decoration: BoxDecoration(
-                        color: Colors.deepPurple,
+                        color: Colors.indigo,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -586,7 +608,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.deepPurple,
+                          color: Colors.indigo,
                         ),
                       ),
                     ),
@@ -670,7 +692,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                                               alignment: Alignment.center,
                                               child:
                                                   const CircularProgressIndicator(
-                                                      color: Colors.deepPurple),
+                                                      color: Colors.indigo),
                                             ),
                                   errorBuilder: (_, __, ___) => Container(
                                     height: 140,
@@ -716,15 +738,14 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                           height: 40,
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
-                              colors: [Colors.deepPurple, Color(0xFF4527A0)],
+                              colors: [Colors.indigo, Color(0xFF283593)],
                               begin: Alignment.centerLeft,
                               end: Alignment.centerRight,
                             ),
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [
                               BoxShadow(
-                                color:
-                                    Colors.deepPurple.withValues(alpha: 0.35),
+                                color: Colors.indigo.withValues(alpha: 0.35),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                               ),
@@ -788,7 +809,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                 backgroundImage: AssetImage('assets/images/Icon-chao.png'),
               ),
             ),
-            LoadingAnimationWidget.inkDrop(color: Colors.green, size: 70),
+            LoadingAnimationWidget.inkDrop(color: Colors.indigo, size: 70),
           ],
         ),
       ),
@@ -1187,6 +1208,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     final bankEn = bankInfo?['en'];
 
     return Card(
+      color: Colors.white,
       elevation: 0.4,
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -1326,12 +1348,12 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       child: Text(
                         widget.cuslang == "EN" ? "Press to pay" : "กดเพื่อชำระ",
                         style: TextStyle(
-                          color: Colors.green.shade700,
+                          color: Colors.indigo.shade700,
                           fontFamily: Font_.Fonts_T,
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
                           decoration: TextDecoration.underline,
-                          decorationColor: Colors.green.shade700,
+                          decorationColor: Colors.indigo.shade700,
                         ),
                       ),
                       onTap: () async {
@@ -1514,12 +1536,12 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                         margin: const EdgeInsets.only(bottom: 10),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? Colors.green.withOpacity(0.04)
+                              ? Colors.indigo.withOpacity(0.04)
                               : Colors.grey.shade50,
                           borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isSelected
-                                ? Colors.green.withOpacity(0.4)
+                                ? Colors.indigo.withOpacity(0.4)
                                 : Colors.grey.shade200,
                             width: 1.2,
                           ),
@@ -1552,7 +1574,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                               children: [
                                 Checkbox(
                                   value: isSelected,
-                                  activeColor: Colors.green,
+                                  activeColor: Colors.indigo,
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(5)),
                                   onChanged: (bool? value) {
@@ -1665,7 +1687,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       child: ElevatedButton(
                         onPressed: () => Navigator.pop(context, selectedDocNos),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade600,
+                          backgroundColor: Colors.indigo.shade600,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(

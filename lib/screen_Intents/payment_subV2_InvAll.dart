@@ -6435,7 +6435,7 @@ class _paymentSubV2InvAllState extends State<paymentSubV2InvAll>
                                                   backgroundColor: Colors.grey,
                                                   foregroundColor: Colors.white,
                                                   padding: const EdgeInsets
-                                                          .symmetric(
+                                                      .symmetric(
                                                       horizontal: 16,
                                                       vertical: 8),
                                                 ),
@@ -6486,7 +6486,7 @@ class _paymentSubV2InvAllState extends State<paymentSubV2InvAll>
                                                         title: Padding(
                                                           padding:
                                                               const EdgeInsets
-                                                                      .symmetric(
+                                                                  .symmetric(
                                                                   horizontal:
                                                                       16.0,
                                                                   vertical:
@@ -6631,7 +6631,7 @@ class _paymentSubV2InvAllState extends State<paymentSubV2InvAll>
                                                   backgroundColor: Colors.black,
                                                   foregroundColor: Colors.white,
                                                   padding: const EdgeInsets
-                                                          .symmetric(
+                                                      .symmetric(
                                                       horizontal: 16,
                                                       vertical: 8),
                                                 ),
@@ -6897,7 +6897,7 @@ class _paymentSubV2InvAllState extends State<paymentSubV2InvAll>
                                                 children: [
                                                   Padding(
                                                     padding: const EdgeInsets
-                                                            .symmetric(
+                                                        .symmetric(
                                                         horizontal: 12.0,
                                                         vertical: 2.0),
                                                     child: Row(

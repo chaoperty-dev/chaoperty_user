@@ -14,7 +14,7 @@
 ///flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false   (แก้ปัญหา Security Capture Screen )
 ///flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security
 ///flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-define=web-browser-flag=--disable-web-security --no-tree-shake-icons
-//** */ flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user_test/
+//** */ flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user_intents/
 //flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user_test/
 //----------------------------------------------------->
 
@@ -104,7 +104,7 @@ class MyApp extends StatelessWidget {
         builder: (context, child) {
           Widget result = child!;
 
-          // จำกัดขนาดสูงสุดแค่แท็บเล็ต (900px)
+          // จำกัดขนาดสูงสุดคือโทรศัพท์ (480px)
           result = ResponsiveWrapper(child: result);
 
           // เพิ่มลายน้ำถ้าเปิด
@@ -233,7 +233,7 @@ class _SplashAppState extends State<SplashApp> {
   }
 }
 
-// Responsive Wrapper - จำกัดขนาดสูงสุดแค่แท็บเล็ต (900px)
+// ResponsiveWrapper - จำกัดขนาดสูงสุดคือโทรศัพท์ (480px)
 // และสไลด์ด้านข้างได้เมื่อหน้าจอน้อยกว่า 300px
 class ResponsiveWrapper extends StatelessWidget {
   final Widget child;
@@ -243,7 +243,7 @@ class ResponsiveWrapper extends StatelessWidget {
   const ResponsiveWrapper({
     super.key,
     required this.child,
-    this.maxWidth = 900, // ขนาดสูงสุดแท็บเล็ต
+    this.maxWidth = 480, // ขนาดสูงสุดโทรศัพท์
     this.minWidth = 330, // ขนาดขั้นต่ำที่รองรับ
   });
 

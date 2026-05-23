@@ -242,6 +242,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   String? return_qr_refapi1, return_qr_refapi2, return_qr_refapi3;
   String? qr_expiresAt, qr_softExpiresAt, activeQrSessionSoftExpire;
   String? qr_payload;
+  String? qrDataNoIntens;
   // ใช้ค่าล่าสุด (อาจถูกอัปเดตจาก renew)
   String? nowExpiresIso;
   DateTime? expiryLocal;
@@ -288,6 +289,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       _localAnimation = AlwaysStoppedAnimation(1.0);
     }
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showAttachSlipWarning();
+    });
+
     checkPreferance().then((value) {
       Value_newDateY1 = DateFormat('yyyy-MM-dd').format(newDatetime);
       Value_newDateD1 = DateFormat('dd-MM-yyyy').format(newDatetime);
@@ -296,6 +301,187 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
       _initData();
     });
+  }
+
+  void _showAttachSlipWarning() {
+    final isEN = widget.cuslang == 'EN';
+    double dx = 0.0;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (_, setSS) => Dialog(
+          backgroundColor: Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.warning_rounded,
+                      color: Colors.red, size: 38),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  isEN ? 'Important Notice' : 'ประกาศสำคัญสำหรับผู้เช่า',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isEN
+                      ? 'After making a payment, tenants must attach payment evidence via the tenant app every time.'
+                      : 'หลังจากทำการชำระเงินแล้ว\nผู้เช่าจะต้องแนบหลักฐานการชำระเงิน\nผ่านแอปผู้เช่าทุกครั้ง',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 14, height: 1.6),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: Colors.red.withValues(alpha: 0.4), width: 1.5),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          isEN
+                              ? 'If no evidence is attached,\nthe system will treat it as\n"No Payment Made" in all cases'
+                              : 'หากไม่แนบหลักฐานในแอปผู้เช่า\nระบบจะถือว่า\n"ยังไม่มีการชำระเงิน" ทุกกรณี',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red,
+                            height: 1.65,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                // ── Slide-to-dismiss button ──
+                LayoutBuilder(builder: (_, constraints) {
+                  const double handleSize = 46.0;
+                  const double trackHeight = 52.0;
+                  const double pad = 4.0;
+                  final double maxDrag =
+                      constraints.maxWidth - handleSize - pad * 2;
+                  final double pct = (dx / maxDrag).clamp(0.0, 1.0);
+
+                  return Container(
+                    height: trackHeight,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Color.lerp(Colors.grey, Colors.grey.shade800, pct)!,
+                          Colors.grey.shade800,
+                        ],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(trackHeight / 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withValues(alpha: 0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      alignment: Alignment.centerLeft,
+                      children: [
+                        // label — จางลงเมื่อเลื่อน
+                        Center(
+                          child: Opacity(
+                            opacity: (1.0 - pct * 2).clamp(0.0, 1.0),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  isEN ? 'Slide to close' : 'เลื่อนเพื่อปิด',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        // handle
+                        AnimatedPositioned(
+                          duration: dx == 0
+                              ? const Duration(milliseconds: 300)
+                              : Duration.zero,
+                          curve: Curves.elasticOut,
+                          left: pad + dx,
+                          child: GestureDetector(
+                            onHorizontalDragUpdate: (d) {
+                              setSS(() {
+                                dx = (dx + d.delta.dx).clamp(0.0, maxDrag);
+                              });
+                            },
+                            onHorizontalDragEnd: (_) {
+                              if (dx >= maxDrag * 0.72) {
+                                Navigator.of(ctx, rootNavigator: true).pop();
+                              } else {
+                                setSS(() => dx = 0.0);
+                              }
+                            },
+                            child: Container(
+                              width: handleSize,
+                              height: handleSize,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black26,
+                                    blurRadius: 6,
+                                    offset: Offset(2, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                Icons.arrow_forward_rounded,
+                                color: Colors.grey.shade700,
+                                size: 24,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -917,6 +1103,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       orElse: () => PayMentModel(
         ser: '-',
         bname: '-',
+        bno: '-',
+        ptser: '-',
       ),
     );
 
@@ -1152,6 +1340,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       this.QR_Date15Min = expLbl;
       this.qr_softExpiresAt = qr_expiresAt;
       this.payment_tser = ptser;
+      this.QR_Ref1 = ref1;
+      this.QR_Ref2 = ref2;
+      this.QR_Ref3 = ref3;
       _expireDialogShown = false;
       gopay = 1; // ✅ แสดง QR box บนหน้าหลัก
     });
@@ -1165,20 +1356,34 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     debugPrint('💳 qr_payload: $qr_payload');
     */
 
+    // ✅ ใช้ selectedValue (PromptPay ID จาก dropdown) สำหรับสร้าง QR
+    // paybno จาก intent อาจเป็นเลขอ้างอิงไม่ใช่ PromptPay ID (เช่น 010554605728801 = 15 หลัก)
+    // selectedValue คือ bno ของ bank ที่ผู้ใช้เลือก (เช่น 0843631897 = 10 หลัก) ซึ่งเป็น PromptPay ID ที่ถูกต้อง
+    final qrBno = selectedValue ?? paybno ?? '-';
+    debugPrint(
+        '💳 QrGenRef DEBUG: ptser=$ptser, paybno=$paybno, selectedValue=$selectedValue, qrBno=$qrBno, qrBno.length=${qrBno.length}, bankId=$bankId');
     final qrData = (ptser == '7')
         ? qr_payload.toString()
         : (ptser == '6')
-            ? '|$bno\r$ref1\r$ref2\r${amtRaw.replaceAll('.', '')}' // PromptPay Bill Payment
+            ? '|$qrBno\r$ref1\r$ref2\r${amtRaw.replaceAll('.', '')}' // Bill Payment
             : (ptser == '5')
-                ? generateQRCode(promptPayID: bno, amount: amtVal) // PromptPay
+                ? generateQRCode(
+                    promptPayID: qrBno, amount: amtVal) // PromptPay
                 : (ptser == '2')
                     ? '${payimg}'
                     : '';
 
+    // Store qrData for use in _QRBox and save QR
+    qrDataNoIntens = qrData;
+
     // Notify Listeners (Dialog) that QR data changed
     _qrUpdateTrigger.value++;
 
-    // debugPrint('💳 Generated QR Data (length: ${qrData.length}): $qrData');
+    debugPrint(
+        '💳 QrGenRef: ptser=$ptser, qrBno=$qrBno, qrData length=${qrData.length}');
+    debugPrint(
+        '💳 QrGenRef: qrData=${qrData.substring(0, qrData.length > 80 ? 80 : qrData.length)}...');
+    debugPrint('💳 QrGenRef: paybno=$paybno, selectedValue=$selectedValue');
 
     // ... validation logic ...
     if (qrData.isEmpty) {
@@ -2200,17 +2405,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     // debugPrint('💳 Soft Expire At: $soft_expire_at');
     // debugPrint('💳 qr_payload: $qr_payload');
 
-    final qrData = (ptser == '7')
-        ? (qr_payload ?? '')
-        : (ptser == '6')
-            ? '|$bno\r$ref1\r$ref2\r${amtRaw.replaceAll('.', '')}'
-            : (ptser == '5' || payment_tser == '5' || payment_tser == '6')
-                ? generateQRCode(
-                    promptPayID: "$selectedValue",
-                    amount: double.tryParse(amtRaw) ?? 0.0)
-                : (ptser == '2')
-                    ? '${payment_img}'
-                    : '';
+    // ✅ ใช้ qrDataNoIntens ที่ถูกสร้างใน QrGenRef แล้ว (เหมือน V3)
+    final qrData = qrDataNoIntens ?? "";
 
     // debugPrint('💳 Generated QR Data ');
 
@@ -2220,9 +2416,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         children: [
           Card(
             color: Colors.white,
-            elevation: 4,
+            elevation: 0.4,
+            margin: const EdgeInsets.symmetric(vertical: 4),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
@@ -2231,6 +2428,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                   key: useKey,
                   child: Container(
                     padding: const EdgeInsets.all(8),
+                    color: Colors.white,
                     child: Column(
                       children: [
                         if (payment_tser == '2') ...[
@@ -2808,21 +3006,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                     ua.contains('ipad') ||
                                     ua.contains('ipod');
 
-                                // FINAL SAFE MODE: Direct CPU Generation (No Text)
-                                // Avoids all Capture/Canvas issues on iOS Web.
+                                // ✅ ใช้ qrDataNoIntens ที่ถูกสร้างใน QrGenRef แล้ว (เหมือน _QRBox)
                                 try {
-                                  // Gen QR Data
-                                  final qrData = (payment_tser == '6')
-                                      ? '|$selectedValue\r$QR_Ref1\r$QR_Ref2\r${Form_payment1.text.replaceAll('.', '')}\r'
-                                      : generateQRCode(
-                                          promptPayID: "$selectedValue",
-                                          amount: double.parse(
-                                              Form_payment1.text.isEmpty
-                                                  ? "0"
-                                                  : Form_payment1.text));
+                                  final qrData = qrDataNoIntens ?? '';
 
-                                  // Gen Image (CPU) - 100% Safe (QR + Logos)
-                                  // Note: Text drawing disabled to avoid errors.
                                   final cpuQrBytes =
                                       await buildQrPngWithCenterLogo(
                                     data: qrData,
@@ -2833,8 +3020,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                     bottomname: '$payment_bname',
                                     bottombankno: '$selectedValue',
                                     bottomRef: widget.cuslang == 'EN'
-                                        ? 'Pay within $QR_Date15Min  |  Ref: $QR_Ref1'
-                                        : 'ชำระภายใน $QR_Date15Min  |  Ref: $QR_Ref1',
+                                        ? 'Pay within $QR_Date15Min  |  Ref: $return_qr_refapi1'
+                                        : 'ชำระภายใน $QR_Date15Min  |  Ref: $return_qr_refapi1',
                                   );
 
                                   // Save
@@ -2857,9 +3044,14 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                   // Notify User
                                   if (isIOS) {
                                     Fluttertoast.showToast(
+                                        timeInSecForIosWeb: 3,
                                         msg: widget.cuslang == 'EN'
                                             ? "Saved (Text not supported on iOS Web)"
                                             : "บันทึกแล้ว (ไม่รองรับข้อความบน iOS Web)",
+                                        backgroundColor: Colors.black,
+                                        textColor: Colors.white,
+                                        webPosition: "center",
+                                        webBgColor: "#000000",
                                         toastLength: Toast.LENGTH_LONG);
                                   }
                                 } catch (e) {
@@ -3134,7 +3326,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     // final bankEn = bankInfo?['en'];
     return Card(
       elevation: 0.4,
+      color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -3417,226 +3612,255 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
         final String? createdAt = intent.createdAt?.toIso8601String() ?? "-";
 
+        final bool isWaitingCheck =
+            statusIntentUuid.toString() == 'รอตรวจสอบ' ||
+                statusIntentUuid.toString() == 'รอการตรวจสอบ';
+        final bool isSlipUploaded =
+            systemStatusIntentUuid.toString() == 'slip_uploaded';
+        final bool showSlipAction =
+            intent.latestSlip != null || isSlipUploaded || isWaitingCheck;
+
+        final Color stBgColor =
+            isWaitingCheck ? Colors.orange.shade100 : Colors.cyan.shade100;
+        final Color stTextColor =
+            isWaitingCheck ? Colors.orange.shade700 : Colors.cyan.shade700;
+
         return Card(
           elevation: 0.4,
+          color: Colors.white,
+          margin: const EdgeInsets.symmetric(vertical: 4),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          clipBehavior: Clip.antiAlias,
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
               initiallyExpanded: false,
               tilePadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  const EdgeInsets.only(left: 16, right: 16, top: 6, bottom: 0),
               childrenPadding:
-                  const EdgeInsets.only(left: 6, right: 6, bottom: 12),
+                  const EdgeInsets.only(left: 16, right: 16, bottom: 16),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-              title: Row(
+                  borderRadius: BorderRadius.circular(16)),
+              trailing:
+                  const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Colors.white,
-                    child:
-                        Icon(Icons.receipt_long, size: 20, color: Colors.grey),
-                    //  logoFile != null && logoFile.isNotEmpty
-                    //     ? Image.asset(
-                    //         'assets/images/LogoBank/$logoFile',
-                    //         height: 26,
-                    //         errorBuilder: (_, __, ___) => const Icon(
-                    //             Icons.account_balance,
-                    //             size: 20,
-                    //             color: Colors.grey),
-                    //       )
-                    //     : const Icon(Icons.account_balance,
-                    //         size: 20, color: Colors.grey),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'เลขที่แจ้งชำระ: ${paymentIntentNo ?? '-'}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15.5),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: stBgColor,
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        Text(
-                          '# ${paymentIntentUuid ?? '-'}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: stTextColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                                widget.cuslang == 'EN'
+                                    ? '${systemStatusIntentUuid}'
+                                    : '${statusIntentUuid}',
+                                style: TextStyle(
+                                  color: stTextColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: Font_.Fonts_T,
+                                )),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '#${paymentIntentUuid ?? '-'}',
                           style: const TextStyle(
-                              fontFamily: Font_.Fonts_T, fontSize: 8.5),
+                              color: Colors.grey,
+                              fontSize: 12,
+                              fontFamily: Font_.Fonts_T),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '฿${nFormat.format(totalAmount)}',
+                    style: const TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.access_time,
+                            size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          flex: 3,
+                          child: Text(
+                            widget.cuslang == 'EN'
+                                ? 'Expire ${_fmtExpireLocal(softExpireAt)}'
+                                : 'หมดอายุ ${_fmtExpireLocal(softExpireAt)}',
+                            style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 13,
+                                fontFamily: Font_.Fonts_T),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(Icons.receipt_long,
+                            size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          flex: 1,
+                          child: Text(
+                            widget.cuslang == "EN"
+                                ? "$billCount Bill"
+                                : "$billCount บิล",
+                            style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 13,
+                                fontFamily: Font_.Fonts_T),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  chip(
-                      widget.cuslang == 'EN'
-                          ? '${systemStatusIntentUuid}'
-                          : '${statusIntentUuid}',
-                      Colors.orange.withOpacity(.08),
-                      Colors.orange.shade700),
                 ],
               ),
               subtitle: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    // if (paymentIntentNo != null)
-                    //   Row(mainAxisSize: MainAxisSize.min, children: [
-                    //     const Icon(Icons.confirmation_number_outlined,
-                    //         size: 15, color: Colors.black54),
-                    //     const SizedBox(width: 6),
-                    //     Text('$paymentIntentNo',
-                    //         style: const TextStyle(
-                    //             fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                    //   ]),
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.money, size: 15, color: Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                          widget.cuslang == 'EN'
-                              ? 'Total: ${nFormat.format(totalAmount)}'
-                              : 'ยอดสุทธิ: ${nFormat.format(totalAmount)}',
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                    ]),
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.calendar_today,
-                          size: 15, color: Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                          widget.cuslang == 'EN'
-                              ? 'Created At: ${_fmtExpireLocal(createdAt)}'
-                              : 'วันที่สร้าง: ${_fmtExpireLocal(createdAt)}',
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                    ]),
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.date_range,
-                          size: 15, color: Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                          widget.cuslang == 'EN'
-                              ? 'Expire At: ${_fmtExpireLocal(softExpireAt)}'
-                              : 'หมดอายุ: ${_fmtExpireLocal(softExpireAt)}',
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                    ]),
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      // const Spacer(),
-                      const Icon(Icons.receipt,
-                          size: 15, color: Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                          widget.cuslang == "EN"
-                              ? "Bill All : $billCount "
-                              : "บิลทั้งหมด : $billCount ",
-                          style: const TextStyle(
-                              color: Colors.grey,
-                              fontFamily: Font_.Fonts_T,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 6),
-                      if (intent.latestSlip != null ||
-                          systemStatusIntentUuid.toString() ==
-                              'slip_uploaded' ||
-                          statusIntentUuid.toString() == 'รอตรวจสอบ' ||
-                          statusIntentUuid.toString() == 'รอการตรวจสอบ') ...[
-                        InkWell(
-                          child: SizedBox(
-                            child: Row(
-                              children: [
-                                Text(
+                padding: const EdgeInsets.only(top: 8),
+                child: showSlipAction
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          InkWell(
+                            onTap: () async {
+                              setState(() {
+                                numinvoice = intent.intentUuid;
+                                sum_amt = totalAmount;
+                              });
+                              await QrGenRef(
+                                QR_Ref1: intent.ref1 ?? '',
+                                QR_Ref2: intent.ref2 ?? '',
+                                QR_Ref3: intent.ref3 ?? '',
+                                softExpireAt:
+                                    intent.softExpireAt?.toIso8601String() ??
+                                        '',
+                              );
+                              if (!mounted) return;
+                              _showPaymentConfirmationSheet(context);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.shade50,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.description_outlined,
+                                      color: Colors.indigo.shade800, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
                                     widget.cuslang == "EN"
-                                        ? "payment proof"
+                                        ? "Payment proof"
                                         : "หลักฐานการชำระ",
-                                    style: const TextStyle(
-                                        decoration: TextDecoration.underline,
-                                        color: Colors.green,
-                                        fontFamily: Font_.Fonts_T,
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700)),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.green,
-                                )
-                              ],
+                                    style: TextStyle(
+                                      color: Colors.indigo.shade800,
+                                      fontFamily: Font_.Fonts_T,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  Icon(Icons.chevron_right,
+                                      color: Colors.indigo.shade800, size: 20),
+                                ],
+                              ),
                             ),
                           ),
-                          onTap: () async {
-                            setState(() {
-                              numinvoice = intent.intentUuid;
-                              sum_amt = intent.total ?? 0.0;
-                            });
-                            await QrGenRef(
-                              QR_Ref1: intent.ref1 ?? '',
-                              QR_Ref2: intent.ref2 ?? '',
-                              QR_Ref3: intent.ref3 ?? '',
-                              softExpireAt:
-                                  intent.softExpireAt?.toIso8601String() ?? '',
-                            );
-                            if (!mounted) return;
-                            _showPaymentConfirmationSheet(context);
-                          },
-                        ),
-                      ] else ...[
-                        InkWell(
-                          child: SizedBox(
-                            child: Row(
-                              children: [
-                                Text(
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          InkWell(
+                            onTap: () async {
+                              setState(() {
+                                numinvoice = intent.intentUuid;
+                                sum_amt = totalAmount;
+                              });
+                              await QrGenRef(
+                                QR_Ref1: intent.ref1 ?? '',
+                                QR_Ref2: intent.ref2 ?? '',
+                                QR_Ref3: intent.ref3 ?? '',
+                                softExpireAt:
+                                    intent.softExpireAt?.toIso8601String() ??
+                                        '',
+                              );
+                              if (!mounted) return;
+                              _showPaymentConfirmationSheet(context);
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.shade50,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.credit_card,
+                                      color: Colors.indigo.shade800, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
                                     widget.cuslang == "EN"
                                         ? "Press to pay"
                                         : "กดเพื่อยืนยัน",
-                                    style: const TextStyle(
-                                        decoration: TextDecoration.underline,
-                                        color: Colors.green,
-                                        fontFamily: Font_.Fonts_T,
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700)),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.green,
-                                )
-                              ],
+                                    style: TextStyle(
+                                      color: Colors.indigo.shade800,
+                                      fontFamily: Font_.Fonts_T,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  // const Spacer(),
+                                  // Icon(Icons.chevron_right,
+                                  //     color: Colors.indigo.shade800, size: 20),
+                                ],
+                              ),
                             ),
                           ),
-                          onTap: () async {
-                            setState(() {
-                              numinvoice = intent.intentUuid;
-                              sum_amt = intent.total ?? 0.0;
-                            });
-                            await QrGenRef(
-                              QR_Ref1: intent.ref1 ?? '',
-                              QR_Ref2: intent.ref2 ?? '',
-                              QR_Ref3: intent.ref3 ?? '',
-                              softExpireAt:
-                                  intent.softExpireAt?.toIso8601String() ?? '',
-                            );
-                            if (!mounted) return;
-                            _showPaymentConfirmationSheet(context);
-                            // if (paymentModel != null) {
-                            //   final index = _PayMentModels.indexOf(paymentModel);
-                            //   if (index != -1) {
-                            //     _selectPayment(index);
-                            //   }
-                            // }
-                          },
-                        ),
-                      ]
-                    ]),
-                  ],
-                ),
+                        ],
+                      ),
               ),
               children: [
                 const Divider(height: 1),
@@ -3920,8 +4144,11 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     final bankEn = bankInfo?['en'];
 
     return Card(
+      color: Colors.white,
       elevation: 0.4,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -4191,7 +4418,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 //  bool tt =false
     return Card(
       elevation: 0.4,
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -4203,6 +4433,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
           initiallyExpanded: false,
           trailing: const SizedBox(),
           title: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircleAvatar(
                 radius: 18,
@@ -4285,30 +4516,174 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                 centerTitle: true,
                 leading: IconButton(
                   icon: Icon(Icons.arrow_back_ios, color: Colors.black),
-                  onPressed: () {
-                    PanaraConfirmDialog.showAnimatedGrow(
-                      context,
-                      title: widget.cuslang == 'EN' ? "Warning" : "แจ้งเตือน",
-                      message: widget.cuslang == 'EN'
-                          ? "If paid, please attach proof and confirm. Or close to pay later."
-                          : "หากชำระแล้วอย่าลืมแนบหลักฐานและยืนยัน หรือปิดไว้ชำระอีกครั้งภายหลัง",
-                      confirmButtonText: widget.cuslang == 'EN'
-                          ? "Attach Proof"
-                          : "แนบหลักฐาน",
-                      cancelButtonText: widget.cuslang == 'EN'
-                          ? "Pay Later"
-                          : "ปิดไว้ชำระภายหลัง",
-                      onTapConfirm: () {
-                        Navigator.pop(context); // Close dialog
-                        // _showPaymentConfirmationSheet(context);
-                      },
-                      onTapCancel: () {
-                        Navigator.pop(context); // Close dialog
-                        Navigator.pop(context); // Close screen
-                      },
-                      panaraDialogType: PanaraDialogType.warning,
+                  onPressed: () async {
+                    showDialog(
+                      context: context,
                       barrierDismissible: true,
+                      builder: (ctx) {
+                        final isEN = widget.cuslang == 'EN';
+                        return Dialog(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24)),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 28, vertical: 28),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.orange.shade200,
+                                        width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                          color: Colors.orange
+                                              .withValues(alpha: 0.25),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 4))
+                                    ],
+                                  ),
+                                  child: Icon(Icons.warning_amber_rounded,
+                                      color: Colors.orange.shade700, size: 38),
+                                ),
+                                const SizedBox(height: 18),
+                                Text(
+                                  isEN ? 'Warning' : 'แจ้งเตือน',
+                                  style: TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade900,
+                                      fontFamily: Font_.Fonts_T),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  isEN
+                                      ? 'If paid, please attach proof and confirm.\nOr close to pay later.'
+                                      : 'หากชำระแล้ว กรุณาแนบหลักฐานและยืนยัน',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                      fontFamily: Font_.Fonts_T,
+                                      height: 1.6),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 24),
+                                // Primary: แนบหลักฐาน
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                          colors: [
+                                            Colors.indigo,
+                                            Color(0xFF283593)
+                                          ],
+                                          begin: Alignment.centerLeft,
+                                          end: Alignment.centerRight),
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                            color: Colors.indigo
+                                                .withValues(alpha: 0.35),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4))
+                                      ],
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(14),
+                                        onTap: () async {
+                                          Navigator.of(ctx, rootNavigator: true)
+                                              .pop();
+                                        },
+                                        child: Center(
+                                            child: Text(
+                                                isEN
+                                                    ? 'Attach Proof'
+                                                    : 'แนบหลักฐาน',
+                                                style: const TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 15,
+                                                    fontWeight:
+                                                        FontWeight.bold))),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                // Secondary: ชำระภายหลัง
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(
+                                          color: Colors.grey.shade400),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                    ),
+                                    onPressed: () async {
+                                      final nav = Navigator.of(ctx,
+                                          rootNavigator: true);
+                                      final rootNav = Navigator.of(context);
+                                      SharedPreferences preferences =
+                                          await SharedPreferences.getInstance();
+                                      var custno =
+                                          preferences.getString('custno');
+                                      nav.pop();
+                                      rootNav.pushAndRemoveUntil(
+                                          MaterialPageRoute(
+                                              builder: (_) =>
+                                                  FitnessAppHomeScreen(
+                                                      custno_s: custno)),
+                                          (route) => false);
+                                    },
+                                    child: Text(
+                                        isEN ? 'Pay Later' : 'ชำระภายหลัง',
+                                        style: TextStyle(
+                                            color: Colors.grey.shade700,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     );
+                    // PanaraConfirmDialog.showAnimatedGrow(
+                    //   context,
+                    //   title: widget.cuslang == 'EN' ? "Warning" : "แจ้งเตือน",
+                    //   message: widget.cuslang == 'EN'
+                    //       ? "If paid, please attach proof and confirm. Or close to pay later."
+                    //       : "หากชำระแล้วอย่าลืมแนบหลักฐานและยืนยัน หรือปิดไว้ชำระอีกครั้งภายหลัง",
+                    //   confirmButtonText: widget.cuslang == 'EN'
+                    //       ? "Attach Proof"
+                    //       : "แนบหลักฐาน",
+                    //   cancelButtonText: widget.cuslang == 'EN'
+                    //       ? "Pay Later"
+                    //       : "ปิดไว้ชำระภายหลัง",
+                    //   onTapConfirm: () {
+                    //     Navigator.pop(context); // Close dialog
+                    //     // _showPaymentConfirmationSheet(context);
+                    //   },
+                    //   onTapCancel: () {
+                    //     Navigator.pop(context); // Close dialog
+                    //     Navigator.pop(context); // Close screen
+                    //   },
+                    //   panaraDialogType: PanaraDialogType.warning,
+                    //   barrierDismissible: true,
+                    // );
                   },
                 ),
                 title: Row(
@@ -4414,7 +4789,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                         preferredSize: Size.fromHeight(0),
                         child: SizedBox.shrink(),
                       )), // FAB Removed
-            // backgroundColor: Colors.white,
+            backgroundColor: const Color(0xFFF2F3F8),
             body: Stack(
               children: [
                 FadeTransition(
@@ -4748,99 +5123,142 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                   ),
               ],
             ),
-            bottomNavigationBar: (selectTap == 2) ||
-                    (invoicePayModels.length == 0)
+            bottomNavigationBar: (selectTap == 2)
                 ? null
                 : Container(
-                    padding: EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.grey.withOpacity(0.3),
-                          spreadRadius: 1,
-                          blurRadius: 10,
-                          offset: Offset(0, -2),
+                          color: Colors.black.withValues(alpha: 0.08),
+                          spreadRadius: 0,
+                          blurRadius: 20,
+                          offset: const Offset(0, -4),
                         ),
                       ],
                     ),
                     child: SafeArea(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: (invoicePayModels.length == 0)
-                              ? () {
-                                  PanaraInfoDialog.showAnimatedGrow(
-                                    context,
-                                    title: "Oops",
-                                    message: widget.cuslang == 'EN'
-                                        ? "No payment amount!!!"
-                                        : "ไม่มียอดชำระ !!!",
-                                    buttonText: widget.cuslang == 'EN'
-                                        ? "acknowledge"
-                                        : "รับทราบ",
-                                    onTapDismiss: () async {
-                                      Navigator.of(
-                                        context,
-                                        rootNavigator: true,
-                                      ).pop();
-                                    },
-                                    panaraDialogType: PanaraDialogType.error,
-                                    barrierDismissible: false,
-                                  );
-                                }
-                              : (paymentSer1 != null &&
-                                      gopay != 0 &&
-                                      qr_expiresAt != null &&
-                                      !_isQrExpired())
-                                  ? () async {
-                                      _showPaymentConfirmationSheet(context);
-                                    }
-                                  : () async {
-                                      // Reset expired QR state before creating new
-                                      if (_isQrExpired()) {
-                                        setState(() {
-                                          qr_expiresAt = null;
-                                          qr_softExpiresAt = null;
-                                          activeQrSessionSoftExpire = null;
-                                          numinvoice = null;
-                                          gopay = 0;
-                                        });
-                                      }
-                                      await CreatePaymentItem();
-                                    },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: Text(
-                            (invoicePayModels.length == 0)
-                                ? widget.cuslang == 'EN'
-                                    ? "No payment amount"
-                                    : "ไม่มียอดชำระ"
+                      child: () {
+                        final bool noInvoice = _InvoiceModels.isEmpty;
+                        final bool isConfirm = paymentSer1 != null &&
+                            gopay != 0 &&
+                            qr_expiresAt != null;
+                        final bool isEN = widget.cuslang == 'EN';
+
+                        final List<Color> grad = noInvoice
+                            ? [Colors.grey.shade300, Colors.grey.shade400]
+                            : isConfirm
+                                ? [
+                                    const Color(0xFFFF8F00),
+                                    const Color(0xFFE65100),
+                                  ]
+                                : [
+                                    const Color(0xFF43A047),
+                                    const Color(0xFF00897B),
+                                  ];
+
+                        final IconData icon = noInvoice
+                            ? Icons.remove_circle_outline_rounded
+                            : isConfirm
+                                ? Icons.attach_file_rounded
                                 : select_pay == 0
-                                    ? (widget.cuslang == 'EN'
-                                        ? 'Payment Next'
-                                        : 'ชำระเงินต่อไป')
-                                    : (paymentSer1 != null &&
-                                            gopay != 0 &&
-                                            qr_expiresAt != null)
-                                        ? (widget.cuslang == 'EN'
-                                            ? 'Confirm Payment'
-                                            : 'ยืนยันการชำระ')
-                                        : (widget.cuslang == 'EN'
-                                            ? 'Start Payment'
-                                            : 'เริ่มการชำระ'),
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: Font_.Fonts_T,
+                                    ? Icons.arrow_forward_rounded
+                                    : Icons.payment_rounded;
+
+                        final String label = noInvoice
+                            ? (isEN ? 'No Payment Amount' : 'ไม่มียอดชำระ')
+                            : select_pay == 0
+                                ? (isEN ? 'Payment Next' : 'ชำระเงินต่อไป')
+                                : isConfirm
+                                    ? (isEN
+                                        ? 'Confirm Payment'
+                                        : 'กดเพื่อ "แนบหลักฐานและยืนยัน"')
+                                    : (isEN
+                                        ? 'Start Payment'
+                                        : 'กดเพื่อ "เริ่มการชำระ"');
+
+                        return Container(
+                          height: 56,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: grad,
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: noInvoice
+                                ? []
+                                : [
+                                    BoxShadow(
+                                      color: grad.last.withValues(alpha: 0.45),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 5),
+                                    ),
+                                  ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: noInvoice
+                                  ? () {
+                                      PanaraInfoDialog.showAnimatedGrow(
+                                        context,
+                                        title: 'Oops',
+                                        message: isEN
+                                            ? 'No payment amount!!!'
+                                            : 'ไม่มียอดชำระ !!!',
+                                        buttonText:
+                                            isEN ? 'acknowledge' : 'รับทราบ',
+                                        onTapDismiss: () async {
+                                          Navigator.of(context,
+                                                  rootNavigator: true)
+                                              .pop();
+                                        },
+                                        panaraDialogType:
+                                            PanaraDialogType.error,
+                                        barrierDismissible: false,
+                                      );
+                                    }
+                                  : isConfirm
+                                      ? () async {
+                                          _showPaymentConfirmationSheet(
+                                              context);
+                                        }
+                                      : () async {
+                                          // Reset expired QR state before creating new
+                                          if (_isQrExpired()) {
+                                            setState(() {
+                                              qr_expiresAt = null;
+                                              qr_softExpiresAt = null;
+                                              activeQrSessionSoftExpire = null;
+                                              numinvoice = null;
+                                              gopay = 0;
+                                            });
+                                          }
+                                          await CreatePaymentItem();
+                                        },
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(icon, color: Colors.white, size: 22),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    label,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: Font_.Fonts_T,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      ),
+                        );
+                      }(),
                     ),
                   ),
           );
@@ -5599,115 +6017,172 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     }
   }
 
-  void _showSlideConfirmDialog(BuildContext context) {
+  void _showSlideConfirmDialog() {
+    if (!mounted) return;
     showDialog(
-      context: context,
+      context: context, // uses this.context
       barrierDismissible: true,
       builder: (BuildContext ctx) {
-        return AlertDialog(
+        return Dialog(
+          backgroundColor: Colors.white,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          contentPadding: EdgeInsets.zero,
-          content: Container(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(children: [
+                      Container(
+                        width: 4,
+                        height: 22,
+                        margin: const EdgeInsets.only(right: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                       Text(
                         widget.cuslang == 'EN'
                             ? 'Confirm Payment'
                             : 'ยืนยันการชำระเงิน',
-                        style: TextStyle(
-                            fontFamily: Font_.Fonts_T,
+                        style: const TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold),
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: Colors.grey),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
+                    ]),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
                 ),
-                Divider(height: 1),
-                SizedBox(height: 10),
-                if (_uploadedSlipData != null)
-                  Container(
-                    height: 250,
-                    width: double.infinity,
-                    color: Colors.black12,
+              ),
+              const Divider(height: 1),
+              const SizedBox(height: 14),
+              if (_uploadedSlipData != null)
+                Container(
+                  height: 240,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(13),
                     child: InteractiveViewer(
                       panEnabled: true,
                       minScale: 0.1,
                       maxScale: 4.0,
-                      child: Image.memory(
-                        _uploadedSlipData!,
-                        fit: BoxFit.contain,
-                      ),
+                      child:
+                          Image.memory(_uploadedSlipData!, fit: BoxFit.contain),
                     ),
                   ),
-                SizedBox(height: 16),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: _SlideToConfirm(
-                    label: widget.cuslang == 'EN'
-                        ? 'Slide to Confirm'
-                        : 'เลื่อนเพื่อยืนยัน',
-                    enabled: true,
-                    onConfirmation: () async {
-                      // Reset uploaded data to allow new upload
-                      setState(() {
-                        _uploadedSlipData = null;
-                      });
-                      // Trigger file picker
-                      // final success = await _pickSlipImage();
-                      if (base64_Slip != null) {
-                        if (!mounted) return;
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (BuildContext context) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          },
-                        );
-                        final successUp = await _uploadSlipImage(
-                            amtRawSlip: sum_amt.toString());
-                        if (mounted) {
-                          Navigator.of(context).pop(); // Close dialog
-                          Navigator.of(context).pop(); // Close dialog
-                          Navigator.pushAndRemoveUntil(context,
-                              MaterialPageRoute(builder: (context) {
-                            return FitnessAppHomeScreen(custno_s: custno);
-                          }), (route) => false);
-                          if (successUp) {
-                            Fluttertoast.showToast(
-                                timeInSecForIosWeb: 3,
-                                msg: widget.cuslang == 'EN'
-                                    ? "Slip upload successful"
-                                    : 'อัปโหลดสลิปสำเร็จ',
-                                backgroundColor: Colors.black,
-                                textColor: Colors.white,
-                                webPosition: "center",
-                                webBgColor: "#000000",
-                                toastLength: Toast.LENGTH_SHORT);
-                          }
+                ),
+              const SizedBox(height: 12),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.indigo.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded,
+                        color: Colors.green, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.cuslang == 'EN'
+                          ? 'Slip attached'
+                          : 'หลักฐานแนบแล้ว',
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.green.shade700,
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          widget.cuslang == 'EN'
+                              ? "${nFormat.format(double.parse(Form_payment1.text))} THB"
+                              : "${nFormat.format(double.parse(Form_payment1.text))} บาท",
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.indigo),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: _SlideToConfirm(
+                  label: widget.cuslang == 'EN'
+                      ? 'Slide to Confirm'
+                      : 'เลื่อนเพื่อยืนยัน',
+                  enabled: true,
+                  onConfirmation: () async {
+                    // Reset uploaded data to allow new upload
+                    setState(() {
+                      _uploadedSlipData = null;
+                    });
+                    // Trigger file picker
+                    // final success = await _pickSlipImage();
+                    if (base64_Slip != null) {
+                      if (!mounted) return;
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (BuildContext context) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        },
+                      );
+                      final successUp = await _uploadSlipImage(
+                          amtRawSlip: sum_amt.toString());
+                      if (mounted) {
+                        Navigator.of(context).pop(); // Close dialog
+                        Navigator.of(context).pop(); // Close dialog
+                        Navigator.pushAndRemoveUntil(context,
+                            MaterialPageRoute(builder: (context) {
+                          return FitnessAppHomeScreen(custno_s: custno);
+                        }), (route) => false);
+                        if (successUp) {
+                          Fluttertoast.showToast(
+                              timeInSecForIosWeb: 3,
+                              msg: widget.cuslang == 'EN'
+                                  ? "Slip upload successful"
+                                  : 'อัปโหลดสลิปสำเร็จ',
+                              backgroundColor: Colors.black,
+                              textColor: Colors.white,
+                              webPosition: "center",
+                              webBgColor: "#000000",
+                              toastLength: Toast.LENGTH_SHORT);
                         }
                       }
-                      // _processPaymentConfirmation(ctx);
-                    },
-                  ),
+                    }
+                    // _processPaymentConfirmation(ctx);
+                  },
                 ),
-                SizedBox(height: 8),
-              ],
-            ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
         );
       },
@@ -6796,6 +7271,14 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                     SizedBox(height: 20),
                                     const SizedBox(height: 8),
                                     Card(
+                                      color: Colors.white,
+                                      elevation: 0.4,
+                                      margin: const EdgeInsets.symmetric(
+                                          vertical: 4),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                      clipBehavior: Clip.antiAlias,
                                       child: Column(
                                         children: [
                                           _slipInfoRow(
@@ -7153,53 +7636,101 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Instructions
+                              // Instructions (V3 style: gradient + circle icon)
                               Container(
-                                padding: EdgeInsets.all(12),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 14),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border:
-                                      Border.all(color: Colors.orange.shade200),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.orange.shade100,
+                                      Colors.orange.shade50
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                      color: Colors.orange.shade300,
+                                      width: 1.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.orange.withOpacity(0.18),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
                                 ),
-                                child: Column(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.info_outline,
-                                            color: Colors.orange.shade800),
-                                        SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            widget.cuslang == 'EN'
-                                                ? "Please upload proof of payment to complete the transaction."
-                                                : "กรุณาแนบหลักฐานการโอนเงินเพื่อดำเนินการให้เสร็จสมบูรณ์",
-                                            style: TextStyle(
-                                                color: Colors.orange.shade900,
-                                                fontFamily: Font_.Fonts_T,
-                                                fontWeight: FontWeight.bold),
-                                          ),
+                                    Container(
+                                      margin: const EdgeInsets.only(
+                                          top: 1, right: 12),
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade200,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(Icons.info_rounded,
+                                          color: Colors.orange.shade800,
+                                          size: 18),
+                                    ),
+                                    Expanded(
+                                      child: Text(
+                                        widget.cuslang == 'EN'
+                                            ? "Please upload proof of payment to complete the transaction and confirm your payment."
+                                            : "กรุณาแนบหลักฐานการโอนเงินเพื่อดำเนินการให้เสร็จสมบูรณ์ และยืนยันการชำระเงิน",
+                                        style: TextStyle(
+                                          color: Colors.orange.shade900,
+                                          fontFamily: Font_.Fonts_T,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13.5,
+                                          height: 1.5,
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
                               SizedBox(height: 20),
 
-                              // Upload Section Check
+                              // Upload Section header (V3 style: deepPurple icon + Required chip)
                               Row(
                                 children: [
+                                  const Icon(Icons.upload_file_rounded,
+                                      color: Colors.indigo, size: 20),
+                                  const SizedBox(width: 8),
                                   Text(
                                     widget.cuslang == 'EN'
                                         ? "Upload Slip"
                                         : "อัปโหลดสลิป",
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        fontFamily: Font_.Fonts_T,
+                                        color: Colors.indigo,
                                         fontSize: 16),
                                   ),
-                                  SizedBox(width: 10),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                          color: Colors.red.shade200),
+                                    ),
+                                    child: Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Required'
+                                          : 'จำเป็น',
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.red.shade700,
+                                          fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
                                   if (_isBillDead)
                                     InkWell(
                                       child: chip(
@@ -7265,7 +7796,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
                                   // Show auto dialog removed - using Slider instead
                                   if (success) {
-                                    _showSlideConfirmDialog(context);
+                                    _showSlideConfirmDialog();
                                   }
                                 },
                                 child: Container(

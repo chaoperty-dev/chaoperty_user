@@ -769,7 +769,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                   ),
                 ),
                 LoadingAnimationWidget.inkDrop(
-                  color: Colors.green,
+                  color: Colors.indigo,
                   size: 70,
                 ),
               ],
@@ -2298,11 +2298,11 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.deepPurple.shade300,
+                  color: Colors.indigo.shade300,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.deepPurple.shade300.withValues(alpha: 0.3),
+                      color: Colors.indigo.shade300.withValues(alpha: 0.3),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
@@ -2581,20 +2581,58 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
         children: [
           Card(
             color: Colors.white,
-            elevation: 4,
+            elevation: 0.4,
+            margin: const EdgeInsets.symmetric(vertical: 4),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
-                // QR Code Area
                 RepaintBoundary(
                   key: useKey,
                   child: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     color: Colors.white,
                     child: Column(
                       children: [
+                        SizedBox(height: 0),
+
+                        // Reminder to attach slip
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.symmetric(horizontal: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.indigo.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: Colors.indigo.shade200, width: 0.7),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                  size: 18, color: Colors.indigo.shade700),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  widget.cuslang == 'EN'
+                                      ? 'Don \'t forget to attach your payment slip after paying.'
+                                      : 'อย่าลืมแนบหลักฐานการชำระเงินหลังจากชำระแล้ว',
+                                  style: TextStyle(
+                                    fontFamily: Font_.Fonts_T,
+                                    fontSize: 12,
+                                    color: Colors.indigo.shade700,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
                         if (payment_tser == '2') ...[
                           ClipRRect(
                             borderRadius: BorderRadius.circular(6),
@@ -2756,12 +2794,17 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         ] else if (payment_tser == '7' ||
                             payment_tser == '6' ||
                             payment_tser == '5') ...[
-                          Image.asset(
-                            'images/thai_qr_payment.png',
-                            width: double.infinity,
-                            fit: BoxFit.contain,
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(12)),
+                            child: Image.asset(
+                              'images/thai_qr_payment_2.png',
+                              width: double.infinity,
+                              height: 65,
+                              fit: BoxFit.fitWidth,
+                            ),
                           ),
-                          SizedBox(height: isMobile ? 4 : 4),
+                          SizedBox(height: 10),
                           (_expireDialogShown == true)
                               ? Container(
                                   width: double.infinity,
@@ -2837,11 +2880,11 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   : (payment_tser == '5' || payment_tser == '6')
                                       ? (_isExporting && _exportQrBytes != null)
                                           ? Image.memory(_exportQrBytes!,
-                                              width: 150,
-                                              height: 150,
+                                              width: 100,
+                                              height: 100,
                                               fit: BoxFit.contain)
                                           : PrettyQr(
-                                              size: 150,
+                                              size: 100,
                                               // size: qrSize,
                                               data: qrData,
                                               image: const AssetImage(
@@ -2902,7 +2945,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             ),
                           ),
                         ],
-                        SizedBox(height: isMobile ? 4 : 6),
+                        SizedBox(height: isMobile ? 2 : 2),
                         Text(
                           '฿${nFormat.format(double.parse(Form_payment1.text))}',
                           textAlign: TextAlign.center,
@@ -2910,10 +2953,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             fontFamily: Font_.Fonts_T,
                             fontWeight: FontWeight.w700,
                             fontSize: isDesktop ? 18 : 16,
-                            color: Colors.red.shade900,
+                            color: Colors.red.shade800,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 0),
                         Text(
                           '$payment_bname',
                           textAlign: TextAlign.center,
@@ -2937,6 +2980,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                 color: Colors.black.withOpacity(.65),
                               ),
                             ),
+                            const SizedBox(width: 6),
                             InkWell(
                                 onTap: () {
                                   Clipboard.setData(new ClipboardData(
@@ -2954,12 +2998,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                 },
                                 child: Icon(
                                   Icons.content_copy_outlined,
-                                  size: 14,
+                                  size: 16,
+                                  color: Colors.grey.shade600,
                                 )),
                           ],
                         ),
-                        Divider(height: 2, color: Colors.grey.shade600),
-                        // const SizedBox(height: 2),
+                        const SizedBox(height: 2),
+                        Divider(height: 1, color: Colors.grey.shade300),
+                        const SizedBox(height: 2),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -3390,8 +3436,6 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                   ),
                 ),
 
-                SizedBox(height: 2),
-
                 // Footer: Trouble Paying?
                 // Container(
                 //   width: double.infinity,
@@ -3440,7 +3484,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     // final bankEn = bankInfo?['en'];
     return Card(
       elevation: 0.4,
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -3614,7 +3661,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             isSelected
                                 ? Icons.check_circle_outline
                                 : Icons.highlight_off_outlined,
-                            color: isSelected ? Colors.green : Colors.grey,
+                            color: isSelected ? Colors.indigo : Colors.grey,
                             size: 18,
                           ),
                         ),
@@ -3726,8 +3773,11 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
         return Card(
           elevation: 0.4,
+          color: Colors.white,
+          margin: const EdgeInsets.symmetric(vertical: 4),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          clipBehavior: Clip.antiAlias,
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
@@ -3867,13 +3917,13 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                         : "หลักฐานการชำระ",
                                     style: const TextStyle(
                                         decoration: TextDecoration.underline,
-                                        color: Colors.green,
+                                        color: Colors.indigo,
                                         fontFamily: Font_.Fonts_T,
                                         fontSize: 12.5,
                                         fontWeight: FontWeight.w700)),
                                 const Icon(
                                   Icons.chevron_right,
-                                  color: Colors.green,
+                                  color: Colors.indigo,
                                 )
                               ],
                             ),
@@ -3899,13 +3949,13 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                         : "กดเพื่อยืนยัน",
                                     style: const TextStyle(
                                         decoration: TextDecoration.underline,
-                                        color: Colors.green,
+                                        color: Colors.indigo,
                                         fontFamily: Font_.Fonts_T,
                                         fontSize: 12.5,
                                         fontWeight: FontWeight.w700)),
                                 const Icon(
                                   Icons.chevron_right,
-                                  color: Colors.green,
+                                  color: Colors.indigo,
                                 )
                               ],
                             ),
@@ -4045,7 +4095,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
         //   color: Colors.white,
         //   borderRadius: BorderRadius.circular(12),
         //   border: isSelected
-        //       ? Border.all(color: Colors.green.shade500, width: 1.5)
+        //       ? Border.all(color: Colors.indigo.shade500, width: 1.5)
         //       : Border.all(color: Colors.grey.shade200, width: 1),
         //   boxShadow: [
         //     BoxShadow(
@@ -4082,7 +4132,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           isSelected
                               ? Icons.check_circle_outline
                               : Icons.highlight_off_outlined,
-                          color: isSelected ? Colors.green : Colors.grey,
+                          color: isSelected ? Colors.indigo : Colors.grey,
                           size: 18,
                         ),
                       ),
@@ -4214,7 +4264,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
     return Card(
       elevation: 0.4,
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -4343,14 +4396,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 // 6. Discount
                 if ((sum_disamt + sum_disamt_in) > 0)
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.discount, size: 15, color: Colors.green),
+                    const Icon(Icons.discount, size: 15, color: Colors.indigo),
                     const SizedBox(width: 6),
                     Text(
                         '${widget.cuslang == "EN" ? "Discount" : "ส่วนลด"}: ${nFormat.format(sum_disamt + sum_disamt_in)}',
                         style: const TextStyle(
                             fontFamily: Font_.Fonts_T,
                             fontSize: 12.5,
-                            color: Colors.green)),
+                            color: Colors.indigo)),
                   ]),
                 // 7. Total (Net)
                 // Row(mainAxisSize: MainAxisSize.min, children: [
@@ -4486,7 +4539,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 //  bool tt =false
     return Card(
       elevation: 0.4,
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -4574,6 +4630,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
           final bool isDesktop = width >= 900;
           final double qrSize = 140.0;
           return Scaffold(
+            backgroundColor: const Color(0xFFF2F3F8),
             appBar: AppBar(
                 backgroundColor: Colors.white,
                 elevation: 0,
@@ -4646,15 +4703,15 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                     decoration: BoxDecoration(
                                       gradient: const LinearGradient(
                                           colors: [
-                                            Colors.deepPurple,
-                                            Color(0xFF4527A0)
+                                            Colors.indigo,
+                                            Color(0xFF283593)
                                           ],
                                           begin: Alignment.centerLeft,
                                           end: Alignment.centerRight),
                                       borderRadius: BorderRadius.circular(14),
                                       boxShadow: [
                                         BoxShadow(
-                                            color: Colors.deepPurple
+                                            color: Colors.indigo
                                                 .withValues(alpha: 0.35),
                                             blurRadius: 10,
                                             offset: const Offset(0, 4))
@@ -5015,7 +5072,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           ),
                         ),
                         LoadingAnimationWidget.inkDrop(
-                          color: Colors.green,
+                          color: Colors.indigo,
                           size: 70,
                         ),
                       ],
@@ -5942,7 +5999,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         height: 22,
                         margin: const EdgeInsets.only(right: 10),
                         decoration: BoxDecoration(
-                          color: Colors.deepPurple,
+                          color: Colors.indigo,
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -5953,7 +6010,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.deepPurple),
+                            color: Colors.indigo),
                       ),
                     ]),
                     IconButton(
@@ -5991,14 +6048,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.deepPurple.shade50,
+                  color: Colors.indigo.shade50,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.deepPurple.shade200),
+                  border: Border.all(color: Colors.indigo.shade200),
                 ),
                 child: Row(
                   children: [
                     const Icon(Icons.check_circle_rounded,
-                        color: Colors.green, size: 18),
+                        color: Colors.indigo, size: 18),
                     const SizedBox(width: 6),
                     Text(
                       widget.cuslang == 'EN'
@@ -6006,7 +6063,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           : 'หลักฐานแนบแล้ว',
                       style: TextStyle(
                           fontSize: 13,
-                          color: Colors.green.shade700,
+                          color: Colors.indigo.shade700,
                           fontFamily: Font_.Fonts_T,
                           fontWeight: FontWeight.bold),
                     ),
@@ -6022,7 +6079,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,
-                              color: Colors.deepPurple),
+                              color: Colors.indigo),
                         ),
                       ),
                     ),
@@ -6060,7 +6117,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   ),
                                 ),
                                 LoadingAnimationWidget.inkDrop(
-                                  color: Colors.green,
+                                  color: Colors.indigo,
                                   size: 70,
                                 ),
                               ],
@@ -6289,7 +6346,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.green.withValues(alpha: 0.35),
+                      color: Colors.indigo.withValues(alpha: 0.35),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
@@ -6329,14 +6386,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [Colors.deepPurple, Color(0xFF4527A0)],
+                      colors: [Colors.indigo, Color(0xFF283593)],
                       begin: Alignment.centerLeft,
                       end: Alignment.centerRight,
                     ),
                     borderRadius: BorderRadius.circular(14),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.deepPurple.withValues(alpha: 0.35),
+                        color: Colors.indigo.withValues(alpha: 0.35),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -6911,13 +6968,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: Colors.deepPurple.shade50,
+                    color: Colors.indigo.shade50,
                     shape: BoxShape.circle,
-                    border:
-                        Border.all(color: Colors.deepPurple.shade200, width: 2),
+                    border: Border.all(color: Colors.indigo.shade200, width: 2),
                   ),
                   child: Icon(Icons.timer_off_rounded,
-                      color: Colors.deepPurple.shade700, size: 38),
+                      color: Colors.indigo.shade700, size: 38),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -6925,7 +6981,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: Colors.deepPurple.shade900,
+                    color: Colors.indigo.shade900,
                     fontFamily: Font_.Fonts_T,
                   ),
                 ),
@@ -6949,7 +7005,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 12),
-                          side: BorderSide(color: Colors.deepPurple.shade200),
+                          side: BorderSide(color: Colors.indigo.shade200),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10)),
                         ),
@@ -6957,7 +7013,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         child: Text(
                           isEN ? 'Close' : 'ปิด',
                           style: TextStyle(
-                              color: Colors.deepPurple.shade700,
+                              color: Colors.indigo.shade700,
                               fontWeight: FontWeight.bold,
                               fontFamily: Font_.Fonts_T),
                         ),
@@ -6967,7 +7023,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                     Expanded(
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurple,
+                          backgroundColor: Colors.indigo,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
@@ -7046,7 +7102,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   height: 22,
                                   margin: const EdgeInsets.only(right: 10),
                                   decoration: BoxDecoration(
-                                    color: Colors.deepPurple,
+                                    color: Colors.indigo,
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
@@ -7057,7 +7113,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.deepPurple,
+                                      color: Colors.indigo,
                                       fontFamily: Font_.Fonts_T),
                                 ),
                               ],
@@ -7091,7 +7147,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                           Row(
                                             children: [
                                               Icon(Icons.check_circle,
-                                                  color: Colors.green.shade800),
+                                                  color:
+                                                      Colors.indigo.shade800),
                                               SizedBox(width: 10),
                                               Expanded(
                                                 child: Text(
@@ -7114,6 +7171,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                     SizedBox(height: 20),
                                     const SizedBox(height: 8),
                                     Card(
+                                      color: Colors.white,
+                                      elevation: 0.4,
+                                      margin: const EdgeInsets.symmetric(
+                                          vertical: 4),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                      clipBehavior: Clip.antiAlias,
                                       child: Column(
                                         children: [
                                           _slipInfoRow(
@@ -7218,7 +7283,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                 ? 'Slip upload successful!'
                                                                 : 'อัปโหลดสลิปสำเร็จ!'),
                                                             backgroundColor:
-                                                                Colors.green,
+                                                                Colors.indigo,
                                                           ),
                                                         );
                                                       }
@@ -7480,7 +7545,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   height: 22,
                                   margin: const EdgeInsets.only(right: 10),
                                   decoration: BoxDecoration(
-                                    color: Colors.deepPurple,
+                                    color: Colors.indigo,
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
@@ -7491,7 +7556,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.deepPurple,
+                                      color: Colors.indigo,
                                       fontFamily: Font_.Fonts_T),
                                 ),
                               ],
@@ -7576,7 +7641,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   child: Row(
                                     children: [
                                       const Icon(Icons.upload_file_rounded,
-                                          color: Colors.deepPurple, size: 20),
+                                          color: Colors.indigo, size: 20),
                                       const SizedBox(width: 8),
                                       Text(
                                         widget.cuslang == 'EN'
@@ -7584,7 +7649,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                             : "อัปโหลดสลิป",
                                         style: const TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            color: Colors.deepPurple,
+                                            color: Colors.indigo,
                                             fontSize: 16),
                                       ),
                                       const SizedBox(width: 6),
@@ -7652,8 +7717,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                     right: 10),
                                                             decoration:
                                                                 BoxDecoration(
-                                                              color: Colors
-                                                                  .deepPurple,
+                                                              color:
+                                                                  Colors.indigo,
                                                               borderRadius:
                                                                   BorderRadius
                                                                       .circular(
@@ -7672,7 +7737,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                       FontWeight
                                                                           .bold,
                                                                   color: Colors
-                                                                      .deepPurple),
+                                                                      .indigo),
                                                             ),
                                                           ),
                                                           IconButton(
@@ -7711,17 +7776,20 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                 ),
                                                                 child:
                                                                     ExpansionTile(
-                                                                  backgroundColor: Colors
-                                                                      .deepPurple
-                                                                      .shade50,
-                                                                  collapsedBackgroundColor: Colors
-                                                                      .deepPurple
-                                                                      .shade50,
-                                                                  iconColor: Colors
-                                                                      .deepPurple,
+                                                                  backgroundColor:
+                                                                      Colors
+                                                                          .indigo
+                                                                          .shade50,
+                                                                  collapsedBackgroundColor:
+                                                                      Colors
+                                                                          .indigo
+                                                                          .shade50,
+                                                                  iconColor:
+                                                                      Colors
+                                                                          .indigo,
                                                                   collapsedIconColor:
                                                                       Colors
-                                                                          .deepPurple,
+                                                                          .indigo,
                                                                   shape: RoundedRectangleBorder(
                                                                       borderRadius:
                                                                           BorderRadius.circular(
@@ -7742,7 +7810,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                             FontWeight
                                                                                 .bold,
                                                                         color: Colors
-                                                                            .deepPurple),
+                                                                            .indigo),
                                                                   ),
                                                                   children: [
                                                                     Padding(
@@ -7776,12 +7844,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                                 BoxDecoration(
                                                                               color: Colors.white,
                                                                               borderRadius: BorderRadius.circular(8),
-                                                                              border: Border.all(color: Colors.deepPurple.shade200),
+                                                                              border: Border.all(color: Colors.indigo.shade200),
                                                                             ),
                                                                             child:
                                                                                 Row(
                                                                               children: [
-                                                                                const Icon(Icons.event, size: 18, color: Colors.deepPurple),
+                                                                                const Icon(Icons.event, size: 18, color: Colors.indigo),
                                                                                 const SizedBox(width: 8),
                                                                                 Expanded(
                                                                                   child: Text(
@@ -7801,7 +7869,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                             child:
                                                                                 ElevatedButton.icon(
                                                                               style: ElevatedButton.styleFrom(
-                                                                                backgroundColor: Colors.deepPurple,
+                                                                                backgroundColor: Colors.indigo,
                                                                                 foregroundColor: Colors.white,
                                                                                 padding: const EdgeInsets.symmetric(vertical: 12),
                                                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -7825,7 +7893,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                                   builder: (ctx, child) => Theme(
                                                                                     data: Theme.of(ctx).copyWith(
                                                                                       colorScheme: const ColorScheme.light(
-                                                                                        primary: Colors.deepPurple,
+                                                                                        primary: Colors.indigo,
                                                                                         onPrimary: Colors.white,
                                                                                         onSurface: Colors.black87,
                                                                                       ),
@@ -7851,7 +7919,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                             children: [
                                                                               Text(
                                                                                 widget.cuslang == 'EN' ? 'Note' : 'หมายเหตุ',
-                                                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                                                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.indigo),
                                                                               ),
                                                                               const SizedBox(width: 6),
                                                                               Container(
@@ -7886,15 +7954,15 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                                                               border: OutlineInputBorder(
                                                                                 borderRadius: BorderRadius.circular(10),
-                                                                                borderSide: BorderSide(color: Colors.deepPurple.shade200),
+                                                                                borderSide: BorderSide(color: Colors.indigo.shade200),
                                                                               ),
                                                                               enabledBorder: OutlineInputBorder(
                                                                                 borderRadius: BorderRadius.circular(10),
-                                                                                borderSide: BorderSide(color: Colors.deepPurple.shade200),
+                                                                                borderSide: BorderSide(color: Colors.indigo.shade200),
                                                                               ),
                                                                               focusedBorder: OutlineInputBorder(
                                                                                 borderRadius: BorderRadius.circular(10),
-                                                                                borderSide: const BorderSide(color: Colors.deepPurple, width: 1.5),
+                                                                                borderSide: const BorderSide(color: Colors.indigo, width: 1.5),
                                                                               ),
                                                                             ),
                                                                             onChanged: (_) =>
@@ -7909,7 +7977,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                             child:
                                                                                 ElevatedButton.icon(
                                                                               style: ElevatedButton.styleFrom(
-                                                                                backgroundColor: Colors.green.shade600,
+                                                                                backgroundColor: Colors.indigo.shade600,
                                                                                 foregroundColor: Colors.white,
                                                                                 padding: const EdgeInsets.symmetric(vertical: 12),
                                                                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -7957,12 +8025,11 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: Colors.deepPurple.shade50,
+                                          color: Colors.indigo.shade50,
                                           borderRadius:
                                               BorderRadius.circular(6),
                                           border: Border.all(
-                                              color:
-                                                  Colors.deepPurple.shade200),
+                                              color: Colors.indigo.shade200),
                                         ),
                                         child: Text(
                                           widget.cuslang == 'EN'
@@ -7970,7 +8037,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                               : 'ช่วยเหลือ',
                                           style: TextStyle(
                                               fontSize: 11,
-                                              color: Colors.deepPurple.shade700,
+                                              color: Colors.indigo.shade700,
                                               fontWeight: FontWeight.bold),
                                         ),
                                       ),
@@ -8391,14 +8458,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   width: double.infinity,
                                   height: 250,
                                   decoration: BoxDecoration(
-                                    color: Colors.deepPurple.shade50,
+                                    color: Colors.indigo.shade50,
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
-                                        color: Colors.deepPurple.shade200,
+                                        color: Colors.indigo.shade200,
                                         width: 1.5),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.deepPurple
+                                        color: Colors.indigo
                                             .withValues(alpha: 0.06),
                                         blurRadius: 12,
                                         offset: const Offset(0, 4),
@@ -8414,14 +8481,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                               width: 72,
                                               height: 72,
                                               decoration: BoxDecoration(
-                                                color: Colors.deepPurple
+                                                color: Colors.indigo
                                                     .withValues(alpha: 0.1),
                                                 shape: BoxShape.circle,
                                               ),
                                               child: const Icon(
                                                 Icons.cloud_upload_outlined,
                                                 size: 38,
-                                                color: Colors.deepPurple,
+                                                color: Colors.indigo,
                                               ),
                                             ),
                                             const SizedBox(height: 14),
@@ -8430,8 +8497,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                   ? "Tap to upload payment slip"
                                                   : "กดเพื่ออัปโหลดสลิป",
                                               style: TextStyle(
-                                                  color: Colors
-                                                      .deepPurple.shade700,
+                                                  color: Colors.indigo.shade700,
                                                   fontFamily: Font_.Fonts_T,
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 15),
@@ -8440,8 +8506,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                             Text(
                                               "JPG, PNG (Max 10MB)",
                                               style: TextStyle(
-                                                  color: Colors
-                                                      .deepPurple.shade300,
+                                                  color: Colors.indigo.shade300,
                                                   fontSize: 12),
                                             ),
                                           ],
@@ -8518,7 +8583,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           children: [
                             Row(children: [
                               Icon(Icons.event_rounded,
-                                  color: Colors.deepPurple.shade400, size: 16),
+                                  color: Colors.indigo.shade400, size: 16),
                               const SizedBox(width: 6),
                               Text(
                                 widget.cuslang == 'EN'
@@ -8535,7 +8600,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.deepPurple.shade700,
+                                color: Colors.indigo.shade700,
                               ),
                             ),
                           ],
@@ -8605,17 +8670,17 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
                         decoration: BoxDecoration(
-                          color: Colors.deepPurple.shade50,
+                          color: Colors.indigo.shade50,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: Colors.deepPurple.shade200, width: 1),
+                              color: Colors.indigo.shade200, width: 1),
                         ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Row(children: [
                               const Icon(Icons.receipt_long_rounded,
-                                  color: Colors.deepPurple, size: 20),
+                                  color: Colors.indigo, size: 20),
                               const SizedBox(width: 8),
                               Text(
                                 widget.cuslang == 'EN'
@@ -8623,7 +8688,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                     : 'จำนวนที่ต้องชำระ',
                                 style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.deepPurple.shade700,
+                                    color: Colors.indigo.shade700,
                                     fontFamily: Font_.Fonts_T),
                               ),
                             ]),
@@ -8634,7 +8699,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                               style: const TextStyle(
                                 fontSize: 17,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.deepPurple,
+                                color: Colors.indigo,
                               ),
                             ),
                           ],
@@ -8689,7 +8754,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                               ),
                                             ),
                                             LoadingAnimationWidget.inkDrop(
-                                              color: Colors.green,
+                                              color: Colors.indigo,
                                               size: 70,
                                             ),
                                           ],
@@ -8857,16 +8922,16 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.green.shade50,
+              color: Colors.indigo.shade50,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.green.shade200),
+              border: Border.all(color: Colors.indigo.shade200),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    Icon(Icons.check_circle, color: Colors.indigo, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -8875,7 +8940,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           fontFamily: Font_.Fonts_T,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
-                          color: Colors.green.shade700,
+                          color: Colors.indigo.shade700,
                         ),
                       ),
                     ),
@@ -8923,7 +8988,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                       ),
                                     ),
                                     LoadingAnimationWidget.inkDrop(
-                                      color: Colors.green,
+                                      color: Colors.indigo,
                                       size: 70,
                                     ),
                                   ],
@@ -8939,7 +9004,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('อัปโหลดสลิปสำเร็จ!'),
-                                  backgroundColor: Colors.green,
+                                  backgroundColor: Colors.indigo,
                                 ),
                               );
                             }
@@ -9071,7 +9136,7 @@ class _SlideToConfirm extends StatefulWidget {
     Key? key,
     required this.onConfirmation,
     required this.label,
-    this.color = Colors.green,
+    this.color = Colors.indigo,
     this.enabled = true,
   }) : super(key: key);
 
@@ -9100,9 +9165,8 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
             gradient: LinearGradient(
               colors: widget.enabled
                   ? [
-                      Color.lerp(
-                          Colors.deepPurple, Colors.deepPurple.shade800, pct)!,
-                      Colors.deepPurple.shade800,
+                      Color.lerp(Colors.indigo, Colors.indigo.shade800, pct)!,
+                      Colors.indigo.shade800,
                     ]
                   : [Colors.grey.shade500, Colors.grey.shade700],
               begin: Alignment.centerLeft,
@@ -9111,9 +9175,8 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
             borderRadius: BorderRadius.circular(_height / 2),
             boxShadow: [
               BoxShadow(
-                color:
-                    (widget.enabled ? Colors.deepPurple : Colors.grey.shade600)
-                        .withValues(alpha: 0.35),
+                color: (widget.enabled ? Colors.indigo : Colors.grey.shade600)
+                    .withValues(alpha: 0.35),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -9188,7 +9251,7 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
                       ),
                       child: Icon(
                         Icons.arrow_forward_rounded,
-                        color: widget.enabled ? Colors.deepPurple : Colors.grey,
+                        color: widget.enabled ? Colors.indigo : Colors.grey,
                         size: 24,
                       ),
                     ),
@@ -9206,7 +9269,7 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(Icons.check_rounded,
-                        color: Colors.deepPurple, size: 26),
+                        color: Colors.indigo, size: 26),
                   ),
                 ),
             ],

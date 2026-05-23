@@ -6,7 +6,10 @@ String _tlv(String id, String value) {
 }
 
 String generateQRCode({String promptPayID = "", double amount = 0}) {
-  if (promptPayID.length != 10 && promptPayID.length != 13) return "";
+  // รองรับเลข 10 หลัก (เบอร์โทร), 13 หลัก (เลขบัตรประชาชน), และ 15 หลัก (เลขบัญชีธนาคาร)
+  if (promptPayID.length != 10 &&
+      promptPayID.length != 13 &&
+      promptPayID.length != 15) return "";
 
   // 00: Payload Format Indicator (01)
   final start = _tlv('00', '01');
@@ -16,11 +19,17 @@ String generateQRCode({String promptPayID = "", double amount = 0}) {
 
   // 29: Merchant Account Information (PromptPay)
   final aid = _tlv('00', 'A000000677010111');
-  final idField = (promptPayID.length == 10)
-      // 01: Mobile (ต้องเป็น 0066 + เบอร์ตัด 0 ตัวหน้า)
-      ? _tlv('01', '006${'6'}${promptPayID.substring(1)}')
-      // 02: National ID
-      : _tlv('02', promptPayID);
+  final idField;
+  if (promptPayID.length == 10) {
+    // 01: Mobile (ต้องเป็น 0066 + เบอร์ตัด 0 ตัวหน้า)
+    idField = _tlv('01', '006${'6'}${promptPayID.substring(1)}');
+  } else if (promptPayID.length == 13) {
+    // 02: National ID
+    idField = _tlv('02', promptPayID);
+  } else {
+    // 04: Bank Account (เลขบัญชี 15 หลัก)
+    idField = _tlv('04', promptPayID);
+  }
   final mai = _tlv('29', aid + idField);
 
   // 53: Transaction Currency (764 = THB)
