@@ -627,7 +627,7 @@ class _RentalScreenState extends State<RentalScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       LoadingAnimationWidget.inkDrop(
-                          color: Colors.green, size: 64),
+                          color: Colors.indigo, size: 64),
                       const SizedBox(height: 12),
                       Text(isEN ? 'Loading...' : 'กำลังโหลด...',
                           style: const TextStyle(color: Colors.black54)),

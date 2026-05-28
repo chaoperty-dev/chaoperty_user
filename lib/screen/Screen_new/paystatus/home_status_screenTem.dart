@@ -581,35 +581,11 @@ class _StatusScreenState extends State<StatusScreen>
                   double width_x = 100;
                   double height_x = 50;
 
-                  if (kIsWeb) {
-                    // เฉพาะบน Web/Desktop
-                    if (constraints.maxWidth >= 1400) {
-                      crossAxisCount = 4;
-                      aspectRatio = 3.85;
-                      padding = 2;
-                      width_x = 70;
-                      height_x = 50;
-                    } else if (constraints.maxWidth >= 1000) {
-                      crossAxisCount = 3;
-                      aspectRatio = 3.9;
-                      padding = 2;
-                      bottom_x = 20;
-                      width_x = 70;
-                      height_x = 50;
-                    } else if (constraints.maxWidth >= 800) {
-                      crossAxisCount = 2;
-                      aspectRatio = 3.0;
-                      bottom_x = 40;
-                      width_x = 80;
-                      height_x = 50;
-                    } else if (constraints.maxWidth >= 400) {
-                      crossAxisCount = 1;
-                      aspectRatio = 8.0;
-                      bottom_x = 40;
-                      width_x = 80;
-                      height_x = 50;
-                    }
-                  }
+                  crossAxisCount = 1;
+                  aspectRatio = 3.2;
+                  bottom_x = 40;
+                  width_x = 80;
+                  height_x = 50;
                   // เช็คว่าหน้าจอกว้างพอที่จะเป็น 2 คอลัมน์ไหม
                   final isWideScreen = constraints.maxWidth > 600;
 
@@ -1426,7 +1402,7 @@ class _StatusScreenState extends State<StatusScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                      color: Colors.green,
+                      color: Colors.indigo,
                       size: 70,
                     ),
                   ],

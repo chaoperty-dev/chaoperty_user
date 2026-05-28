@@ -450,11 +450,12 @@ class MealsView extends StatelessWidget {
                                       await SharedPreferences.getInstance();
                                   preferences.setString(
                                       'usercid', mealsListData!.cid.toString());
-                                  preferences.setString('payby', 'PAYCONTACT');
+                                  preferences.setString('payby', 'PAY');
                                   MaterialPageRoute route = MaterialPageRoute(
-                                    builder: (context) =>
-                                        const FitnessAppHomeScreen(
-                                            pageroot: 'PAYCONTACT'),
+                                    builder: (context) => FitnessAppHomeScreen(
+                                      pageroot: 'PAY',
+                                      initialCid: mealsListData!.cid.toString(),
+                                    ),
                                   );
                                   Navigator.push(context, route);
                                 },

@@ -31,7 +31,9 @@ import 'package:floating_bottom_navigation_bar/floating_bottom_navigation_bar.da
 class FitnessAppHomeScreen extends StatefulWidget {
   final String? pageroot;
   final String? custno_s;
-  const FitnessAppHomeScreen({super.key, this.pageroot, this.custno_s});
+  final String? initialCid;
+  const FitnessAppHomeScreen(
+      {super.key, this.pageroot, this.custno_s, this.initialCid});
 
   @override
   State<FitnessAppHomeScreen> createState() => _FitnessAppHomeScreenState();
@@ -53,7 +55,7 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
 
     if (widget.pageroot == 'INFO') {
       _currentIndex = 2;
-    } else if (widget.pageroot == 'PAY') {
+    } else if (widget.pageroot == 'PAY' || widget.pageroot == 'PAYCONTACT') {
       _currentIndex = 1;
     } else {
       _currentIndex = 0;
@@ -64,7 +66,10 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
 
     // หน้าเริ่มต้นตาม pageroot
     tabBody = switch (widget.pageroot) {
-      'PAY' => TrainingPayScreen(animationController: animationController),
+      'PAY' => TrainingPayScreen(
+          animationController: animationController,
+          initialCid: widget.initialCid,
+        ),
       'INFO' => TrainingScreen(animationController: animationController),
       'MITER' => MitterScreen(animationController: animationController),
       'PAYMENT' => ReceiptPayScreen(animationController: animationController),

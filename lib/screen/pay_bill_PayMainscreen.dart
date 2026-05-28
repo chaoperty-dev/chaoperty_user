@@ -2078,7 +2078,7 @@ class _PaybillPayMainScreenState extends State<PaybillPayMainScreen> {
                   radius: 30,
                   backgroundImage: AssetImage('assets/images/Icon-chao.png')),
             ),
-            LoadingAnimationWidget.inkDrop(color: Colors.green, size: 70),
+            LoadingAnimationWidget.inkDrop(color: Colors.indigo, size: 70),
           ],
         ),
       ),

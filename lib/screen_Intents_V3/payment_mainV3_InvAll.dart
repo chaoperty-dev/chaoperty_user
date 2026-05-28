@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'package:chaoperty_user/video_player_helper.dart';
 import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
@@ -32,6 +32,7 @@ class paymentMainV3InvAll extends StatefulWidget {
   final List<TeNantModel>? teNantModel;
   final List<CustomerModel>? customerModel;
   final String? cuslang;
+  final String? initialCid;
   final bool isMainScreen; // [NEW] Control scroll behavior
   const paymentMainV3InvAll(
       {super.key,
@@ -40,6 +41,7 @@ class paymentMainV3InvAll extends StatefulWidget {
       this.teNantModel,
       this.customerModel,
       this.cuslang,
+      this.initialCid,
       this.isMainScreen = true}); // [NEW] Default to true
 
   @override
@@ -63,6 +65,115 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     return _dateFormat.format(d);
   }
 
+  List<Bill> _sortedBills(Iterable<Bill> bills) {
+    final sorted = bills.toList(growable: false);
+    sorted.sort((a, b) {
+      final dateA = DateTime.tryParse(a.date ?? '') ?? DateTime(9999);
+      final dateB = DateTime.tryParse(b.date ?? '') ?? DateTime(9999);
+      final dateCompare = dateA.compareTo(dateB);
+      if (dateCompare != 0) return dateCompare;
+      return (a.docno ?? '').compareTo(b.docno ?? '');
+    });
+    return sorted;
+  }
+
+  List<_CidBankMatch> _findBanksByCid(String input) {
+    final query = input.trim().toLowerCase();
+    if (query.isEmpty || coninv.isEmpty) return const <_CidBankMatch>[];
+
+    final matches = <_CidBankMatch>[];
+    for (final group in coninv.first.data ?? const <Data>[]) {
+      final bills = _sortedBills(group.bill ?? const <Bill>[]).where((bill) {
+        final cid = (bill.cid ?? '').trim().toLowerCase();
+        return cid == query;
+      }).toList();
+      if (bills.isEmpty) continue;
+      final pvat =
+          bills.fold<double>(0, (sum, bill) => sum + (bill.pvatBill ?? 0));
+      final vat =
+          bills.fold<double>(0, (sum, bill) => sum + (bill.vatBill ?? 0));
+      final wht =
+          bills.fold<double>(0, (sum, bill) => sum + (bill.whtBill ?? 0));
+      final total =
+          bills.fold<double>(0, (sum, bill) => sum + (bill.totalBill ?? 0));
+      final discount = bills.fold<double>(
+          0, (sum, bill) => sum + (bill.totalDisendbill ?? 0));
+      final filteredGroup = Data(
+        payser: group.payser,
+        ptser: group.ptser,
+        bank: group.bank,
+        bno: group.bno,
+        bname: group.bname,
+        ptname: group.ptname,
+        img: group.img,
+        serPayweb: group.serPayweb,
+        pvatBill: pvat,
+        vatBill: vat,
+        whtBill: wht,
+        totalBill: total,
+        totalDisendbill: discount,
+        bill: bills,
+      );
+
+      matches.add(_CidBankMatch(
+        bank: group.bank ?? '-',
+        bankCode: bankCodeMap[group.bank]?['code'] ?? '',
+        accountNo: group.bno ?? '',
+        accountName: group.bname ?? '',
+        bills: bills,
+        total: total,
+        discount: discount,
+        group: filteredGroup,
+      ));
+    }
+
+    matches.sort((a, b) => a.bank.compareTo(b.bank));
+    return matches;
+  }
+
+  List<_ContractSuggestion> _findContractSuggestions(String input) {
+    final query = input.trim().toLowerCase();
+    if (coninv.isEmpty) return const <_ContractSuggestion>[];
+
+    final suggestionsByCid = <String, _ContractSuggestion>{};
+    for (final group in coninv.first.data ?? const <Data>[]) {
+      for (final bill in group.bill ?? const <Bill>[]) {
+        final cid = (bill.cid ?? '').trim();
+        if (cid.isEmpty) continue;
+
+        final normalizedCid = cid.toLowerCase();
+        if (query.isNotEmpty &&
+            (normalizedCid == query || !normalizedCid.contains(query))) {
+          continue;
+        }
+
+        final bankLabel =
+            '${group.bank ?? '-'}${(bankCodeMap[group.bank]?['code'] ?? '').isEmpty ? '' : ' (${bankCodeMap[group.bank]?['code']})'}';
+        final current = suggestionsByCid[cid];
+        if (current == null) {
+          suggestionsByCid[cid] = _ContractSuggestion(
+            cid: cid,
+            billCount: 1,
+            bankNames: <String>{bankLabel},
+            total: (bill.totalBill ?? 0).toDouble(),
+          );
+        } else {
+          current.billCount += 1;
+          current.bankNames.add(bankLabel);
+          current.total += (bill.totalBill ?? 0).toDouble();
+        }
+      }
+    }
+
+    final suggestions = suggestionsByCid.values.toList();
+    suggestions.sort((a, b) {
+      final lengthCompare = a.cid.length.compareTo(b.cid.length);
+      if (lengthCompare != 0) return lengthCompare;
+      return a.cid.compareTo(b.cid);
+    });
+    return suggestions.take(8).toList(growable: false);
+  }
+
   DateTime datex = DateTime.now();
   int tap_pay = 0;
   int? _serPayment, _serptPayment;
@@ -77,9 +188,13 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
   String? return_qr_img, invoiceAll, return_qr_refapi, return_img;
   bool _isLoading = true;
   bool _showGuideCard = false;
+  bool _showCidSearch = false;
+  bool _cidSearchTouched = false;
+  final TextEditingController _cidSearchController = TextEditingController();
   Timer? _timer;
   String countdownText = '';
   Offset _fabPos = Offset.zero;
+  double _fabDragDistance = 0;
   Offset _cardPos = Offset.zero;
 
   static const String _guideCardLastShownKey = 'guideCardLastShownV3';
@@ -105,28 +220,37 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
   ////--------------------->
   @override
   void initState() {
+    super.initState();
+    final initialCid = widget.initialCid?.trim();
+    if (initialCid != null && initialCid.isNotEmpty) {
+      _cidSearchController.text = initialCid;
+      _showCidSearch = true;
+      _cidSearchTouched = true;
+    }
     red_Invoice();
     // red_Invoice().then((value) => Check_genref_pay());
     Check_time();
-    super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final size = MediaQuery.of(context).size;
-      setState(() {
-        _fabPos = Offset(size.width - 64, size.height - 220);
-        _cardPos = Offset(size.width - 268, size.height - 680);
-      });
       // ✅ ตรวจสอบว่าเคยแสดง Guide Card ภายใน 5 นาทีที่ผ่านมาหรือยัง
       final prefs = await SharedPreferences.getInstance();
       final lastShown = prefs.getInt(_guideCardLastShownKey) ?? 0;
       final now = DateTime.now().millisecondsSinceEpoch;
       final canShow = (now - lastShown) >= _guideCardCooldown.inMilliseconds;
       if (canShow) {
-        Future.delayed(const Duration(milliseconds: 800), () {
+        // รอให้ข้อมูลโหลดเสร็จก่อน แล้วค่อยแสดง (เช็คซ้ำจนกว่าจะ ready)
+        void tryShow() {
           if (!mounted) return;
+          if (_isLoading) {
+            Future.delayed(const Duration(milliseconds: 500), tryShow);
+            return;
+          }
           setState(() => _showGuideCard = true);
-          prefs.setInt(_guideCardLastShownKey, now);
-        });
+          prefs.setInt(
+              _guideCardLastShownKey, DateTime.now().millisecondsSinceEpoch);
+        }
+
+        Future.delayed(const Duration(milliseconds: 800), tryShow);
       }
     });
   }
@@ -135,6 +259,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
   @override
   void dispose() {
     _timer?.cancel();
+    _cidSearchController.dispose();
     super.dispose();
   }
 
@@ -245,15 +370,14 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     final preferences = await SharedPreferences.getInstance();
     final custNo = preferences.getString('custno');
     final ren = preferences.getString('renTalSer');
-    // ✅ 2 กรณี:
-    // - ถ้ามีผู้เช่ามากกว่า 1 -> userCid = null (เอาทุกบิล)
-    // - ถ้ามีผู้เช่าเดียว -> userCid = cid (เอาเฉพาะบิล cid ตรง)
+    // initialCid is only for prefilling/searching the UI. Do not filter the
+    // loaded invoice dataset with it, otherwise the contract picker loses the
+    // other contracts after navigating from the home card.
     final String? userCid = (widget.teNantModel == null ||
             widget.teNantModel!.isEmpty ||
             widget.teNantModel!.length > 1)
         ? null
-        : null;
-    //widget.teNantModel!.first.cid;
+        : widget.teNantModel!.first.cid;
 
     if (custNo == null || custNo.isEmpty) {
       if (!mounted) return;
@@ -354,188 +478,261 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     final inv = coninv.first;
     final groups = inv.data ?? const <Data>[];
     if (groups.isEmpty) return _buildEmptyState();
+    final hasActiveContractSearch = _showCidSearch;
 
-    return Stack(
-      children: [
-        AnimatedBuilder(
-          animation: widget.mainScreenAnimationController!,
-          builder: (_, __) => FadeTransition(
-            opacity: widget.mainScreenAnimation!,
-            child: Transform.translate(
-              offset: Offset(0, 30 * (1 - widget.mainScreenAnimation!.value)),
-              child: RefreshIndicator(
-                onRefresh: red_Invoice,
-                child: CustomScrollView(
-                  shrinkWrap: !widget.isMainScreen,
-                  physics: widget.isMainScreen
-                      ? const AlwaysScrollableScrollPhysics()
-                      : const NeverScrollableScrollPhysics(),
-                  slivers: [
-                    if (widget.isMainScreen) getAppBarUI(),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (widget.teNantModel!.length > 1) ...[
-                              RunningViewPay(
-                                animation: Tween<double>(begin: 0.0, end: 1.0)
-                                    .animate(CurvedAnimation(
-                                        parent: widget
-                                            .mainScreenAnimationController!,
-                                        curve: Interval((1 / 5) * 3, 1.0,
-                                            curve: Curves.fastOutSlowIn))),
-                                animationController:
-                                    widget.mainScreenAnimationController!,
-                                cuslang: widget.cuslang,
-                                customerModel: widget.customerModel,
-                              ),
-                            ],
-                            _summaryCard(inv),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 2, vertical: 2),
-                                  decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.8),
-                                      borderRadius: BorderRadius.circular(8)),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        Icons.list_sharp,
-                                        color: Colors.orange.shade700,
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8),
-                                        child: Text(
-                                          widget.cuslang == 'EN'
-                                              ? 'Outstanding/Pending Payments'
-                                              : 'รายการค้าง/รอชำระ',
-                                          maxLines: 2,
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.orange.shade700,
-                                              fontFamily: Font_.Fonts_T),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          AnimatedBuilder(
+            animation: widget.mainScreenAnimationController!,
+            builder: (_, __) => FadeTransition(
+              opacity: widget.mainScreenAnimation!,
+              child: Transform.translate(
+                offset: Offset(0, 30 * (1 - widget.mainScreenAnimation!.value)),
+                child: RefreshIndicator(
+                  onRefresh: red_Invoice,
+                  child: CustomScrollView(
+                    shrinkWrap: !widget.isMainScreen,
+                    physics: widget.isMainScreen
+                        ? const AlwaysScrollableScrollPhysics()
+                        : const NeverScrollableScrollPhysics(),
+                    slivers: [
+                      if (widget.isMainScreen) getAppBarUI(),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (widget.teNantModel!.length > 1) ...[
+                                RunningViewPay(
+                                  animation: Tween<double>(begin: 0.0, end: 1.0)
+                                      .animate(CurvedAnimation(
+                                          parent: widget
+                                              .mainScreenAnimationController!,
+                                          curve: Interval((1 / 5) * 3, 1.0,
+                                              curve: Curves.fastOutSlowIn))),
+                                  animationController:
+                                      widget.mainScreenAnimationController!,
+                                  cuslang: widget.cuslang,
+                                  customerModel: widget.customerModel,
                                 ),
                               ],
+                              _summaryCard(inv),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 2, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.8),
+                                        borderRadius: BorderRadius.circular(8)),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.list_sharp,
+                                          color: Colors.orange.shade700,
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8),
+                                          child: Text(
+                                            widget.cuslang == 'EN'
+                                                ? 'Outstanding/Pending Payments'
+                                                : 'รายการค้าง/รอชำระ',
+                                            maxLines: 2,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.orange.shade700,
+                                                fontFamily: Font_.Fonts_T),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _showCidSearch = !_showCidSearch;
+                                        if (!_showCidSearch) {
+                                          _cidSearchTouched = false;
+                                          _cidSearchController.clear();
+                                        }
+                                      });
+                                    },
+                                    icon: const Icon(Icons.search, size: 18),
+                                    label: Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Search'
+                                          : 'ค้นหา',
+                                      // widget.cuslang == 'EN'
+                                      //     ? 'Search Contract'
+                                      //     : 'ค้นหาเลขสัญญา',
+                                      style: const TextStyle(
+                                        fontFamily: Font_.Fonts_T,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.indigo.shade700,
+                                      backgroundColor:
+                                          Colors.indigo.withOpacity(0.08),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 6),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_showCidSearch) ...[
+                                const SizedBox(height: 8),
+                                _buildInlineCidSearch(),
+                                if (hasActiveContractSearch)
+                                  const SizedBox(height: 100),
+                              ],
+                              const SizedBox(height: 4),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (!hasActiveContractSearch)
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (BuildContext context, int index) {
+                                return _groupTile(
+                                    (inv.data ?? const <Data>[])[index]);
+                              },
+                              childCount: (inv.data ?? const <Data>[]).length,
                             ),
-                            const SizedBox(height: 4),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
-                      sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate(
-                          (BuildContext context, int index) {
-                            return _groupTile(
-                                (inv.data ?? const <Data>[])[index]);
-                          },
-                          childCount: (inv.data ?? const <Data>[]).length,
-                        ),
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-        Positioned(
-          top: _fabPos.dy,
-          left: _fabPos.dx,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onPanUpdate: (d) {
-              final size = MediaQuery.of(context).size;
-              setState(() {
-                _fabPos = Offset(
-                  (_fabPos.dx + d.delta.dx).clamp(0, size.width - 64),
-                  (_fabPos.dy + d.delta.dy).clamp(0, size.height - 120),
-                );
-              });
-            },
-            child: _buildGuideFABWithLabel(),
-          ),
-        ),
-        Positioned(
-          top: _cardPos.dy,
-          left: _cardPos.dx,
-          width: 260,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onPanUpdate: (d) {
-              final size = MediaQuery.of(context).size;
-              setState(() {
-                _cardPos = Offset(
-                  (_cardPos.dx + d.delta.dx).clamp(0, size.width - 260),
-                  (_cardPos.dy + d.delta.dy).clamp(0, size.height - 200),
-                );
-              });
-            },
-            child: IgnorePointer(
-              ignoring: !_showGuideCard,
-              child: AnimatedOpacity(
-                opacity: _showGuideCard ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 220),
-                child: AnimatedScale(
-                  scale: _showGuideCard ? 1.0 : 0.88,
-                  duration: const Duration(milliseconds: 220),
-                  alignment: Alignment.bottomRight,
-                  child: _buildGuideCard(),
+          // Guide Card — ลากขยับได้
+          LayoutBuilder(builder: (ctx, constraints) {
+            final sw = constraints.maxWidth;
+            final sh = constraints.maxHeight;
+            // ตั้งค่าเริ่มต้นครั้งแรก
+            if (_fabPos == Offset.zero) {
+              _fabPos = Offset(sw - 76, sh - 160);
+            }
+            if (_cardPos == Offset.zero) {
+              // ให้ popup คู่มือเด้งขึ้นมาอยู่เหนือปุ่ม FAB พอดี
+              _cardPos = Offset(
+                (_fabPos.dx - 200).clamp(0.0, sw - 260.0),
+                (_fabPos.dy - (sh * 0.55) - 10).clamp(0.0, sh - sh * 0.55),
+              );
+            }
+            return Stack(
+              children: [
+                // 1. FAB คู่มือ (อยู่ข้างหลังสุด)
+                Positioned(
+                  left: _fabPos.dx.clamp(0.0, sw - 70.0),
+                  top: _fabPos.dy.clamp(0.0, sh - 90.0),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanUpdate: (d) {
+                      setState(() {
+                        _fabPos = Offset(
+                          (_fabPos.dx + d.delta.dx).clamp(0.0, sw - 70.0),
+                          (_fabPos.dy + d.delta.dy).clamp(0.0, sh - 90.0),
+                        );
+                      });
+                    },
+                    onTap: () {
+                      setState(() {
+                        _showGuideCard = !_showGuideCard;
+                        if (_showGuideCard) {
+                          // ดึง card มาอยู่ตรง FAB เสมอเวลาถูกเปิด
+                          _cardPos = Offset(
+                            (_fabPos.dx - 200).clamp(0.0, sw - 260.0),
+                            (_fabPos.dy - (sh * 0.55) - 10)
+                                .clamp(0.0, sh - sh * 0.55),
+                          );
+                        }
+                      });
+                      if (_showGuideCard) {
+                        SharedPreferences.getInstance().then((prefs) {
+                          prefs.setInt(_guideCardLastShownKey,
+                              DateTime.now().millisecondsSinceEpoch);
+                        });
+                      }
+                    },
+                    child: _buildGuideFABWithLabel(),
+                  ),
                 ),
-              ),
-            ),
-          ),
-        ),
-      ],
+                // 2. Guide Card (อยู่ข้างหน้า บัง FAB ได้)
+                if (_showGuideCard)
+                  Positioned(
+                    left: _cardPos.dx.clamp(0.0, sw - 260.0),
+                    top: _cardPos.dy.clamp(0.0, sh - sh * 0.55),
+                    width: 260,
+                    child: GestureDetector(
+                      onPanUpdate: (d) {
+                        setState(() {
+                          _cardPos = Offset(
+                            (_cardPos.dx + d.delta.dx).clamp(0.0, sw - 260.0),
+                            (_cardPos.dy + d.delta.dy)
+                                .clamp(0.0, sh - sh * 0.55),
+                          );
+                        });
+                      },
+                      child: AnimatedOpacity(
+                        opacity: 1.0,
+                        duration: const Duration(milliseconds: 220),
+                        child: AnimatedScale(
+                          scale: 1.0,
+                          duration: const Duration(milliseconds: 220),
+                          alignment: Alignment.bottomRight,
+                          child: _buildGuideCard(),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }),
+        ],
+      ),
     );
   }
 
   Widget _buildGuideFAB() {
-    return GestureDetector(
-      onTap: () async {
-        setState(() => _showGuideCard = !_showGuideCard);
-        if (_showGuideCard) {
-          final prefs = await SharedPreferences.getInstance();
-          prefs.setInt(
-              _guideCardLastShownKey, DateTime.now().millisecondsSinceEpoch);
-        }
-      },
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Colors.indigo.withValues(alpha: 0.7),
-              const Color(0xFF283593).withValues(alpha: 0.7),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.indigo.withValues(alpha: 0.25),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.indigo.withValues(alpha: 0.7),
+            const Color(0xFF283593).withValues(alpha: 0.7),
           ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        child: const Icon(Icons.live_help_rounded,
-            color: Colors.white70, size: 20),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.indigo.withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
+      child:
+          const Icon(Icons.live_help_rounded, color: Colors.white70, size: 20),
     );
   }
 
@@ -1190,11 +1387,17 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     );
   }
 
-  Widget _groupTile(Data g) {
+  Widget _groupTile(Data g, {bool isSearch = false}) {
     const int count = 5;
     final payser = g.payser ?? null;
     final serPayweb = g.serPayweb ?? null;
     final payptser = g.ptser ?? null;
+    final bills = _sortedBills(g.bill ?? const <Bill>[]);
+    final groupBillCount = bills.length;
+    final groupTotal = bills.fold<double>(
+        0.0, (sum, b) => sum + ((b.totalBill ?? 0).toDouble()));
+    final groupDiscount = bills.fold<double>(
+        0.0, (sum, b) => sum + ((b.totalDisendbill ?? 0).toDouble()));
     final bank = g.bank ?? '';
     final bno = g.bno ?? '';
     final bname = g.bname ?? ''; // Added definition
@@ -1209,9 +1412,14 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
 
     return Card(
       color: Colors.white,
-      elevation: 0.4,
+      elevation: isSearch ? 0.8 : 0.4,
       margin: const EdgeInsets.symmetric(vertical: 4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: isSearch
+            ? BorderSide(color: Colors.indigo.shade100, width: 0.8)
+            : BorderSide.none,
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
         child: Theme(
@@ -1254,8 +1462,8 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                           fontSize: 15.5)),
                 ),
                 const SizedBox(width: 4),
-                chip(widget.cuslang == 'EN' ? 'Bills' : 'ใบแจ้งหนี้',
-                    Colors.indigo.shade50, Colors.indigo.shade700),
+                // chip(widget.cuslang == 'EN' ? 'Bills' : 'ใบแจ้งหนี้',
+                //     Colors.indigo.shade50, Colors.indigo.shade700),
               ],
             ),
             subtitle: Padding(
@@ -1332,11 +1540,34 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                   ],
 
                   Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.payments, size: 15, color: Colors.black54),
+                    const SizedBox(width: 6),
+                    Text(
+                        '${widget.cuslang == "EN" ? "Total" : "ยอดสุทธิรวม"} : ${fmtMoney(groupTotal)}',
+                        style: const TextStyle(
+                            color: Colors.black87,
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700)),
+                  ]),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.money_off_csred_outlined,
+                        size: 15, color: Colors.black54),
+                    const SizedBox(width: 6),
+                    Text(
+                        '${widget.cuslang == "EN" ? "Discount" : "ส่วนลดรวม"} : ${fmtMoney(groupDiscount)}',
+                        style: const TextStyle(
+                            color: Colors.black54,
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700)),
+                  ]),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
                     Spacer(),
                     const Icon(Icons.receipt, size: 15, color: Colors.black54),
                     const SizedBox(width: 6),
                     Text(
-                        '${widget.cuslang == "EN" ? "Bill All  : ${g.bill!.length ?? 0} " : "บิลทั้งหมด  : ${g.bill!.length ?? 0} "}',
+                        '${widget.cuslang == "EN" ? "Bill All  : $groupBillCount " : "บิลทั้งหมด  : $groupBillCount "}',
                         style: const TextStyle(
                             color: Colors.grey,
                             fontFamily: Font_.Fonts_T,
@@ -1359,13 +1590,14 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       onTap: () async {
                         if (serPayweb.toString() == '1') {
                           List<String>? selectedDocNos;
-                          if ((g.bill ?? []).length > 1) {
-                            selectedDocNos =
-                                await _showBillSelectionDialog(g.bill!);
-                            if (selectedDocNos == null)
+                          if (bills.length > 1) {
+                            selectedDocNos = await _showBillSelectionDialog(
+                                bills.toList(growable: false));
+                            if (selectedDocNos == null) {
                               return; // User cancelled
+                            }
                           } else {
-                            selectedDocNos = (g.bill ?? [])
+                            selectedDocNos = bills
                                 .map((b) => b.docno ?? '')
                                 .where((d) => d.isNotEmpty)
                                 .toList();
@@ -1457,7 +1689,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
             children: [
               const Divider(height: 1),
               const SizedBox(height: 8),
-              ...(g.bill ?? const <Bill>[]).map(_billRow).toList(),
+              ...bills.map(_billRow),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -1482,8 +1714,284 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     );
   }
 
+  Widget _buildInlineCidSearch() {
+    final isEN = widget.cuslang == 'EN';
+    final query = _cidSearchController.text.trim();
+    final hasQuery = query.isNotEmpty;
+    final matches =
+        _cidSearchTouched ? _findBanksByCid(query) : const <_CidBankMatch>[];
+    final suggestions = matches.isEmpty
+        ? _findContractSuggestions(query)
+        : const <_ContractSuggestion>[];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.indigo.withOpacity(0.16)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _cidSearchController,
+            decoration: InputDecoration(
+              hintText: isEN ? 'Enter contract no.' : 'กรอกเลขสัญญา',
+              hintStyle: TextStyle(
+                color: Colors.grey.shade500,
+                fontFamily: Font_.Fonts_T,
+              ),
+              prefixIcon: Padding(
+                padding: const EdgeInsets.only(left: 10, right: 8),
+                child:
+                    //  Container(
+                    //   width: 32,
+                    //   height: 32,
+                    //   decoration: BoxDecoration(
+                    //     color: Colors.indigo.withOpacity(0.08),
+                    //     borderRadius: BorderRadius.circular(9),
+                    //   ),
+                    // child:
+                    Icon(
+                  Icons.search,
+                  color: Colors.indigo.shade500,
+                  size: 18,
+                ),
+                // ),
+              ),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 50, minHeight: 44),
+              suffixIcon: hasQuery
+                  ? IconButton(
+                      icon: Icon(Icons.close,
+                          color: Colors.grey.shade600, size: 20),
+                      onPressed: () {
+                        setState(() {
+                          _cidSearchTouched = false;
+                          _cidSearchController.clear();
+                        });
+                      },
+                    )
+                  : IconButton(
+                      tooltip: isEN ? 'Close search' : 'ปิดการค้นหา',
+                      icon: Icon(
+                        Icons.close,
+                        color: Colors.grey.shade600,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _showCidSearch = false;
+                          _cidSearchTouched = false;
+                          _cidSearchController.clear();
+                        });
+                      },
+                    ),
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+              filled: true,
+              fillColor: Colors.white,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    BorderSide(color: Colors.indigo.shade300, width: 1.2),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            textInputAction: TextInputAction.search,
+            onChanged: (_) => setState(() => _cidSearchTouched = true),
+            onSubmitted: (_) => setState(() => _cidSearchTouched = true),
+          ),
+        ),
+        if (suggestions.isNotEmpty || (_cidSearchTouched && hasQuery))
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            constraints: BoxConstraints(
+              minHeight: _showCidSearch && !hasQuery
+                  ? MediaQuery.of(context).size.height * 0.42
+                  : 0,
+            ),
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF2F4FF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.indigo.withOpacity(0.08)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: matches.isEmpty
+                          ? Colors.red.withOpacity(0.08)
+                          : Colors.indigo.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          matches.isEmpty && suggestions.isEmpty
+                              ? Icons.info_outline
+                              : (matches.isNotEmpty
+                                  ? Icons.account_balance
+                                  : Icons.format_list_bulleted),
+                          size: 14,
+                          color: matches.isEmpty && suggestions.isEmpty
+                              ? Colors.red.shade700
+                              : Colors.indigo.shade700,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          matches.isEmpty
+                              ? (suggestions.isEmpty
+                                  ? (isEN ? 'No bank found' : 'ไม่พบธนาคาร')
+                                  : (hasQuery
+                                      ? (isEN
+                                          ? 'Similar contracts'
+                                          : 'เลขสัญญาใกล้เคียง')
+                                      : (isEN
+                                          ? 'Select contract'
+                                          : 'เลือกเลขสัญญา')))
+                              : (isEN
+                                  ? '${matches.length} bank(s)'
+                                  : 'พบ ${matches.length} ธนาคาร'),
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: matches.isEmpty && suggestions.isEmpty
+                                ? Colors.red.shade700
+                                : Colors.indigo.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (matches.isNotEmpty)
+                  ...matches.map(
+                    (match) => _groupTile(match.group, isSearch: true),
+                  )
+                else if (suggestions.isNotEmpty)
+                  ...suggestions.map(_contractSuggestionTile),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _contractSuggestionTile(_ContractSuggestion suggestion) {
+    final isEN = widget.cuslang == 'EN';
+    final bankCount = suggestion.bankNames.length;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _cidSearchController.text = suggestion.cid;
+          _cidSearchController.selection = TextSelection.fromPosition(
+            TextPosition(offset: suggestion.cid.length),
+          );
+          _cidSearchTouched = true;
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.indigo.withOpacity(0.10)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.025),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.indigo.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.confirmation_number,
+                color: Colors.indigo.shade600,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    suggestion.cid,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isEN
+                        ? '$bankCount bank(s) · ${suggestion.billCount} bill(s) · ${fmtMoney(suggestion.total)}'
+                        : '$bankCount ธนาคาร · ${suggestion.billCount} บิล · ${fmtMoney(suggestion.total)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, color: Colors.indigo.shade400),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<List<String>?> _showBillSelectionDialog(List<Bill> bills) async {
-    List<String> selectedDocNos = bills.map((b) => b.docno ?? '').toList();
+    final sortedBills = _sortedBills(bills);
+    List<String> selectedDocNos =
+        sortedBills.map((b) => b.docno ?? '').toList();
     final isEN = widget.cuslang == 'EN';
 
     return await showDialog<List<String>>(
@@ -1529,7 +2037,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: bills.map((bill) {
+                    children: sortedBills.map((bill) {
                       final docno = bill.docno ?? '';
                       final isSelected = selectedDocNos.contains(docno);
                       return Container(
@@ -1711,6 +2219,42 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
       },
     );
   }
+}
+
+class _CidBankMatch {
+  const _CidBankMatch({
+    required this.bank,
+    required this.bankCode,
+    required this.accountNo,
+    required this.accountName,
+    required this.bills,
+    required this.total,
+    required this.discount,
+    required this.group,
+  });
+
+  final String bank;
+  final String bankCode;
+  final String accountNo;
+  final String accountName;
+  final List<Bill> bills;
+  final double total;
+  final double discount;
+  final Data group;
+}
+
+class _ContractSuggestion {
+  _ContractSuggestion({
+    required this.cid,
+    required this.billCount,
+    required this.bankNames,
+    required this.total,
+  });
+
+  final String cid;
+  int billCount;
+  final Set<String> bankNames;
+  double total;
 }
 
 class _HeaderBar extends SliverPersistentHeaderDelegate {

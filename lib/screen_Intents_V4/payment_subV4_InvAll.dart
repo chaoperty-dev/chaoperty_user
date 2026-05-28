@@ -33,6 +33,7 @@ import 'package:http_parser/http_parser.dart';
 // import 'package:image_downloader_web/image_downloader_web.dart';
 import 'package:gal/gal.dart';
 import 'package:intl/intl.dart';
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:mime/mime.dart';
 import 'package:panara_dialogs/panara_dialogs.dart';
@@ -122,6 +123,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   DateTime datex = DateTime.now();
   bool? isChecked = false;
   bool isLoading = true;
+  bool _initialLoading = true; // show 1-sec splash on first enter
   bool _isExporting = false;
   Uint8List? _exportQrBytes;
   GlobalKey qrImageKey = GlobalKey();
@@ -289,9 +291,20 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       _localAnimation = AlwaysStoppedAnimation(1.0);
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showAttachSlipWarning();
+    // splash loading 1 วินาที ตอนเข้าหน้าครั้งแรก
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) setState(() => _initialLoading = false);
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) _showAttachSlipWarning();
+      });
+    });
+
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   _showAttachSlipWarning();
+    // });
 
     checkPreferance().then((value) {
       Value_newDateY1 = DateFormat('yyyy-MM-dd').format(newDatetime);
@@ -1506,10 +1519,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       'ciddoc': ciddoc,
       'docnoin': docnoin,
     };
-
     var uri =
-        Uri.parse('${MyConstant().domain_chao}/GC_bill_invoice_history.php')
+        Uri.parse('${MyConstant().domain_chao}/GC_bill_invoiceHistory_v2.php')
             .replace(queryParameters: queryParams);
+    // var uri =
+    //     Uri.parse('${MyConstant().domain_chao}/GC_bill_invoice_history.php')
+    //         .replace(queryParameters: queryParams);
     print('uri: $uri');
     try {
       var response = await http.get(uri);
@@ -2084,7 +2099,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   var file_;
   Future<void> uploadFile_Slip() async {
     final imagePicker = ImagePicker();
-    final pickedFile = await imagePicker.pickImage(source: ImageSource.gallery);
+    final pickedFile = await imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 55,
+      maxWidth: 700,
+      maxHeight: 700,
+    );
 
     if (pickedFile == null) {
       return;
@@ -2143,13 +2163,16 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       fileName_Slip = 'slip_${ciddoc_}_${date}_$Time_.$extension_';
     });
     try {
+      final imageBase64 = (base64_Slip == 'ready' && _slipImageBytes != null)
+          ? base64Encode(_slipImageBytes!)
+          : base64_Slip;
       final url =
           '${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php?name=$fileName_Slip&Foder=$foder&extension=$extension_';
 
       final response = await http.post(
         Uri.parse(url),
         body: {
-          'image': base64_Slip,
+          'image': imageBase64,
           'Foder': foder,
           'name': fileName_Slip,
           'ex': extension_.toString()
@@ -2427,7 +2450,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                 RepaintBoundary(
                   key: useKey,
                   child: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     color: Colors.white,
                     child: Column(
                       children: [
@@ -2565,12 +2589,59 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                         ] else if (payment_tser == '7' ||
                             payment_tser == '6' ||
                             payment_tser == '5') ...[
-                          Image.asset(
-                            'images/thai_qr_payment.png',
-                            width: double.infinity,
-                            fit: BoxFit.contain,
+                          // Image.asset(
+                          //   'images/thai_qr_payment.png',
+                          //   width: double.infinity,
+                          //   fit: BoxFit.contain,
+                          // ),
+                          // SizedBox(height: isMobile ? 4 : 4),
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(14)),
+                            child: Image.asset(
+                              'images/thai_qr_payment_2.png',
+                              width: double.infinity,
+                              height: 65,
+                              fit: BoxFit.fitWidth,
+                            ),
                           ),
-                          SizedBox(height: isMobile ? 4 : 4),
+                          // Reminder to attach slip — flush with banner
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo.shade50,
+                              border: Border(
+                                bottom: BorderSide(
+                                    color: Colors.indigo.shade100, width: 0.7),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber_outlined,
+                                    size: 18, color: Colors.red.shade700),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Don \'t forget to attach your payment slip after paying.'
+                                          : 'อย่าลืมแนบหลักฐานการชำระเงินหลังจากชำระแล้ว',
+                                      style: TextStyle(
+                                        fontFamily: Font_.Fonts_T,
+                                        fontSize: 12,
+                                        color: Colors.indigo.shade700,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           (_expireDialogShown == true)
                               ? Container(
                                   width: double.infinity,
@@ -2650,11 +2721,11 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                   : (payment_tser == '5' || payment_tser == '6')
                                       ? (_isExporting && _exportQrBytes != null)
                                           ? Image.memory(_exportQrBytes!,
-                                              width: 150,
-                                              height: 150,
+                                              width: 100,
+                                              height: 100,
                                               fit: BoxFit.contain)
                                           : PrettyQr(
-                                              size: 150,
+                                              size: 100,
                                               // size: qrSize,
                                               data: qrData,
                                               image: const AssetImage(
@@ -2715,7 +2786,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                             ),
                           ),
                         ],
-                        SizedBox(height: isMobile ? 4 : 6),
+                        SizedBox(height: isMobile ? 2 : 2),
                         Text(
                           '฿${nFormat.format(double.parse(Form_payment1.text))}',
                           textAlign: TextAlign.center,
@@ -2723,10 +2794,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                             fontFamily: Font_.Fonts_T,
                             fontWeight: FontWeight.w700,
                             fontSize: isDesktop ? 18 : 16,
-                            color: Colors.red.shade900,
+                            color: Colors.red.shade800,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 0),
                         Text(
                           '$payment_bname',
                           textAlign: TextAlign.center,
@@ -2750,6 +2821,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                 color: Colors.black.withOpacity(.65),
                               ),
                             ),
+                            const SizedBox(width: 6),
                             InkWell(
                                 onTap: () {
                                   Clipboard.setData(new ClipboardData(
@@ -2767,12 +2839,14 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                 },
                                 child: Icon(
                                   Icons.content_copy_outlined,
-                                  size: 14,
+                                  size: 16,
+                                  color: Colors.grey.shade600,
                                 )),
                           ],
                         ),
-                        Divider(height: 2, color: Colors.grey.shade600),
-                        // const SizedBox(height: 2),
+                        const SizedBox(height: 2),
+                        Divider(height: 1, color: Colors.grey.shade300),
+                        const SizedBox(height: 2),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -3576,8 +3650,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       return const SizedBox.shrink();
     }
 
+    final displayIntents = paymentIntents.take(4).toList();
+
     return Column(
-      children: paymentIntents.map((intent) {
+      children: displayIntents.map((intent) {
         // 1. Find matching PaymentModel for bank info
         PayMentModel? paymentModel;
         try {
@@ -3628,22 +3704,24 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         return Card(
           elevation: 0.4,
           color: Colors.white,
-          margin: const EdgeInsets.symmetric(vertical: 4),
+          margin: const EdgeInsets.symmetric(vertical: 2),
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           clipBehavior: Clip.antiAlias,
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
+              dense: true,
+              visualDensity: const VisualDensity(vertical: -4),
               initiallyExpanded: false,
               tilePadding:
-                  const EdgeInsets.only(left: 16, right: 16, top: 6, bottom: 0),
+                  const EdgeInsets.only(left: 12, right: 12, top: 2, bottom: 0),
               childrenPadding:
-                  const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                  const EdgeInsets.only(left: 12, right: 12, bottom: 8),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              trailing:
-                  const Icon(Icons.keyboard_arrow_down, color: Colors.grey),
+                  borderRadius: BorderRadius.circular(12)),
+              trailing: const Icon(Icons.keyboard_arrow_down,
+                  color: Colors.grey, size: 20),
               title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -3651,7 +3729,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                            horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
                           color: stBgColor,
                           borderRadius: BorderRadius.circular(20),
@@ -3660,21 +3738,21 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
-                              width: 6,
-                              height: 6,
+                              width: 5,
+                              height: 5,
                               decoration: BoxDecoration(
                                 color: stTextColor,
                                 shape: BoxShape.circle,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 5),
                             Text(
                                 widget.cuslang == 'EN'
                                     ? '${systemStatusIntentUuid}'
                                     : '${statusIntentUuid}',
                                 style: TextStyle(
                                   color: stTextColor,
-                                  fontSize: 12,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   fontFamily: Font_.Fonts_T,
                                 )),
@@ -3687,7 +3765,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                           '#${paymentIntentUuid ?? '-'}',
                           style: const TextStyle(
                               color: Colors.grey,
-                              fontSize: 12,
+                              fontSize: 11.5,
                               fontFamily: Font_.Fonts_T),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
@@ -3695,20 +3773,20 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 2),
                   Text(
                     '฿${nFormat.format(totalAmount)}',
                     style: const TextStyle(
                       fontFamily: Font_.Fonts_T,
-                      fontSize: 24,
+                      fontSize: 19,
                       fontWeight: FontWeight.bold,
                       color: Colors.black,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 5),
                   Container(
                     padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(12),
@@ -3716,8 +3794,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                     child: Row(
                       children: [
                         Icon(Icons.access_time,
-                            size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
+                            size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 5),
                         Flexible(
                           flex: 3,
                           child: Text(
@@ -3726,15 +3804,15 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                 : 'หมดอายุ ${_fmtExpireLocal(softExpireAt)}',
                             style: TextStyle(
                                 color: Colors.grey.shade700,
-                                fontSize: 13,
+                                fontSize: 11.5,
                                 fontFamily: Font_.Fonts_T),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Icon(Icons.receipt_long,
-                            size: 16, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
+                            size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 5),
                         Flexible(
                           flex: 1,
                           child: Text(
@@ -3743,7 +3821,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                 : "$billCount บิล",
                             style: TextStyle(
                                 color: Colors.grey.shade700,
-                                fontSize: 13,
+                                fontSize: 11.5,
                                 fontFamily: Font_.Fonts_T),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -3754,7 +3832,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                 ],
               ),
               subtitle: Padding(
-                padding: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.only(top: 4),
                 child: showSlipAction
                     ? Row(
                         mainAxisAlignment: MainAxisAlignment.end,
@@ -3778,7 +3856,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 6),
+                                  horizontal: 12, vertical: 5),
                               decoration: BoxDecoration(
                                 color: Colors.indigo.shade50,
                                 borderRadius: BorderRadius.circular(20),
@@ -3787,8 +3865,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(Icons.description_outlined,
-                                      color: Colors.indigo.shade800, size: 20),
-                                  const SizedBox(width: 8),
+                                      color: Colors.indigo.shade800, size: 18),
+                                  const SizedBox(width: 6),
                                   Text(
                                     widget.cuslang == "EN"
                                         ? "Payment proof"
@@ -3796,12 +3874,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                     style: TextStyle(
                                       color: Colors.indigo.shade800,
                                       fontFamily: Font_.Fonts_T,
-                                      fontSize: 14,
+                                      fontSize: 12.5,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   Icon(Icons.chevron_right,
-                                      color: Colors.indigo.shade800, size: 20),
+                                      color: Colors.indigo.shade800, size: 18),
                                 ],
                               ),
                             ),
@@ -3830,7 +3908,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 6),
+                                  horizontal: 12, vertical: 5),
                               decoration: BoxDecoration(
                                 color: Colors.indigo.shade50,
                                 borderRadius: BorderRadius.circular(20),
@@ -3839,8 +3917,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(Icons.credit_card,
-                                      color: Colors.indigo.shade800, size: 20),
-                                  const SizedBox(width: 8),
+                                      color: Colors.indigo.shade800, size: 18),
+                                  const SizedBox(width: 6),
                                   Text(
                                     widget.cuslang == "EN"
                                         ? "Press to pay"
@@ -3848,7 +3926,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                     style: TextStyle(
                                       color: Colors.indigo.shade800,
                                       fontFamily: Font_.Fonts_T,
-                                      fontSize: 14,
+                                      fontSize: 12.5,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -4502,6 +4580,30 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
   @override
   Widget build(BuildContext context) {
+    if (_initialLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF2F3F8),
+        body: Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: CircleAvatar(
+                  backgroundColor: Colors.transparent,
+                  radius: 30,
+                  backgroundImage: AssetImage('assets/images/Icon-chao.png'),
+                ),
+              ),
+              LoadingAnimationWidget.inkDrop(
+                color: Colors.indigo,
+                size: 70,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return AnimatedBuilder(
         animation: _effectiveController,
         builder: (BuildContext context, Widget? child) {
@@ -5203,23 +5305,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                               borderRadius: BorderRadius.circular(14),
                               onTap: noInvoice
                                   ? () {
-                                      PanaraInfoDialog.showAnimatedGrow(
-                                        context,
-                                        title: 'Oops',
-                                        message: isEN
-                                            ? 'No payment amount!!!'
-                                            : 'ไม่มียอดชำระ !!!',
-                                        buttonText:
-                                            isEN ? 'acknowledge' : 'รับทราบ',
-                                        onTapDismiss: () async {
-                                          Navigator.of(context,
-                                                  rootNavigator: true)
-                                              .pop();
-                                        },
-                                        panaraDialogType:
-                                            PanaraDialogType.error,
-                                        barrierDismissible: false,
-                                      );
+                                      _showNoPaymentWarningDialog(isEN);
                                     }
                                   : isConfirm
                                       ? () async {
@@ -5333,6 +5419,114 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     } catch (e) {
       // print(e);
     }
+  }
+
+  Future<void> _showNoPaymentWarningDialog(bool isEN) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.orange.shade200, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.orange.withValues(alpha: 0.25),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.orange.shade700,
+                    size: 38,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Oops',
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade900,
+                    fontFamily: Font_.Fonts_T,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isEN ? 'No payment amount!!!' : 'ไม่มียอดชำระ !!!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                    fontFamily: Font_.Fonts_T,
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Colors.indigo, Color(0xFF283593)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.indigo.withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          Navigator.of(ctx, rootNavigator: true).pop();
+                        },
+                        child: Center(
+                          child: Text(
+                            isEN ? 'acknowledge' : 'รับทราบ',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: Font_.Fonts_T,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showMyDialogPay_Error(text) {
@@ -6137,10 +6331,6 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                       : 'เลื่อนเพื่อยืนยัน',
                   enabled: true,
                   onConfirmation: () async {
-                    // Reset uploaded data to allow new upload
-                    setState(() {
-                      _uploadedSlipData = null;
-                    });
                     // Trigger file picker
                     // final success = await _pickSlipImage();
                     if (base64_Slip != null) {
@@ -6465,9 +6655,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
   Future<bool> _pickSlipImage() async {
     final completer = Completer<bool>();
+    var isProcessingVisible = false;
 
     // Helper to show loading
     void _showProcessing() {
+      if (isProcessingVisible || !mounted) return;
+      isProcessingVisible = true;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -6504,6 +6697,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
     // Helper to request close loading
     void _hideProcessing() {
+      if (!isProcessingVisible || !mounted) return;
+      isProcessingVisible = false;
       Navigator.of(context, rootNavigator: true).pop();
     }
 
@@ -6534,22 +6729,18 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
           }
 
           if (images.isNotEmpty) {
-            Uint8List? finalImage;
-            if (images.length == 1) {
-              finalImage = images.first;
-            } else {
-              // Merge images
-              finalImage = await _mergeImages(images);
-            }
+            final Uint8List? finalImage =
+                images.length == 1 ? images.first : await _mergeImages(images);
 
             if (finalImage != null) {
               if (mounted) {
                 setState(() {
                   _slipImageBytes = finalImage;
                   _slipImageName =
-                      files.length > 1 ? "merged_slip.jpg" : files[0].name;
-                  base64_Slip = base64Encode(_slipImageBytes!);
+                      files.length > 1 ? "merged_slip.jpg" : "slip_upload.jpg";
                   _uploadedSlipData = _slipImageBytes;
+                  base64_Slip = 'ready';
+                  extension_ = 'jpg';
                 });
                 _hideProcessing();
               }
@@ -6575,31 +6766,33 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       // Mobile/Desktop: use ImagePicker
       final ImagePicker picker = ImagePicker();
       try {
-        final List<XFile> images = await picker.pickMultiImage();
+        final List<XFile> images = await picker.pickMultiImage(
+          imageQuality: 55,
+          maxWidth: 700,
+          maxHeight: 700,
+        );
 
         if (images.isNotEmpty) {
           _showProcessing();
+          await Future.delayed(const Duration(milliseconds: 80));
 
-          List<Uint8List> imageBytesList = [];
-          for (var imgFile in images) {
-            imageBytesList.add(await imgFile.readAsBytes());
-          }
+          final List<Uint8List> imageBytesList = await Future.wait(
+            images.map((imgFile) => imgFile.readAsBytes()),
+          );
 
-          Uint8List? finalImage;
-          if (imageBytesList.length == 1) {
-            finalImage = imageBytesList.first;
-          } else {
-            finalImage = await _mergeImages(imageBytesList);
-          }
+          final Uint8List? finalImage = imageBytesList.length == 1
+              ? imageBytesList.first
+              : await _mergeImages(imageBytesList);
 
           if (finalImage != null) {
             if (mounted) {
               setState(() {
                 _slipImageBytes = finalImage;
                 _slipImageName =
-                    images.length > 1 ? "merged_slip.jpg" : images[0].name;
-                base64_Slip = base64Encode(_slipImageBytes!);
+                    images.length > 1 ? "merged_slip.jpg" : "slip_upload.jpg";
                 _uploadedSlipData = _slipImageBytes;
+                base64_Slip = 'ready';
+                extension_ = 'jpg';
               });
               _hideProcessing();
             }
@@ -6616,6 +6809,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         }
       } catch (e) {
         debugPrint("Error picking mobile images: $e");
+        _hideProcessing();
         completer.complete(false);
       }
     }
@@ -6624,46 +6818,26 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   }
 
   Future<Uint8List?> _mergeImages(List<Uint8List> images) async {
+    return compute(_processSlipMergeImages, SlipMergeParams(images: images))
+        .timeout(
+      const Duration(seconds: 12),
+      onTimeout: () {
+        debugPrint('Slip image processing timed out');
+        return images.isNotEmpty ? images.first : null;
+      },
+    );
+  }
+
+  Uint8List? _slipPreviewBytes() {
+    if (_uploadedSlipData != null) return _uploadedSlipData;
+    if (_slipImageBytes != null) return _slipImageBytes;
+    final raw = base64_Slip;
+    if (raw == null || raw.isEmpty || raw == 'ready') return null;
+
     try {
-      List<img.Image> decodedImages = [];
-      int maxWidth = 800; // Fixed width for consistency
-      int totalHeight = 0;
-
-      for (var bytes in images) {
-        img.Image? decoded = img.decodeImage(bytes);
-        if (decoded != null) {
-          // Resize if wider than maxWidth
-          if (decoded.width > maxWidth) {
-            decoded = img.copyResize(decoded, width: maxWidth);
-          } else if (decoded.width < maxWidth) {
-            // For simplicity, maybe scaling up is bad, but scaling down is good.
-            // Let's just resize everything to 'maxWidth' or keep aspect ratio?
-            // Better: Resize to fit maxWidth if larger, else keep.
-            // But for stacking, they should preferably be same width or centered.
-            // Let's force width to 800 for uniform look.
-            decoded = img.copyResize(decoded, width: maxWidth);
-          }
-
-          decodedImages.add(decoded);
-          totalHeight += decoded.height;
-        }
-      }
-
-      if (decodedImages.isEmpty) return null;
-
-      // Create a merged image
-      final mergedDisplay = img.Image(width: maxWidth, height: totalHeight);
-
-      int currentY = 0;
-      for (var image in decodedImages) {
-        // Draw image at x=0, y=currentY
-        img.compositeImage(mergedDisplay, image, dstX: 0, dstY: currentY);
-        currentY += image.height;
-      }
-
-      return Uint8List.fromList(img.encodeJpg(mergedDisplay, quality: 80));
+      return base64Decode(raw);
     } catch (e) {
-      debugPrint("Error merging images: $e");
+      debugPrint('Invalid slip preview base64: $e');
       return null;
     }
   }
@@ -7195,90 +7369,122 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
               return StatefulBuilder(
                   builder: (BuildContext context, StateSetter setStateSheet) {
                 return Container(
-                  height: MediaQuery.of(context).size.height * 0.85,
+                  height: MediaQuery.of(context).size.height * 0.5,
+                  margin: const EdgeInsets.symmetric(horizontal: 6),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
+                        BorderRadius.vertical(top: Radius.circular(22)),
                   ),
                   child: Column(
                     children: [
                       // Header
                       Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 12.0),
+                            horizontal: 20.0, vertical: 12.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              widget.cuslang == 'EN'
-                                  ? 'Payment Confirmation'
-                                  : 'ยืนยันการชำระเงิน',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: Font_.Fonts_T),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 22,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigo,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                Text(
+                                  widget.cuslang == 'EN'
+                                      ? 'Payment Confirmation'
+                                      : 'ยืนยันการชำระเงิน',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.indigo,
+                                    fontFamily: Font_.Fonts_T,
+                                  ),
+                                ),
+                              ],
                             ),
                             IconButton(
-                              icon: Icon(Icons.close, color: Colors.grey),
+                              visualDensity: VisualDensity.compact,
+                              icon: const Icon(Icons.close, color: Colors.grey),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
                         ),
                       ),
-                      Divider(height: 1),
 
                       Flexible(
                           child: SingleChildScrollView(
-                              padding: EdgeInsets.all(16),
+                              padding: const EdgeInsets.fromLTRB(20, 2, 20, 18),
                               child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     // Instructions
                                     Container(
-                                      padding: EdgeInsets.all(12),
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 11),
                                       decoration: BoxDecoration(
-                                        color: Colors.orange.shade50,
-                                        borderRadius: BorderRadius.circular(8),
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.orange.shade100,
+                                            Colors.orange.shade50
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        borderRadius: BorderRadius.circular(14),
                                         border: Border.all(
-                                            color: Colors.orange.shade200),
+                                            color: Colors.orange.shade300,
+                                            width: 1.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.orange
+                                                .withValues(alpha: 0.18),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
                                       ),
-                                      child: Column(
+                                      child: Row(
                                         children: [
-                                          Row(
-                                            children: [
-                                              Icon(Icons.check_circle,
-                                                  color: Colors.green.shade800),
-                                              SizedBox(width: 10),
-                                              Expanded(
-                                                child: Text(
-                                                  widget.cuslang == 'EN'
-                                                      ? "Upload completed"
-                                                      : "อัปโหลดเรียบร้อยแล้ว",
-                                                  style: TextStyle(
-                                                      color: Colors
-                                                          .orange.shade900,
-                                                      fontFamily: Font_.Fonts_T,
-                                                      fontWeight:
-                                                          FontWeight.bold),
-                                                ),
+                                          Container(
+                                            margin: const EdgeInsets.only(
+                                                right: 12),
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.orange.shade200,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(Icons.check_rounded,
+                                                color: Colors.orange.shade800,
+                                                size: 16),
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              widget.cuslang == 'EN'
+                                                  ? "Upload completed"
+                                                  : "อัปโหลดเรียบร้อยแล้ว",
+                                              style: TextStyle(
+                                                color: Colors.orange.shade900,
+                                                fontFamily: Font_.Fonts_T,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13.5,
                                               ),
-                                            ],
+                                            ),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    SizedBox(height: 20),
-                                    const SizedBox(height: 8),
-                                    Card(
+                                    const SizedBox(height: 14),
+                                    Container(
                                       color: Colors.white,
-                                      elevation: 0.4,
-                                      margin: const EdgeInsets.symmetric(
-                                          vertical: 4),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(14)),
-                                      clipBehavior: Clip.antiAlias,
+                                      margin: EdgeInsets.zero,
                                       child: Column(
                                         children: [
                                           _slipInfoRow(
@@ -7315,265 +7521,322 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                           const SizedBox(height: 12),
                                           Row(
                                             children: [
-                                              ElevatedButton.icon(
-                                                onPressed: () async {
-                                                  // Reset uploaded data to allow new upload
-                                                  setState(() {
-                                                    _uploadedSlipData = null;
-                                                  });
-                                                  // Trigger file picker
-                                                  final success =
-                                                      await _pickSlipImage();
-                                                  if (success &&
-                                                      _slipImageBytes != null) {
-                                                    if (!mounted) return;
-                                                    showDialog(
-                                                      context: context,
-                                                      barrierDismissible: false,
-                                                      builder: (BuildContext
-                                                          context) {
-                                                        return const Center(
-                                                          child:
-                                                              CircularProgressIndicator(),
+                                              Expanded(
+                                                child: SizedBox(
+                                                  height: 42,
+                                                  child: OutlinedButton.icon(
+                                                    onPressed: () async {
+                                                      // Reset uploaded data to allow new upload
+                                                      setState(() {
+                                                        _uploadedSlipData =
+                                                            null;
+                                                      });
+                                                      // Trigger file picker
+                                                      final success =
+                                                          await _pickSlipImage();
+                                                      if (success &&
+                                                          _slipImageBytes !=
+                                                              null) {
+                                                        if (!mounted) return;
+                                                        showDialog(
+                                                          context: context,
+                                                          barrierDismissible:
+                                                              false,
+                                                          builder: (BuildContext
+                                                              context) {
+                                                            return Center(
+                                                              child: Stack(
+                                                                alignment:
+                                                                    Alignment
+                                                                        .center,
+                                                                children: [
+                                                                  const Padding(
+                                                                    padding:
+                                                                        EdgeInsets.all(
+                                                                            8.0),
+                                                                    child:
+                                                                        CircleAvatar(
+                                                                      backgroundColor:
+                                                                          Colors
+                                                                              .transparent,
+                                                                      radius:
+                                                                          30,
+                                                                      backgroundImage:
+                                                                          AssetImage(
+                                                                              'assets/images/Icon-chao.png'),
+                                                                    ),
+                                                                  ),
+                                                                  LoadingAnimationWidget
+                                                                      .inkDrop(
+                                                                    color: Colors
+                                                                        .indigo,
+                                                                    size: 70,
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            );
+                                                          },
                                                         );
-                                                      },
-                                                    );
-                                                    final successUp =
-                                                        await _uploadSlipImage(
-                                                            amtRawSlip: sum_amt
-                                                                .toString());
-                                                    if (mounted) {
-                                                      Navigator.of(context)
-                                                          .pop(); // Close dialog
-                                                      if (successUp) {
-                                                        ScaffoldMessenger.of(
-                                                                context)
-                                                            .showSnackBar(
-                                                          SnackBar(
-                                                            content: Text(widget
-                                                                        .cuslang ==
-                                                                    'EN'
-                                                                ? 'Slip upload successful!'
-                                                                : 'อัปโหลดสลิปสำเร็จ!'),
-                                                            backgroundColor:
-                                                                Colors.green,
-                                                          ),
-                                                        );
+                                                        final successUp =
+                                                            await _uploadSlipImage(
+                                                                amtRawSlip: sum_amt
+                                                                    .toString());
+                                                        if (mounted) {
+                                                          Navigator.of(context)
+                                                              .pop(); // Close dialog
+                                                          if (successUp) {
+                                                            ScaffoldMessenger
+                                                                    .of(context)
+                                                                .showSnackBar(
+                                                              SnackBar(
+                                                                content: Text(widget
+                                                                            .cuslang ==
+                                                                        'EN'
+                                                                    ? 'Slip upload successful!'
+                                                                    : 'อัปโหลดสลิปสำเร็จ!'),
+                                                                backgroundColor:
+                                                                    Colors
+                                                                        .indigo,
+                                                              ),
+                                                            );
+                                                          }
+                                                        }
                                                       }
-                                                    }
-                                                  }
-                                                },
-                                                icon: const Icon(Icons.refresh,
-                                                    size: 16),
-                                                label: Text(
-                                                    widget.cuslang == 'EN'
-                                                        ? 'Re-attach'
-                                                        : 'แนบอีกครั้ง',
-                                                    style: TextStyle(
-                                                        fontSize: 12)),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.grey,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 8),
+                                                    },
+                                                    icon: const Icon(
+                                                        Icons.refresh,
+                                                        size: 16),
+                                                    label: Text(
+                                                        widget.cuslang == 'EN'
+                                                            ? 'Re-attach'
+                                                            : 'แนบอีกครั้ง',
+                                                        style: TextStyle(
+                                                            fontSize: 12)),
+                                                    style: OutlinedButton
+                                                        .styleFrom(
+                                                      foregroundColor:
+                                                          Colors.indigo,
+                                                      side: BorderSide(
+                                                          color: Colors
+                                                              .indigo.shade100),
+                                                      backgroundColor:
+                                                          Colors.indigo.shade50,
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(22),
+                                                      ),
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                               const SizedBox(
-                                                width: 10,
+                                                width: 12,
                                               ),
-                                              ElevatedButton.icon(
-                                                onPressed: () async {
-                                                  final response =
-                                                      await getSlipPreviewPaymentIntents(
-                                                          slipUuid:
-                                                              intentsAttacheSlipNo ??
-                                                                  "");
-                                                  if (!mounted) return;
+                                              Expanded(
+                                                child: SizedBox(
+                                                  height: 42,
+                                                  child: ElevatedButton.icon(
+                                                    onPressed: () async {
+                                                      final response =
+                                                          await getSlipPreviewPaymentIntents(
+                                                              slipUuid:
+                                                                  intentsAttacheSlipNo ??
+                                                                      "");
+                                                      if (!mounted) return;
 
-                                                  await showDialog<void>(
-                                                    context: context,
-                                                    barrierDismissible: true,
-                                                    builder:
-                                                        (BuildContext context) {
-                                                      final isSuccess = response !=
-                                                              null &&
-                                                          response.statusCode >=
-                                                              200 &&
-                                                          response.statusCode <
-                                                              300;
+                                                      await showDialog<void>(
+                                                        context: context,
+                                                        barrierDismissible:
+                                                            true,
+                                                        builder: (BuildContext
+                                                            context) {
+                                                          final isSuccess = response !=
+                                                                  null &&
+                                                              response.statusCode >=
+                                                                  200 &&
+                                                              response.statusCode <
+                                                                  300;
 
-                                                      return AlertDialog(
-                                                        shape:
-                                                            RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(20),
-                                                        ),
-                                                        backgroundColor:
-                                                            AppbackgroundColor
-                                                                .Sub_Abg_Colors,
-                                                        titlePadding:
-                                                            const EdgeInsets
-                                                                .all(0.0),
-                                                        contentPadding:
-                                                            const EdgeInsets
-                                                                .all(10.0),
-                                                        actionsPadding:
-                                                            const EdgeInsets
-                                                                .all(6.0),
-                                                        title: Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  horizontal:
-                                                                      16.0,
-                                                                  vertical:
-                                                                      12.0),
-                                                          child: Row(
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .spaceBetween,
-                                                            children: [
-                                                              Text(
-                                                                widget.cuslang ==
-                                                                        'EN'
-                                                                    ? 'Payment Slip'
-                                                                    : 'หลักฐานการโอนเงิน',
-                                                                style: TextStyle(
-                                                                    fontSize:
-                                                                        18,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .bold,
-                                                                    fontFamily:
-                                                                        Font_
-                                                                            .Fonts_T),
-                                                              ),
-                                                              IconButton(
-                                                                icon: Icon(
-                                                                    Icons.close,
-                                                                    color: Colors
-                                                                        .grey),
-                                                                onPressed: () =>
-                                                                    Navigator.pop(
-                                                                        context),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        content:
-                                                            SingleChildScrollView(
-                                                          child: ListBody(
-                                                            children: <Widget>[
-                                                              if (isSuccess &&
-                                                                  response
-                                                                      .bodyBytes
-                                                                      .isNotEmpty)
-                                                                Image.memory(
-                                                                  response
-                                                                      .bodyBytes,
-                                                                  fit: BoxFit
-                                                                      .contain,
-                                                                )
-                                                              else
-                                                                Column(
-                                                                  children: [
-                                                                    const Icon(
+                                                          return AlertDialog(
+                                                            shape:
+                                                                RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          20),
+                                                            ),
+                                                            backgroundColor:
+                                                                AppbackgroundColor
+                                                                    .Sub_Abg_Colors,
+                                                            titlePadding:
+                                                                const EdgeInsets
+                                                                    .all(0.0),
+                                                            contentPadding:
+                                                                const EdgeInsets
+                                                                    .all(10.0),
+                                                            actionsPadding:
+                                                                const EdgeInsets
+                                                                    .all(6.0),
+                                                            title: Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
+                                                                      horizontal:
+                                                                          16.0,
+                                                                      vertical:
+                                                                          12.0),
+                                                              child: Row(
+                                                                mainAxisAlignment:
+                                                                    MainAxisAlignment
+                                                                        .spaceBetween,
+                                                                children: [
+                                                                  Text(
+                                                                    widget.cuslang ==
+                                                                            'EN'
+                                                                        ? 'Payment Slip'
+                                                                        : 'หลักฐานการโอนเงิน',
+                                                                    style: TextStyle(
+                                                                        fontSize:
+                                                                            18,
+                                                                        fontWeight:
+                                                                            FontWeight
+                                                                                .bold,
+                                                                        fontFamily:
+                                                                            Font_.Fonts_T),
+                                                                  ),
+                                                                  IconButton(
+                                                                    icon: Icon(
                                                                         Icons
-                                                                            .broken_image,
-                                                                        size:
-                                                                            50,
+                                                                            .close,
                                                                         color: Colors
                                                                             .grey),
-                                                                    const SizedBox(
-                                                                        height:
-                                                                            10),
-                                                                    Text(
-                                                                      widget.cuslang ==
-                                                                              'EN'
-                                                                          ? 'Unable to load image\n(Status: ${response?.statusCode ?? 'N/A'})'
-                                                                          : 'ไม่สามารถโหลดรูปภาพได้\n(Status: ${response?.statusCode ?? 'N/A'})',
-                                                                      textAlign:
-                                                                          TextAlign
-                                                                              .center,
+                                                                    onPressed: () =>
+                                                                        Navigator.pop(
+                                                                            context),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            content:
+                                                                SingleChildScrollView(
+                                                              child: ListBody(
+                                                                children: <Widget>[
+                                                                  if (isSuccess &&
+                                                                      response
+                                                                          .bodyBytes
+                                                                          .isNotEmpty)
+                                                                    Image
+                                                                        .memory(
+                                                                      response
+                                                                          .bodyBytes,
+                                                                      fit: BoxFit
+                                                                          .contain,
+                                                                    )
+                                                                  else
+                                                                    Column(
+                                                                      children: [
+                                                                        const Icon(
+                                                                            Icons
+                                                                                .broken_image,
+                                                                            size:
+                                                                                50,
+                                                                            color:
+                                                                                Colors.grey),
+                                                                        const SizedBox(
+                                                                            height:
+                                                                                10),
+                                                                        Text(
+                                                                          widget.cuslang == 'EN'
+                                                                              ? 'Unable to load image\n(Status: ${response?.statusCode ?? 'N/A'})'
+                                                                              : 'ไม่สามารถโหลดรูปภาพได้\n(Status: ${response?.statusCode ?? 'N/A'})',
+                                                                          textAlign:
+                                                                              TextAlign.center,
+                                                                        ),
+                                                                      ],
                                                                     ),
-                                                                  ],
-                                                                ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        // actions: [
-                                                        //   if (isSuccess &&
-                                                        //       response.bodyBytes
-                                                        //           .isNotEmpty)
-                                                        //     TextButton.icon(
-                                                        //       icon: const Icon(
-                                                        //           Icons.download,
-                                                        //           size: 16,
-                                                        //           color: Colors.blue),
-                                                        //       label: const Text(
-                                                        //           'ดาวน์โหลด',
-                                                        //           style: TextStyle(
-                                                        //               fontFamily: Font_
-                                                        //                   .Fonts_T,
-                                                        //               color: Colors
-                                                        //                   .blue)),
-                                                        //       onPressed: () {
-                                                        //         final blob =
-                                                        //             html.Blob([
-                                                        //           response.bodyBytes
-                                                        //         ]);
-                                                        //         final url = html.Url
-                                                        //             .createObjectUrlFromBlob(
-                                                        //                 blob);
-                                                        //         final filename =
-                                                        //             _intentsSlipData![
-                                                        //                     'original_filename'] ??
-                                                        //                 'slip.jpg';
-                                                        //         html.AnchorElement(
-                                                        //             href: url)
-                                                        //           ..setAttribute(
-                                                        //               "download",
-                                                        //               filename)
-                                                        //           ..click();
-                                                        //         html.Url
-                                                        //             .revokeObjectUrl(
-                                                        //                 url);
-                                                        //       },
-                                                        //     ),
-                                                        //   TextButton(
-                                                        //     child: const Text('ปิด',
-                                                        //         style: TextStyle(
-                                                        //             fontFamily: Font_
-                                                        //                 .Fonts_T)),
-                                                        //     onPressed: () {
-                                                        //       Navigator.of(context)
-                                                        //           .pop();
-                                                        //     },
-                                                        //   ),
-                                                        // ],
+                                                                ],
+                                                              ),
+                                                            ),
+                                                            // actions: [
+                                                            //   if (isSuccess &&
+                                                            //       response.bodyBytes
+                                                            //           .isNotEmpty)
+                                                            //     TextButton.icon(
+                                                            //       icon: const Icon(
+                                                            //           Icons.download,
+                                                            //           size: 16,
+                                                            //           color: Colors.blue),
+                                                            //       label: const Text(
+                                                            //           'ดาวน์โหลด',
+                                                            //           style: TextStyle(
+                                                            //               fontFamily: Font_
+                                                            //                   .Fonts_T,
+                                                            //               color: Colors
+                                                            //                   .blue)),
+                                                            //       onPressed: () {
+                                                            //         final blob =
+                                                            //             html.Blob([
+                                                            //           response.bodyBytes
+                                                            //         ]);
+                                                            //         final url = html.Url
+                                                            //             .createObjectUrlFromBlob(
+                                                            //                 blob);
+                                                            //         final filename =
+                                                            //             _intentsSlipData![
+                                                            //                     'original_filename'] ??
+                                                            //                 'slip.jpg';
+                                                            //         html.AnchorElement(
+                                                            //             href: url)
+                                                            //           ..setAttribute(
+                                                            //               "download",
+                                                            //               filename)
+                                                            //           ..click();
+                                                            //         html.Url
+                                                            //             .revokeObjectUrl(
+                                                            //                 url);
+                                                            //       },
+                                                            //     ),
+                                                            //   TextButton(
+                                                            //     child: const Text('ปิด',
+                                                            //         style: TextStyle(
+                                                            //             fontFamily: Font_
+                                                            //                 .Fonts_T)),
+                                                            //     onPressed: () {
+                                                            //       Navigator.of(context)
+                                                            //           .pop();
+                                                            //     },
+                                                            //   ),
+                                                            // ],
+                                                          );
+                                                        },
                                                       );
                                                     },
-                                                  );
-                                                },
-                                                icon: const Icon(
-                                                    Icons.visibility,
-                                                    size: 16),
-                                                label: Text(
-                                                    widget.cuslang == 'EN'
-                                                        ? 'View Slip'
-                                                        : 'ดูหลักฐาน',
-                                                    style: TextStyle(
-                                                        fontSize: 12)),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.black,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 8),
+                                                    icon: const Icon(
+                                                        Icons.visibility,
+                                                        size: 16),
+                                                    label: Text(
+                                                        widget.cuslang == 'EN'
+                                                            ? 'View Slip'
+                                                            : 'ดูหลักฐาน',
+                                                        style: TextStyle(
+                                                            fontSize: 12)),
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      backgroundColor:
+                                                          Colors.indigo,
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      elevation: 0,
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(22),
+                                                      ),
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -7611,17 +7874,31 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              widget.cuslang == 'EN'
-                                  ? 'Payment Confirmation'
-                                  : 'ยืนยันการชำระเงิน',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: Font_.Fonts_T),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 22,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigo,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                Text(
+                                  widget.cuslang == 'EN'
+                                      ? 'Payment Confirmation'
+                                      : 'ยืนยันการชำระเงิน',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.indigo,
+                                      fontFamily: Font_.Fonts_T),
+                                ),
+                              ],
                             ),
                             IconButton(
-                              icon: Icon(Icons.close, color: Colors.grey),
+                              icon: const Icon(Icons.close, color: Colors.grey),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
@@ -7655,7 +7932,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                       width: 1.5),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.orange.withOpacity(0.18),
+                                      color:
+                                          Colors.orange.withValues(alpha: 0.18),
                                       blurRadius: 10,
                                       offset: const Offset(0, 3),
                                     ),
@@ -7737,7 +8015,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                           widget.cuslang == 'EN'
                                               ? 'Order Expired - Cancel Order'
                                               : 'รายการ หมดอายุ - ยกเลิกรายการ',
-                                          Colors.red.withOpacity(.08),
+                                          Colors.red.withValues(alpha: .08),
                                           Colors.red.shade700),
                                       onTap: () =>
                                           _showCancelPaymentDialog(context),
@@ -7748,7 +8026,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                           widget.cuslang == 'EN'
                                               ? 'Show QR Code'
                                               : 'แสดง QR Code',
-                                          Colors.orange.withOpacity(.08),
+                                          Colors.orange.withValues(alpha: .08),
                                           Colors.orange.shade700),
                                       onTap: () async {
                                         final ctx = context;
@@ -7801,22 +8079,40 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                 },
                                 child: Container(
                                   width: double.infinity,
-                                  height: 250,
+                                  height: 210,
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.indigo.shade50,
+                                    borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
-                                        color: Colors.grey.shade300, width: 2),
+                                        color: Colors.indigo.shade200,
+                                        width: 1.5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.indigo
+                                            .withValues(alpha: 0.06),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
                                   ),
-                                  child: base64_Slip == null
+                                  child: _slipPreviewBytes() == null
                                       ? Column(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            Icon(
-                                              Icons.cloud_upload_outlined,
-                                              size: 60,
-                                              color: Colors.blue.shade300,
+                                            Container(
+                                              width: 72,
+                                              height: 72,
+                                              decoration: BoxDecoration(
+                                                color: Colors.indigo
+                                                    .withValues(alpha: 0.1),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.cloud_upload_outlined,
+                                                size: 38,
+                                                color: Colors.indigo,
+                                              ),
                                             ),
                                             SizedBox(height: 10),
                                             Text(
@@ -7824,14 +8120,16 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                                   ? "Tap to upload payment slip"
                                                   : "กดเพื่ออัปโหลดสลิป",
                                               style: TextStyle(
-                                                  color: Colors.grey.shade600,
+                                                  color: Colors.indigo.shade700,
                                                   fontFamily: Font_.Fonts_T,
-                                                  fontWeight: FontWeight.bold),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 15),
                                             ),
+                                            const SizedBox(height: 4),
                                             Text(
                                               "JPG, PNG (Max 10MB)",
                                               style: TextStyle(
-                                                  color: Colors.grey.shade400,
+                                                  color: Colors.indigo.shade300,
                                                   fontSize: 12),
                                             ),
                                           ],
@@ -7847,14 +8145,13 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                                 minScale: 0.1,
                                                 maxScale: 4.0,
                                                 child: Image.memory(
-                                                  base64Decode(
-                                                      base64_Slip.toString()),
+                                                  _slipPreviewBytes()!,
                                                   fit: BoxFit.cover,
                                                 ),
                                               ),
                                               Container(
                                                 color: Colors.black
-                                                    .withOpacity(0.3),
+                                                    .withValues(alpha: 0.3),
                                                 child: Center(
                                                   child: Container(
                                                     padding:
@@ -7863,7 +8160,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                                             vertical: 8),
                                                     decoration: BoxDecoration(
                                                         color: Colors.white
-                                                            .withOpacity(0.8),
+                                                            .withValues(
+                                                                alpha: 0.8),
                                                         borderRadius:
                                                             BorderRadius
                                                                 .circular(20)),
@@ -7900,16 +8198,56 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                         ),
                       ),
                       SizedBox(height: 2),
-                      Text(
-                        widget.cuslang == 'EN'
-                            ? "Total amount to be paid: ${sum_amt.toStringAsFixed(2)} THB"
-                            : "รวมจำนวนเงินที่ต้องชำระ: ${sum_amt.toStringAsFixed(2)} บาท",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                          fontFamily: Font_.Fonts_T,
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: Colors.indigo.shade200, width: 1),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(children: [
+                              const Icon(Icons.receipt_long_rounded,
+                                  color: Colors.indigo, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                widget.cuslang == 'EN'
+                                    ? 'Total Amount'
+                                    : 'จำนวนที่ต้องชำระ',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.indigo.shade700,
+                                    fontFamily: Font_.Fonts_T),
+                              ),
+                            ]),
+                            Text(
+                              widget.cuslang == 'EN'
+                                  ? "${nFormat.format(double.parse(Form_payment1.text))} "
+                                  : "${nFormat.format(double.parse(Form_payment1.text))} ",
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.indigo,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                      // Text(
+                      //   widget.cuslang == 'EN'
+                      //       ? "Total amount to be paid: ${sum_amt.toStringAsFixed(2)} THB"
+                      //       : "รวมจำนวนเงินที่ต้องชำระ: ${sum_amt.toStringAsFixed(2)} บาท",
+                      //   style: TextStyle(
+                      //     fontSize: 14,
+                      //     color: Colors.grey.shade600,
+                      //     fontFamily: Font_.Fonts_T,
+                      //   ),
+                      // ),
                       SizedBox(height: 2),
                       // Footer Action
                       Container(
@@ -7918,7 +8256,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                           color: Colors.white,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
+                              color: Colors.grey.withValues(alpha: 0.1),
                               spreadRadius: 1,
                               blurRadius: 5,
                               offset: Offset(0, -3),
@@ -7933,15 +8271,13 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                               label: widget.cuslang == 'EN'
                                   ? 'Slide to Confirm'
                                   : 'เลื่อนเพื่อยืนยันการชำระเงิน',
-                              enabled: base64_Slip != null,
+                              enabled: base64_Slip != null ||
+                                  _slipImageBytes != null,
                               onConfirmation: () async {
-                                // Reset uploaded data to allow new upload
-                                setState(() {
-                                  _uploadedSlipData = null;
-                                });
                                 // Trigger file picker
                                 // final success = await _pickSlipImage();
-                                if (base64_Slip != null) {
+                                if (base64_Slip != null ||
+                                    _slipImageBytes != null) {
                                   if (!mounted) return;
                                   showDialog(
                                     context: context,
@@ -8238,7 +8574,7 @@ class _SlideToConfirm extends StatefulWidget {
     Key? key,
     required this.onConfirmation,
     required this.label,
-    this.color = Colors.green,
+    this.color = Colors.indigo,
     this.enabled = true,
   }) : super(key: key);
 
@@ -8249,96 +8585,129 @@ class _SlideToConfirm extends StatefulWidget {
 class __SlideToConfirmState extends State<_SlideToConfirm> {
   double _position = 0.0;
   bool _confirmed = false;
-  final double _height = 55.0;
-  final double _handleWidth = 55.0;
+  bool _isDragging = false;
+  final double _height = 56.0;
+  final double _handleWidth = 48.0;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final maxDrag = maxWidth - _handleWidth;
+        const double pad = 4.0;
+        final double maxDrag = constraints.maxWidth - _handleWidth - pad * 2;
+        final double pct = (_position / maxDrag).clamp(0.0, 1.0);
 
         return Container(
           height: _height,
-          width: maxWidth,
           decoration: BoxDecoration(
-            color: widget.enabled
-                ? widget.color.withOpacity(0.2)
-                : Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(30),
+            gradient: LinearGradient(
+              colors: widget.enabled
+                  ? [
+                      Color.lerp(Colors.indigo, Colors.indigo.shade800, pct)!,
+                      Colors.indigo.shade800,
+                    ]
+                  : [Colors.grey.shade500, Colors.grey.shade700],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(_height / 2),
+            boxShadow: [
+              BoxShadow(
+                color: (widget.enabled ? Colors.indigo : Colors.grey.shade600)
+                    .withValues(alpha: 0.35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Stack(
             children: [
               Center(
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: widget.enabled ? widget.color : Colors.grey,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: Font_.Fonts_T,
-                    fontSize: 16,
+                child: Opacity(
+                  opacity: (1.0 - pct * 2).clamp(0.0, 1.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
               if (!_confirmed)
-                Positioned(
-                  left: _position,
+                AnimatedPositioned(
+                  duration: _isDragging
+                      ? Duration.zero
+                      : const Duration(milliseconds: 300),
+                  curve: Curves.elasticOut,
+                  left: pad + _position,
+                  top: (_height - _handleWidth) / 2,
                   child: GestureDetector(
                     onHorizontalDragUpdate: (details) {
                       if (!widget.enabled) return;
                       setState(() {
-                        _position += details.delta.dx;
-                        _position = _position.clamp(0.0, maxDrag);
+                        _isDragging = true;
+                        _position =
+                            (_position + details.delta.dx).clamp(0.0, maxDrag);
                       });
                     },
-                    onHorizontalDragEnd: (details) {
+                    onHorizontalDragEnd: (_) {
                       if (!widget.enabled) return;
-                      if (_position >= maxDrag * 0.85) {
+                      if (_position >= maxDrag * 0.72) {
                         setState(() {
+                          _isDragging = false;
                           _position = maxDrag;
                           _confirmed = true;
                         });
                         widget.onConfirmation();
                       } else {
                         setState(() {
+                          _isDragging = false;
                           _position = 0.0;
                         });
                       }
                     },
                     child: Container(
-                      height: _height,
                       width: _handleWidth,
-                      decoration: BoxDecoration(
-                        color: widget.enabled ? widget.color : Colors.grey,
+                      height: _handleWidth,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 4,
-                            offset: Offset(2, 2),
-                          )
+                              color: Colors.black26,
+                              blurRadius: 6,
+                              offset: Offset(2, 2))
                         ],
                       ),
                       child: Icon(
-                        Icons.chevron_right,
-                        color: Colors.white,
-                        size: 30,
+                        Icons.arrow_forward_rounded,
+                        color: widget.enabled ? Colors.indigo : Colors.grey,
+                        size: 24,
                       ),
                     ),
                   ),
                 ),
               if (_confirmed)
                 Positioned(
-                  right: 0,
+                  right: pad,
+                  top: (_height - _handleWidth) / 2,
                   child: Container(
-                    height: _height,
-                    width: _height,
-                    decoration: BoxDecoration(
-                      color: widget.color,
+                    width: _handleWidth,
+                    height: _handleWidth,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.check, color: Colors.white),
+                    child: const Icon(Icons.check_rounded,
+                        color: Colors.indigo, size: 26),
                   ),
                 )
             ],
@@ -8346,6 +8715,52 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
         );
       },
     );
+  }
+}
+
+class SlipMergeParams {
+  final List<Uint8List> images;
+
+  const SlipMergeParams({required this.images});
+}
+
+Future<Uint8List?> _processSlipMergeImages(SlipMergeParams params) async {
+  try {
+    const int maxWidth = 450;
+    final decodedImages = <img.Image>[];
+    var totalHeight = 0;
+
+    for (final bytes in params.images) {
+      var decoded = img.decodeImage(bytes);
+      if (decoded == null) continue;
+
+      if (decoded.width > maxWidth) {
+        decoded = img.copyResize(
+          decoded,
+          width: maxWidth,
+          interpolation: img.Interpolation.nearest,
+        );
+      }
+
+      decodedImages.add(decoded);
+      totalHeight += decoded.height;
+    }
+
+    if (decodedImages.isEmpty) return null;
+
+    final mergedDisplay = img.Image(width: maxWidth, height: totalHeight);
+    img.fill(mergedDisplay, color: img.ColorRgb8(255, 255, 255));
+
+    var currentY = 0;
+    for (final image in decodedImages) {
+      img.compositeImage(mergedDisplay, image, dstX: 0, dstY: currentY);
+      currentY += image.height;
+    }
+
+    return Uint8List.fromList(img.encodeJpg(mergedDisplay, quality: 35));
+  } catch (e) {
+    debugPrint("Error merging images in isolate: $e");
+    return null;
   }
 }
 

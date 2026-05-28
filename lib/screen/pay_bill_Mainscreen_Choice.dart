@@ -396,7 +396,7 @@ class _PaybillMainScreenChoiceState extends State<PaybillMainScreenChoice> {
                         ),
                       ),
                       LoadingAnimationWidget.inkDrop(
-                        color: Colors.green,
+                        color: Colors.indigo,
                         size: 70,
                       ),
                     ],
@@ -868,7 +868,7 @@ class _PaybillMainScreenChoiceState extends State<PaybillMainScreenChoice> {
                                                                   child:
                                                                       Padding(
                                                                     padding: const EdgeInsets
-                                                                            .only(
+                                                                        .only(
                                                                         top: 20,
                                                                         left:
                                                                             16,
@@ -1041,7 +1041,8 @@ class _PaybillMainScreenChoiceState extends State<PaybillMainScreenChoice> {
                                                                         flex: 2,
                                                                         child:
                                                                             Padding(
-                                                                          padding: const EdgeInsets.fromLTRB(
+                                                                          padding: const EdgeInsets
+                                                                              .fromLTRB(
                                                                               0,
                                                                               0,
                                                                               4,

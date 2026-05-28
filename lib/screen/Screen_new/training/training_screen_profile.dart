@@ -231,7 +231,7 @@ class _TrainingProfileScreenState extends State<TrainingProfileScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                      color: Colors.green,
+                      color: Colors.indigo,
                       size: 70,
                     ),
                   ],

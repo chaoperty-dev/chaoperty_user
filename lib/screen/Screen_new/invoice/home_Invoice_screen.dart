@@ -355,7 +355,7 @@ class _InvioceScreenState extends State<InvioceScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                        color: Colors.green, size: 70),
+                        color: Colors.indigo, size: 70),
                   ],
                 ),
               )

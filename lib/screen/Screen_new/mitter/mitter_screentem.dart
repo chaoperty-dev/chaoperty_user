@@ -1194,7 +1194,7 @@ class _MitterScreenState extends State<MitterScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                      color: Colors.green,
+                      color: Colors.indigo,
                       size: 70,
                     ),
                   ],

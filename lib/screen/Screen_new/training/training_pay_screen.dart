@@ -25,10 +25,11 @@ import '../ui_view/workout_view.dart';
 import 'package:http/http.dart' as http;
 
 class TrainingPayScreen extends StatefulWidget {
-  const TrainingPayScreen({Key? key, this.animationController})
+  const TrainingPayScreen({Key? key, this.animationController, this.initialCid})
       : super(key: key);
 
   final AnimationController? animationController;
+  final String? initialCid;
   @override
   _TrainingPayScreenState createState() => _TrainingPayScreenState();
 }
@@ -354,6 +355,7 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
               customerModel: customerModels,
               teNantModel: teNantModels,
               cuslang: cus_lang,
+              initialCid: widget.initialCid,
               isMainScreen: true,
             ),
       // PaybillMainScreen(
@@ -417,7 +419,7 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                      color: Colors.green,
+                      color: Colors.indigo,
                       size: 70,
                     ),
                   ],

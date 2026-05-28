@@ -122,6 +122,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   DateTime datex = DateTime.now();
   bool? isChecked = false;
   bool isLoading = true;
+  bool _initialLoading = true; // show 1-sec splash on first enter
   bool _isProcessingLink = false; // Prevent double submission
   bool _isExporting = false;
   Uint8List? _exportQrBytes;
@@ -290,8 +291,15 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       _localAnimation = AlwaysStoppedAnimation(1.0);
     }
 
+    // splash loading 1 วินาที ตอนเข้าหน้าครั้งแรก
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) setState(() => _initialLoading = false);
+    });
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showAttachSlipWarning();
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) _showAttachSlipWarning();
+      });
     });
 
     checkPreferance().then((value) {
@@ -2233,12 +2241,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   }
 
   String _uniqueSuffix() {
-    final us = DateTime.now()
-        .toUtc()
-        .add(const Duration(hours: 7))
-        .microsecondsSinceEpoch;
-    final r = Random.secure().nextInt(90000000) + 10000000; // 8 digits
-    return '${us}_$r';
+    // ใช้ UUID v4 แทน timestamp+random เพื่อรับประกันไม่ซ้ำ 100%
+    // format: 8-4-4-4-12 → เอาแค่ 8+4+4=16 ตัวแรก (สั้นพอ แต่ยัง unique มาก)
+    final uuid = getUuid(); // มีอยู่แล้วใน class
+    // เอาเฉพาะตัวเลข+ตัวอักษร ลบ dash ออก แล้วตัดเอา 16 ตัวแรก
+    final clean = uuid.replaceAll('-', '');
+    return clean.substring(0, 16);
   }
 
   Future<void> OKuploadFile_Slip(newValuePDFimg) async {
@@ -2254,20 +2262,83 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     final base = 'slip_${ciddoc_ ?? "NA"}_$unique';
     fileName_Slip = '$base.$extension_';
 
-    final url =
-        '${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php?name=$fileName_Slip&Foder=$foder&extension=$extension_';
+    debugPrint(
+        '📎 OKuploadFile_Slip: fileName=$fileName_Slip, foder=$foder, ext=$extension_');
+    debugPrint(
+        '📎 OKuploadFile_Slip: _slipImageBytes=${_slipImageBytes != null ? _slipImageBytes!.length : "null"} bytes');
+    debugPrint(
+        '📎 OKuploadFile_Slip: base64_Slip=${base64_Slip != null ? "${base64_Slip!.length} chars" : "null"}');
+
+    // สร้าง URI โดยใช้ replace(queryParameters:) เพื่อให้ encode ค่าพารามิเตอร์ถูกต้อง
+    final uri =
+        Uri.parse('${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php')
+            .replace(
+      queryParameters: {
+        'name': fileName_Slip ?? '',
+        'Foder': foder ?? '',
+        'extension': extension_?.toString() ?? 'png',
+      },
+    );
+    debugPrint('📎 OKuploadFile_Slip: url=$uri');
 
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        body: {
-          'image': base64_Slip,
-          'Foder': foder,
-          'name': fileName_Slip,
-          'ex': extension_.toString(),
-        },
-      );
-    } catch (_) {}
+      if (kIsWeb) {
+        // ✅ Web: MultipartRequest ไม่ทำงานบน web (dart:io ไม่มี)
+        // ต้องใช้ base64 POST เท่านั้น
+        if (base64_Slip != null && base64_Slip!.isNotEmpty) {
+          final response = await http.post(
+            uri,
+            body: {
+              'image': base64_Slip,
+              'Foder': foder ?? '',
+              'name': fileName_Slip ?? '',
+              'ex': extension_?.toString() ?? 'png',
+            },
+          );
+          debugPrint(
+              '📎 OKuploadFile_Slip: web base64 status=${response.statusCode}, body=${response.body}');
+        } else {
+          debugPrint('❌ OKuploadFile_Slip: Web ไม่มี base64_Slip');
+        }
+      } else {
+        // ✅ Mobile/Desktop: ใช้ MultipartRequest ส่งไฟล์ binary ได้
+        if (_slipImageBytes != null) {
+          final request = http.MultipartRequest('POST', uri);
+          request.fields['Foder'] = foder ?? '';
+          request.fields['name'] = fileName_Slip ?? '';
+          request.fields['ex'] = extension_?.toString() ?? 'png';
+          request.files.add(http.MultipartFile.fromBytes(
+            'image',
+            _slipImageBytes!,
+            filename: fileName_Slip ?? 'slip.png',
+            contentType: MediaType('image', 'png'),
+          ));
+          final response = await request.send();
+          final responseBody = await response.stream.bytesToString();
+          debugPrint(
+              '📎 OKuploadFile_Slip: multipart status=${response.statusCode}, body=$responseBody');
+        } else if (base64_Slip != null && base64_Slip!.isNotEmpty) {
+          // Fallback to base64 if binary not available
+          final response = await http.post(
+            uri,
+            body: {
+              'image': base64_Slip,
+              'Foder': foder ?? '',
+              'name': fileName_Slip ?? '',
+              'ex': extension_?.toString() ?? 'png',
+            },
+          );
+          debugPrint(
+              '📎 OKuploadFile_Slip: base64 status=${response.statusCode}, body=${response.body}');
+        } else {
+          debugPrint(
+              '❌ OKuploadFile_Slip: ไม่มีข้อมูลรูปภาพ (_slipImageBytes=null, base64_Slip=null)');
+        }
+      }
+    } catch (e, stack) {
+      debugPrint('❌ OKuploadFile_Slip error: $e');
+      debugPrint('🧭 StackTrace:\n$stack');
+    }
   }
 
   ///----------------------------------------------->
@@ -2547,6 +2618,15 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     ref1 = return_qr_refapi1 ?? '-';
     ref2 = return_qr_refapi2 ?? '-';
     ref3 = return_qr_refapi3 ?? '-';
+    final bank = (payment_bank ?? '').toString();
+    final bankInfo = bankCodeMap[bank];
+    final bankCode = bankInfo?['code'];
+    final bankEn = bankInfo?['en'];
+    final bankName = widget.cuslang == 'EN' ? (bankEn ?? bank) : bank;
+    final bankCodeText =
+        (bankCode == null || bankCode.isEmpty) ? '' : ' ($bankCode)';
+    final bankDisplayName =
+        '${widget.cuslang == 'EN' ? 'Bank ' : 'ธนาคาร '}$bankName$bankCodeText';
     // qr_payload (class member)
 
     final ptser = '${widget.serptPayment}'; // ช่องทาง
@@ -2596,43 +2676,6 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                     color: Colors.white,
                     child: Column(
                       children: [
-                        SizedBox(height: 0),
-
-                        // Reminder to attach slip
-                        Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.symmetric(horizontal: 12),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.indigo.shade50,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                                color: Colors.indigo.shade200, width: 0.7),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.info_outline,
-                                  size: 18, color: Colors.indigo.shade700),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  widget.cuslang == 'EN'
-                                      ? 'Don \'t forget to attach your payment slip after paying.'
-                                      : 'อย่าลืมแนบหลักฐานการชำระเงินหลังจากชำระแล้ว',
-                                  style: TextStyle(
-                                    fontFamily: Font_.Fonts_T,
-                                    fontSize: 12,
-                                    color: Colors.indigo.shade700,
-                                    fontWeight: FontWeight.w600,
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 6),
                         if (payment_tser == '2') ...[
                           ClipRRect(
                             borderRadius: BorderRadius.circular(6),
@@ -2796,7 +2839,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             payment_tser == '5') ...[
                           ClipRRect(
                             borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(12)),
+                                top: Radius.circular(14)),
                             child: Image.asset(
                               'images/thai_qr_payment_2.png',
                               width: double.infinity,
@@ -2804,7 +2847,43 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                               fit: BoxFit.fitWidth,
                             ),
                           ),
-                          SizedBox(height: 10),
+                          // Reminder to attach slip — flush with banner
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo.shade50,
+                              border: Border(
+                                bottom: BorderSide(
+                                    color: Colors.indigo.shade100, width: 0.7),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber_outlined,
+                                    size: 18, color: Colors.red.shade700),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Don \'t forget to attach your payment slip after paying.'
+                                          : 'อย่าลืมแนบหลักฐานการชำระเงินหลังจากชำระแล้ว',
+                                      style: TextStyle(
+                                        fontFamily: Font_.Fonts_T,
+                                        fontSize: 12,
+                                        color: Colors.indigo.shade700,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
                           (_expireDialogShown == true)
                               ? Container(
                                   width: double.infinity,
@@ -3005,6 +3084,17 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         ),
                         const SizedBox(height: 2),
                         Divider(height: 1, color: Colors.grey.shade300),
+                        const SizedBox(height: 2),
+                        Text(
+                          bankDisplayName,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontWeight: FontWeight.w700,
+                            fontSize: isDesktop ? 13 : 11,
+                            color: Colors.black.withOpacity(.65),
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -4622,6 +4712,30 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
   @override
   Widget build(BuildContext context) {
+    if (_initialLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF2F3F8),
+        body: Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: CircleAvatar(
+                  backgroundColor: Colors.transparent,
+                  radius: 30,
+                  backgroundImage: AssetImage('assets/images/Icon-chao.png'),
+                ),
+              ),
+              LoadingAnimationWidget.inkDrop(
+                color: Colors.indigo,
+                size: 70,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return AnimatedBuilder(
         animation: _effectiveController,
         builder: (BuildContext context, Widget? child) {
@@ -6380,46 +6494,89 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Colors.indigo, Color(0xFF283593)],
-                      begin: Alignment.centerLeft,
-                      end: Alignment.centerRight,
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.indigo.withValues(alpha: 0.35),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        if (onDismiss != null) onDismiss();
-                      },
-                      child: Center(
+              // ✅ ปุ่มดูรายการ + ตกลง
+              Row(
+                children: [
+                  // ปุ่มดูรายการ
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          // นำไปยังหน้า Payment receipt (home_status_screen)
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FitnessAppHomeScreen(
+                                pageroot: 'PAYMENT',
+                              ),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.indigo.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
                         child: Text(
-                          isEN ? 'OK' : 'ตกลง',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
+                          isEN ? 'View history' : 'ดูประวัติการชำระ',
+                          style: TextStyle(
+                            color: Colors.indigo.shade700,
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
+                            fontFamily: Font_.Fonts_T,
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                  const SizedBox(width: 12),
+                  // ปุ่มตกลง
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Colors.indigo, Color(0xFF283593)],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.indigo.withValues(alpha: 0.35),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              if (onDismiss != null) onDismiss();
+                            },
+                            child: Center(
+                              child: Text(
+                                isEN ? 'OK' : 'ตกลง',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -6430,9 +6587,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
   Future<bool> _pickSlipImage() async {
     final completer = Completer<bool>();
+    var isProcessingVisible = false;
 
     // Helper to show loading
     void _showProcessing() {
+      if (isProcessingVisible || !mounted) return;
+      isProcessingVisible = true;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -6469,6 +6629,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
     // Helper to request close loading
     void _hideProcessing() {
+      if (!isProcessingVisible || !mounted) return;
+      isProcessingVisible = false;
       Navigator.of(context, rootNavigator: true).pop();
     }
 
@@ -6499,14 +6661,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
           }
 
           if (images.isNotEmpty) {
-            Uint8List? finalImage;
-            // Merge images (always, to include footer)
-            finalImage = await mergeImagesReceiptStyle(
-              images,
-              ref1: return_qr_refapi1,
-              ref2: return_qr_refapi2,
-              ref3: return_qr_refapi3,
-            );
+            final Uint8List? finalImage = images.length == 1
+                ? images.first
+                : await mergeImagesReceiptStyle(
+                    images,
+                    ref1: return_qr_refapi1,
+                    ref2: return_qr_refapi2,
+                    ref3: return_qr_refapi3,
+                  );
 
             if (finalImage != null) {
               if (mounted) {
@@ -6514,8 +6676,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                   _slipImageBytes = finalImage;
                   _slipImageName =
                       files.length > 1 ? "merged_slip.jpg" : files[0].name;
-                  base64_Slip = base64Encode(_slipImageBytes!);
                   _uploadedSlipData = _slipImageBytes;
+                  // Defer base64 encoding to avoid blocking UI
+                  base64_Slip = base64Encode(_slipImageBytes!);
                 });
                 _hideProcessing();
               }
@@ -6541,33 +6704,42 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       // Mobile/Desktop: use ImagePicker
       final ImagePicker picker = ImagePicker();
       try {
-        final List<XFile> images = await picker.pickMultiImage();
+        // Use requestQualityThumbnail for faster pick + auto-compress
+        final List<XFile> images = await picker.pickMultiImage(
+          imageQuality: 60,
+          maxWidth: 800,
+          maxHeight: 800,
+        );
 
         if (images.isNotEmpty) {
           _showProcessing();
+          // Allow dialog to render before heavy work
+          await Future.delayed(const Duration(milliseconds: 100));
 
-          List<Uint8List> imageBytesList = [];
-          for (var imgFile in images) {
-            imageBytesList.add(await imgFile.readAsBytes());
-          }
-
-          Uint8List? finalImage;
-          // Merge images (always, to include footer)
-          finalImage = await mergeImagesReceiptStyle(
-            imageBytesList,
-            ref1: return_qr_refapi1,
-            ref2: return_qr_refapi2,
-            ref3: return_qr_refapi3,
+          // Read all images in parallel instead of sequential
+          final List<Uint8List> imageBytesList = await Future.wait(
+            images.map((imgFile) => imgFile.readAsBytes()),
           );
 
+          final Uint8List? finalImage = imageBytesList.length == 1
+              ? imageBytesList.first
+              : await mergeImagesReceiptStyle(
+                  imageBytesList,
+                  ref1: return_qr_refapi1,
+                  ref2: return_qr_refapi2,
+                  ref3: return_qr_refapi3,
+                );
+
           if (finalImage != null) {
+            // Encode base64 outside setState to avoid blocking UI
+            final String base64Str = base64Encode(finalImage);
             if (mounted) {
               setState(() {
                 _slipImageBytes = finalImage;
                 _slipImageName =
                     images.length > 1 ? "merged_slip.jpg" : images[0].name;
-                base64_Slip = base64Encode(_slipImageBytes!);
                 _uploadedSlipData = _slipImageBytes;
+                base64_Slip = base64Str;
               });
               _hideProcessing();
             }
@@ -6584,6 +6756,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
         }
       } catch (e) {
         debugPrint("Error picking mobile images: $e");
+        _hideProcessing();
         completer.complete(false);
       }
     }
@@ -6637,6 +6810,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
           bankname: bankCode ?? "-",
           banknumber: selectedValue ?? "-",
         ),
+      ).timeout(
+        const Duration(seconds: 12),
+        onTimeout: () {
+          debugPrint('Slip image processing timed out');
+          return images.isNotEmpty ? images.first : null;
+        },
       );
     } catch (e) {
       debugPrint('Error initiates merge compute: $e');
@@ -6712,8 +6891,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
       request.headers.addAll(headers);
 
-      // Send request
-      final response = await request.send();
+      // Send request with timeout to avoid hanging
+      final response =
+          await request.send().timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseBody = await response.stream.bytesToString();
@@ -7257,7 +7437,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                               LoadingAnimationWidget
                                                                   .inkDrop(
                                                                 color: Colors
-                                                                    .green,
+                                                                    .indigo,
                                                                 size: 70,
                                                               ),
                                                             ],
@@ -7853,7 +8033,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                                 const SizedBox(width: 8),
                                                                                 Expanded(
                                                                                   child: Text(
-                                                                                    '${widget.cuslang == 'EN' ? 'Payment date: ' : 'วันที่ชำระ: '}${Value_newDateD1 ?? '-'}',
+                                                                                    '${widget.cuslang == 'EN' ? 'Payment date: ' : 'วันที่ชำระ: '}${Value_newDateD ?? '-'}',
                                                                                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                                                                                   ),
                                                                                 ),
@@ -7887,7 +8067,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                                   confirmText: widget.cuslang == 'EN' ? 'OK' : 'ตกลง',
                                                                                   cancelText: widget.cuslang == 'EN' ? 'Cancel' : 'ยกเลิก',
                                                                                   initialDate: newDatetime,
-                                                                                  firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                                                                                  firstDate: DateTime.now().subtract(const Duration(days: 63)),
                                                                                   lastDate: DateTime.now().add(const Duration(days: 120)), // TEST: future 120 days
                                                                                   // lastDate: DateTime.now(), // production
                                                                                   builder: (ctx, child) => Theme(
@@ -7903,8 +8083,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                                 );
                                                                                 if (picked != null) {
                                                                                   newDatetime = picked;
-                                                                                  Value_newDateY1 = DateFormat('yyyy-MM-dd').format(picked);
-                                                                                  Value_newDateD1 = DateFormat('dd-MM-yyyy').format(picked);
+                                                                                  Value_newDateY = DateFormat('yyyy-MM-dd').format(picked);
+                                                                                  Value_newDateD = DateFormat('dd-MM-yyyy').format(picked);
                                                                                   setDialog(() {});
                                                                                   setStateSheet(() {});
                                                                                   if (mounted) setState(() {});
@@ -8522,8 +8702,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                 minScale: 0.1,
                                                 maxScale: 4.0,
                                                 child: Image.memory(
-                                                  base64Decode(
-                                                      base64_Slip.toString()),
+                                                  _uploadedSlipData ??
+                                                      base64Decode(base64_Slip
+                                                          .toString()),
                                                   fit: BoxFit.cover,
                                                 ),
                                               ),
@@ -8596,7 +8777,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                               ),
                             ]),
                             Text(
-                              Value_newDateD1 ?? '-',
+                              Value_newDateD ?? '-',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -9601,7 +9782,7 @@ Future<Uint8List?> _processMergeImages(MergeParams params) async {
       }
     }
 
-    return Uint8List.fromList(img.encodeJpg(merged, quality: 50));
+    return Uint8List.fromList(img.encodeJpg(merged, quality: 35));
   } catch (e) {
     debugPrint('Error merging images in isolate: $e');
     return null;

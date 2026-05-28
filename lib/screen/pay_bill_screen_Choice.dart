@@ -2313,7 +2313,7 @@ class _PayBillscreenChoiceState extends State<PayBillscreenChoice> {
                     ),
                   ),
                   LoadingAnimationWidget.inkDrop(
-                    color: Colors.green,
+                    color: Colors.indigo,
                     size: 70,
                   ),
                 ],

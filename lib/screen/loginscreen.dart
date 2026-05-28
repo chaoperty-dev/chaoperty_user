@@ -19,6 +19,7 @@ import 'Screen_new/ui_view/workout_view.dart';
 import '../Constant/app_markets.dart';
 import 'market_select_screen.dart';
 import 'market_service.dart';
+import '../main.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -295,13 +296,13 @@ class _LoginScreenState extends State<LoginScreen> {
   ];
 
   Future<int> Line_IoginAuto() async {
-    String url = Uri.base.toString();
-    //  'https://chaoperties.com/user/#/userWeb=1,username=2009,passwd=29c3eea3f305d6b823f562ac4be35217,serrental=50,userid=Uceb372b8b8733f2767ba5d30addddd40';
-
-    /// '${Uri.base.toString()}';
+    // ใช้ initialAppUrl ที่เก็บไว้ตอนเปิดแอปก่อนโดน router ลบทิ้ง
+    String url = initialAppUrl;
+    if (url.isEmpty) {
+      url = Uri.decodeFull(Uri.base.toString());
+    }
 
     try {
-      // print('try : 1');
       int index = url.indexOf('userWeb=');
       int index2 = url.indexOf('username=');
       int index3 = url.indexOf('passwd=');
@@ -313,53 +314,32 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() {
           preferences.clear();
         });
-        // print('try : 2');
-        // Find the starting index of userWeb
+
         index += 'userWeb='.length;
         index2 += 'username='.length;
         index3 += 'passwd='.length;
         index4 += 'serrental='.length;
         index5 += 'userid='.length;
 
-        // Find the ending index (up to the first comma)
         int endIndex = url.indexOf(',', index);
         int endIndex2 = url.indexOf(',', index2);
         int endIndex3 = url.indexOf(',', index3);
         int endIndex4 = url.indexOf(',', index4);
         int endIndex5 = url.indexOf(',', index5);
 
-        // Check if endIndex is -1, indicating the end of the string
-        if (endIndex == -1) {
-          endIndex = url.length;
-        }
-        if (endIndex2 == -1) {
-          endIndex2 = url.length;
-        }
-        if (endIndex3 == -1) {
-          endIndex3 = url.length;
-        }
-        if (endIndex4 == -1) {
-          endIndex4 = url.length;
-        }
-        if (endIndex5 == -1) {
-          endIndex5 = url.length;
-        }
+        if (endIndex == -1) endIndex = url.length;
+        if (endIndex2 == -1) endIndex2 = url.length;
+        if (endIndex3 == -1) endIndex3 = url.length;
+        if (endIndex4 == -1) endIndex4 = url.length;
+        if (endIndex5 == -1) endIndex5 = url.length;
 
-        // Extract the userWeb value
         String userWeb = url.substring(index, endIndex);
         String usernameWeb = url.substring(index2, endIndex2);
         String passwdWeb = url.substring(index3, endIndex3);
         String rser = url.substring(index4, endIndex4);
         String userid = url.substring(index5, endIndex5);
 
-        // print('userWeb: $userWeb');
-        // print('username: $usernameWeb');
-        // print('passwd: $passwdWeb');
-        // print('rser: $rser');
-        // print('userid: $userid');
-
         setState(() {
-          // print('try : 4');
           userController.text = usernameWeb;
           passwordController.text = passwdWeb;
           user_id = userid;
@@ -368,12 +348,38 @@ class _LoginScreenState extends State<LoginScreen> {
         });
 
         signInThread();
+      } else {
+        // ถอด URL ออกมาแล้วแต่หา userWeb ไม่เจอ ให้โชว์เพื่อแก้บัค
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text("Debug: URL Parsing Failed"),
+            content: Text("URL: $url"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text("OK"),
+              ),
+            ],
+          ),
+        );
       }
     } catch (e) {
-      // print('catch_Line_IoginAuto : error');
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text("Debug: Line_IoginAuto Error"),
+          content: Text(e.toString()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("OK"),
+            ),
+          ],
+        ),
+      );
     }
 
-    // print('$ser_Web : nooo error');
     return ser_Web;
   }
 
@@ -931,9 +937,10 @@ class _LoginScreenState extends State<LoginScreen> {
         body: json.encode({
           'isAdd': 'true',
           'username': user,
+          'password': password,
           'idtoken': id_token,
           'line_rser': line_rser,
-          'is_line_oauth': isLineOAuth ? '1' : '0',
+          'is_line_oauth':  isLineOAuth ? '1' : '0',
         }),
       );
       print('Response status: ${response.statusCode}');
@@ -942,11 +949,15 @@ class _LoginScreenState extends State<LoginScreen> {
       var decoded = json.decode(response.body);
       print('Decoded JSON: $decoded');
 
-      var result =
-          decoded is Map && decoded['status'] == true ? decoded['data'] : null;
+      var result;
+      if (decoded is List) {
+        result = decoded;
+      } else if (decoded is Map && decoded['status'] == true) {
+        result = decoded['data'];
+      }
       print('Result data: $result');
 
-      if (result != null) {
+      if (result != null && result is List) {
         print('Found user data, processing...');
 
         // Parse all results
@@ -956,7 +967,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // For LINE / auto-login all rows are valid; for normal login check password once
         List<c_regis_Model> validModels;
-        if (isLineOAuth) {
+        if (isLineOAuth || ser_Web == 1) { // <--- เพิ่ม ser_Web == 1
           validModels = allModels;
         } else {
           // All rows belong to the same user — check password against first row
@@ -1017,11 +1028,35 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        print('No user data found in response');
+        // แจ้งเตือนเมื่อไม่พบผู้ใช้หรือเข้าสู่ระบบไม่สำเร็จ
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text("ไม่สามารถเข้าสู่ระบบได้"),
+            content: Text("ตรวจสอบ Username และ Password อีกครั้ง"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text("OK"),
+              ),
+            ],
+          ),
+        );
       }
     } catch (e, stackTrace) {
-      print('Error in signInThread: $e');
-      print('Stack trace: $stackTrace');
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text("Debug: API Error"),
+          content: Text(e.toString()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("OK"),
+            ),
+          ],
+        ),
+      );
     }
   }
 

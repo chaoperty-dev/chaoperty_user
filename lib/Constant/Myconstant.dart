@@ -35,6 +35,8 @@ class MyConstant {
       return 'https://chaoperties.com/user_test/';
     } else if (url.contains('/Choice/user/')) {
       return 'https://chaoperties.com/Choice/user/';
+    } else if (url.contains('/user_intents/')) {
+      return 'https://chaoperties.com/user_intents/';
     } else {
       return 'https://chaoperties.com/user/';
     }

@@ -1,43 +1,55 @@
-///----------------------------------------------------->
-/// flutter run --enable-software-rendering
-/// flutter run -d chrome --web-renderer html --enable-software-rendering
-/// flutter run -d chrome  --no-sound-null-safety
-/// flutter run -d chrome --web-browser-flag "--disable-web-security" (แก้ปัญหา security  CORS (Cross-Origin Resource Sharing))
-///----------------------------------------------------->
-/// flutter build web --web-renderer html --release
-///  flutter build web --release --no-sound-null-safety
-///  flutter build web --web-renderer html --release --dart-define=web-browser-flag=--disable-web-security (แก้ปัญหา security  CORS (Cross-Origin Resource Sharing))
-///  flutter build web --web-renderer html --release --no-sound-null-safety --dart-define=web-browser-flag=--disable-web-security (แก้ปัญหา security  CORS (Cross-Origin Resource Sharing))
-///  flutter build web --release --web-renderer=html --dart-define=web-browser-flag=--disable-web-security
-///
-///
-///flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false   (แก้ปัญหา Security Capture Screen )
-///flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security
-///flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-define=web-browser-flag=--disable-web-security --no-tree-shake-icons
-//** */ flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user_intents/
-//flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user_test/
+// /----------------------------------------------------->
+// / flutter run --enable-software-rendering
+// / flutter run -d chrome --web-renderer html --enable-software-rendering
+// / flutter run -d chrome  --no-sound-null-safety
+// / flutter run -d chrome --web-browser-flag "--disable-web-security" (แก้ปัญหา security  CORS (Cross-Origin Resource Sharing))
+// /----------------------------------------------------->
+// / flutter build web --web-renderer html --release
+// /  flutter build web --release --no-sound-null-safety
+// /  flutter build web --web-renderer html --release --dart-define=web-browser-flag=--disable-web-security (แก้ปัญหา security  CORS (Cross-Origin Resource Sharing))
+// /  flutter build web --web-renderer html --release --no-sound-null-safety --dart-define=web-browser-flag=--disable-web-security (แก้ปัญหา security  CORS (Cross-Origin Resource Sharing))
+// /  flutter build web --release --web-renderer=html --dart-define=web-browser-flag=--disable-web-security
+// /
+// /
+// /flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false   (แก้ปัญหา Security Capture Screen )
+// /flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security
+// /flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-define=web-browser-flag=--disable-web-security --no-tree-shake-icons
+// ** */ flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user_intents/
+// flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user/
 //----------------------------------------------------->
 
 //----------------------------------------------------->
 //
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_localizations/syncfusion_localizations.dart';
 
 import 'Constant/api_session.dart';
+import 'screen/Screen_new/fitness_app_home_screen.dart';
 import 'screen/loginscreen.dart';
 import 'screen/provider/homeprovider.dart';
 import 'screen/provider/payhisprovider.dart';
 import 'screen/provider/payprovider.dart';
 import 'security/watermark_widget.dart';
 
+// ==== ตัวแปรเก็บ URL เริ่มต้น (แก้ปัญหา Router ลบ Hash) ====
+String initialAppUrl = '';
+
 void main() async {
   // เก็บเวลาเริ่มต้นเพื่อวัดประสิทธิภาพ
   final stopwatch = Stopwatch()..start();
 
   WidgetsFlutterBinding.ensureInitialized();
+
+  // สำคัญมาก: เก็บ URL ไว้ตั้งแต่เปิดแอป ก่อนที่ Flutter Router จะลบมันทิ้ง!
+  initialAppUrl = Uri.base.toString();
+  try {
+    initialAppUrl = Uri.decodeFull(html.window.location.href);
+  } catch (e) {}
 
   // Initialize ApiSession to load saved tokens from SharedPreferences
   await ApiSession.initialize();
@@ -118,9 +130,59 @@ class MyApp extends StatelessWidget {
           return result;
         },
         // home: const ButtonNavBar(),
-        home: const LoginScreen(),
+        home: const AuthGate(),
         // home: FitnessAppHomeScreen(),
       ),
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  bool _shouldLetLoginHandleUrl() {
+    final url = initialAppUrl.isNotEmpty ? initialAppUrl : Uri.base.toString();
+    return url.contains('userWeb=') ||
+        url.contains('username=') ||
+        url.contains('passwd=') ||
+        url.contains('serrental=') ||
+        url.contains('line_code=') ||
+        url.contains('line_error=');
+  }
+
+  Future<String?> _readSavedCustomerNo() async {
+    if (_shouldLetLoginHandleUrl()) return null;
+
+    final preferences = await SharedPreferences.getInstance();
+    final custno = preferences.getString('custno')?.trim();
+    if (custno == null || custno.isEmpty) return null;
+
+    return custno;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String?>(
+      future: _readSavedCustomerNo(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: CircularProgressIndicator(
+                color: Colors.indigo,
+              ),
+            ),
+          );
+        }
+
+        final custno = snapshot.data;
+        if (custno != null) {
+          return FitnessAppHomeScreen(custno_s: custno);
+        }
+
+        return const LoginScreen();
+      },
     );
   }
 }
@@ -209,7 +271,7 @@ class _SplashAppState extends State<SplashApp> {
                       width: 90,
                       height: 90,
                       child: CircularProgressIndicator(
-                        color: Colors.green,
+                        color: Colors.indigo,
                         strokeWidth: 4,
                       ),
                     ),

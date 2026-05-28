@@ -590,7 +590,7 @@ class _RepaeScreenState extends State<RepaeScreen>
         body: isLoading
             ? Center(
                 child: LoadingAnimationWidget.inkDrop(
-                    color: Colors.green, size: 50))
+                    color: Colors.indigo, size: 50))
             : CustomScrollView(
                 controller: scrollController,
                 slivers: <Widget>[

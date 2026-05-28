@@ -341,7 +341,7 @@ class _TrainingScreenState extends State<TrainingScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                      color: Colors.green,
+                      color: Colors.indigo,
                       size: 70,
                     ),
                   ],
