@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'package:chaoperty_user/video_player_helper.dart';
 import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
@@ -1611,7 +1611,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => paymentSubV3InvAll(
+                              builder: (context) => paymentSubV4InvAll(
                                 mainScreenAnimation:
                                     Tween<double>(begin: 0.0, end: 1.0).animate(
                                         CurvedAnimation(
@@ -2004,6 +2004,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
               surfaceTintColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
+              insetPadding: const EdgeInsets.all(16),
               titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
               title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2034,6 +2035,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
               content: Container(
                 constraints: const BoxConstraints(maxWidth: 480),
                 width: MediaQuery.of(context).size.width * 0.9,
+                height: MediaQuery.of(context).size.height * 0.55,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,

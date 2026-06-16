@@ -472,219 +472,238 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       final isEN = cus_lang == 'EN';
 
       showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 420),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 10,
-                  offset: Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header สีส้ม
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => Dialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              child: Container(
+                  constraints: const BoxConstraints(maxWidth: 420),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade100,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(Icons.warning_amber_rounded,
-                            size: 32, color: Colors.orange.shade700),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(
-                          isEN
-                              ? 'Notice: Payment Evidence System Issue'
-                              : 'ขออภัย ระบบการแนบหลักฐานการชำระมีปัญหา',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: Font_.Fonts_T,
-                            color: Colors.orange.shade900,
-                          ),
-                        ),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 10,
+                        offset: Offset(0, 10),
                       ),
                     ],
                   ),
-                ),
-                // Body
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isEN
-                            ? 'Users who attached payment evidence between May 25-28, 2026, please verify your submitted evidence.'
-                            : 'ผู้ใช้ที่แนบหลักฐานการชำระตั้งแต่ช่วงวันที่ 25 ถึง 28 พฤษภาคม 2569 กรุณาเข้าไปตรวจสอบหลักฐานที่ท่านแนบ',
-                        style: TextStyle(
-                          fontSize: 14.5,
-                          fontFamily: Font_.Fonts_T,
-                          color: Colors.black87,
-                          height: 1.5,
-                        ),
+                  child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.85,
                       ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.red.shade100),
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.info_outline,
-                                size: 20, color: Colors.red.shade400),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                isEN
-                                    ? 'If your evidence is not showing, please re-upload it so staff can verify correctly.'
-                                    : 'หากพบว่าหลักฐานไม่แสดง ขอความกรุณาอัพหลักฐานใหม่อีกครั้ง เพื่อให้เจ้าหน้าที่ตรวจสอบได้ถูกต้อง',
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontFamily: Font_.Fonts_T,
-                                  color: Colors.red.shade700,
-                                  height: 1.4,
+                            // Header สีส้ม
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 20, horizontal: 20),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(20),
+                                  topRight: Radius.circular(20),
                                 ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade100,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(Icons.warning_amber_rounded,
+                                        size: 32,
+                                        color: Colors.orange.shade700),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(
+                                      isEN
+                                          ? 'Notice: Payment Evidence System Issue'
+                                          : 'ขออภัย ระบบการแนบหลักฐานการชำระมีปัญหา',
+                                      style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: Font_.Fonts_T,
+                                        color: Colors.orange.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Body
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    isEN
+                                        ? 'Users who attached payment evidence between May 25-28, 2026, please verify your submitted evidence.'
+                                        : 'ผู้ใช้ที่แนบหลักฐานการชำระตั้งแต่ช่วงวันที่ 25 ถึง 28 พฤษภาคม 2569 กรุณาเข้าไปตรวจสอบหลักฐานที่ท่านแนบ',
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontFamily: Font_.Fonts_T,
+                                      color: Colors.black87,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                          color: Colors.red.shade100),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.info_outline,
+                                            size: 20,
+                                            color: Colors.red.shade400),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            isEN
+                                                ? 'If your evidence is not showing, please re-upload it so staff can verify correctly.'
+                                                : 'หากพบว่าหลักฐานไม่แสดง ขอความกรุณาอัพหลักฐานใหม่อีกครั้ง เพื่อให้เจ้าหน้าที่ตรวจสอบได้ถูกต้อง',
+                                            style: TextStyle(
+                                              fontSize: 13.5,
+                                              fontFamily: Font_.Fonts_T,
+                                              color: Colors.red.shade700,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Buttons
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                              child: Row(
+                                children: [
+                                  // ปุ่มปิด
+                                  Expanded(
+                                    child: TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          side: BorderSide(
+                                              color: Colors.grey.shade300),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        isEN ? 'Close' : 'ปิด',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade600,
+                                          fontFamily: Font_.Fonts_T,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // ปุ่มไปตรวจสอบหลักฐาน
+                                  Expanded(
+                                    flex: 2,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.orange.shade600,
+                                            Colors.orange.shade400,
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.orange.withOpacity(0.3),
+                                            blurRadius: 5,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: () {
+                                            Navigator.pop(
+                                                ctx); // ปิด popup ก่อน
+                                            // นำไปยังหน้า Payment receipt (home_status_screen)
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    FitnessAppHomeScreen(
+                                                  pageroot: 'PAYMENT',
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 12),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(Icons.receipt_long,
+                                                    size: 18,
+                                                    color: Colors.white),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  isEN
+                                                      ? 'Check Evidence'
+                                                      : 'ตรวจสอบหลักฐาน',
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.white,
+                                                    fontFamily: Font_.Fonts_T,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Buttons
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-                  child: Row(
-                    children: [
-                      // ปุ่มปิด
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              side: BorderSide(color: Colors.grey.shade300),
-                            ),
-                          ),
-                          child: Text(
-                            isEN ? 'Close' : 'ปิด',
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: Colors.grey.shade600,
-                              fontFamily: Font_.Fonts_T,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // ปุ่มไปตรวจสอบหลักฐาน
-                      Expanded(
-                        flex: 2,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.orange.shade600,
-                                Colors.orange.shade400,
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(10),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.orange.withOpacity(0.3),
-                                blurRadius: 5,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () {
-                                Navigator.pop(ctx); // ปิด popup ก่อน
-                                // นำไปยังหน้า Payment receipt (home_status_screen)
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => FitnessAppHomeScreen(
-                                      pageroot: 'PAYMENT',
-                                    ),
-                                  ),
-                                );
-                              },
-                              borderRadius: BorderRadius.circular(10),
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.receipt_long,
-                                        size: 18, color: Colors.white),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      isEN
-                                          ? 'Check Evidence'
-                                          : 'ตรวจสอบหลักฐาน',
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        color: Colors.white,
-                                        fontFamily: Font_.Fonts_T,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+                      )))));
     });
   }
 

@@ -38,6 +38,7 @@ class MyConstant {
     } else if (url.contains('/user_intents/')) {
       return 'https://chaoperties.com/user_intents/';
     } else {
+      // return 'http://192.168.1.227/';
       return 'https://chaoperties.com/user/';
     }
   }

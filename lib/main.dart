@@ -116,6 +116,15 @@ class MyApp extends StatelessWidget {
         builder: (context, child) {
           Widget result = child!;
 
+          // ป้องกัน UI แตกเมื่อ user ขยายฟอนต์ระบบ (Accessibility)
+          final mediaQuery = MediaQuery.of(context);
+          result = MediaQuery(
+            data: mediaQuery.copyWith(
+              textScaler: TextScaler.linear(1.0), // ล็อกขนาดฟอนต์ให้คงที่
+            ),
+            child: result,
+          );
+
           // จำกัดขนาดสูงสุดคือโทรศัพท์ (480px)
           result = ResponsiveWrapper(child: result);
 

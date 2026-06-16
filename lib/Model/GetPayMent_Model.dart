@@ -25,7 +25,11 @@ class PayMentModel {
   String? ser_han;
   String? key_b;
   String? maket_pay;
-    String? bcode;
+  String? bnameEn;
+  String? bcode;
+  String? bankNcode;
+  String? paytypeNcode;
+  String? remark;
 
   PayMentModel(
       {this.ser,
@@ -54,7 +58,11 @@ class PayMentModel {
       this.ser_han,
       this.key_b,
       this.maket_pay,
-       this.bcode});
+      this.bcode,
+      this.bnameEn,
+      this.bankNcode,
+      this.paytypeNcode,
+      this.remark});
 
   PayMentModel.fromJson(Map<String, dynamic> json) {
     ser = json['ser'];
@@ -84,6 +92,10 @@ class PayMentModel {
     key_b = json['key_b'];
     maket_pay = json['maket_pay'];
     bcode = json['bcode'];
+    bnameEn = json['bname_en'];
+    bankNcode = json['bank_ncode'];
+    paytypeNcode = json['paytype_ncode'];
+    remark = json['remark'];
   }
 
   Map<String, dynamic> toJson() {
@@ -115,6 +127,10 @@ class PayMentModel {
     data['key_b'] = this.key_b;
     data['maket_pay'] = this.maket_pay;
     data['bcode'] = this.bcode;
+    data['bname_en'] = this.bnameEn;
+    data['bank_ncode'] = this.bankNcode;
+    data['paytype_ncode'] = this.paytypeNcode;
+    data['remark'] = this.remark;
 
     return data;
   }

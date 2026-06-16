@@ -271,7 +271,10 @@ Future<http.Response?> postPaymentIntents(
     required int bankMerchantType,
     required String descripTion,
     required List<Map<String, dynamic>> inVoices, // จะถูกส่งเป็น "invoices"
-
+    required String accountType,
+    required String accountNumber,
+    required String accountNameTh,
+    required String accountNameEn,
     required List<Map<String, dynamic>> transSelect}) async {
   try {
     SharedPreferences preferences = await SharedPreferences.getInstance();
@@ -297,10 +300,10 @@ Future<http.Response?> postPaymentIntents(
         "channel": chanNel,
         "amount": requestedAmount,
         "receiving_account": {
-          "account_type": "02001",
-          "account_number": "0806027357",
-          "account_name_th": "พศิกา สรรเสริญ",
-          "account_name_en": "Pasika Sunsern"
+          "account_type": accountType,
+          "account_number": accountNumber,
+          "account_name_th": accountNameTh,
+          "account_name_en": accountNameEn
         },
 
         "late_fee": lateFee,
@@ -316,7 +319,8 @@ Future<http.Response?> postPaymentIntents(
         "is_admin_created": isAdminCreated,
         "bank_merchant_type": bankMerchantType,
         "invoices": inVoices, // ✅ key ให้ตรง API
-        "trans": transSelect
+        "trans": transSelect,
+        
       }
     };
 
