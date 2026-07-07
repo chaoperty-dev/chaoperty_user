@@ -952,21 +952,21 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             _statusRow(
               isEN ? 'Active' : 'ปัจจุบัน',
               activeCount,
-              const Color(0xFF5271ff),
+              FitnessAppTheme.nearlyDarkBlue,
               true,
             ),
             // Expired row
             _statusRow(
               isEN ? 'Expired' : 'หมดสัญญา',
               expiredCount,
-              const Color(0xFFff8385),
+              FitnessAppTheme.nearlyDarkRed,
               false,
             ),
             // Almost expired row
             _statusRow(
               isEN ? 'Almost Expired' : 'ใกล้หมดสัญญา',
               almostCount,
-              const Color(0xFFF1B440),
+              FitnessAppTheme.orange,
               true,
             ),
             // Total row
@@ -1033,6 +1033,13 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             decoration: BoxDecoration(
               color: color,
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.3),
+                  blurRadius: 4,
+                  spreadRadius: 1,
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 10),

@@ -287,7 +287,11 @@ class DashboardSummaryView extends StatelessWidget {
     return Container(
       height: 68,
       decoration: BoxDecoration(
-        color: HexColor('#ff8385'),
+        gradient: LinearGradient(
+          colors: [HexColor('#ff8385'), HexColor('#ff4f52')],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
