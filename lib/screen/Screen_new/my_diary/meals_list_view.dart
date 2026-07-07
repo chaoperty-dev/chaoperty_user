@@ -227,7 +227,7 @@ class MealsView extends StatelessWidget {
                 children: <Widget>[
                   Padding(
                     padding: const EdgeInsets.only(
-                        top: 12, left: 8, right: 8, bottom: 12),
+                        top: 12, left: 8, right: 8, bottom: 10),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -330,9 +330,9 @@ class MealsView extends StatelessWidget {
                               ),
                             ),
 
-                            // 2. Slim Gradient Footer (Bottom 46px)
+                            // 2. Slim Gradient Footer (Bottom 44px)
                             Container(
-                              height: 46,
+                              height: 44,
                               width: double.infinity,
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
@@ -341,7 +341,7 @@ class MealsView extends StatelessWidget {
                                   end: Alignment.bottomRight,
                                 ),
                               ),
-                              padding: const EdgeInsets.fromLTRB(12, 5, 12, 6),
+                              padding: const EdgeInsets.fromLTRB(12, 4, 12, 5),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment:
