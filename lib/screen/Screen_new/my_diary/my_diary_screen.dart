@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/screen/Screen_new/my_diary/water_view.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -23,7 +24,10 @@ import '../../market_select_screen.dart';
 import '../../market_service.dart';
 import '../fitness_app_home_screen.dart';
 import '../fitness_app_theme.dart';
+import '../ui_view/body_measurement.dart';
 import '../ui_view/dashboard_summary_view.dart';
+import '../ui_view/glass_view.dart';
+import '../ui_view/mediterranean_diet_view.dart';
 import '../ui_view/title_view.dart';
 import 'meals_list_view.dart';
 import 'package:http/http.dart' as http;
@@ -436,22 +440,32 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     //     animationController: widget.animationController!,
     //   ),
     // );
-    // ✅ การ์ดสรุป Dashboard รวม (ยอดค้าง + สัญญา + วันนี้ + บิล + ชำระ)
+    // listViews.add(
+    //   MediterranesnDietView(
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 1, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //     teNantModel: teNantModels,
+    //     invoiceModels: _InvoiceModels,
+    //     cuslangs: cus_lang,
+    //     open_set_date: open_set_date,
+    //   ),
+    // );
+
     listViews.add(
-      DashboardSummaryView(
+      BodyMeasurementView(
         animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
             parent: widget.animationController!,
             curve:
-                Interval((1 / count) * 1, 1.0, curve: Curves.fastOutSlowIn))),
+                Interval((1 / count) * 5, 1.0, curve: Curves.fastOutSlowIn))),
         animationController: widget.animationController!,
-        teNantModel: teNantModels,
-        invoiceModels: _InvoiceModels,
         totaltodays: totaltoday,
+        invoiceModels: _InvoiceModels,
         cuslangs: cus_lang,
-        open_set_date: open_set_date,
       ),
     );
-
     listViews.add(
       TitleView(
         titleTxt: cus_lang == 'EN' ? 'Rental contract' : 'สัญญา',
@@ -484,6 +498,51 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     listViews.add(
       _buildContractSummaryTable(),
     );
+
+    // ✅ ตารางสรุปสัญญา
+    listViews.add(
+      _buildContractSummaryTable(),
+    );
+
+// ✅ การ์ดสรุป Dashboard รวม (ยอดค้าง + สัญญา + วันนี้ + บิล + ชำระ)
+    // listViews.add(
+    //   DashboardSummaryView(
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 1, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //     teNantModel: teNantModels,
+    //     invoiceModels: _InvoiceModels,
+    //     totaltodays: totaltoday,
+    //     cuslangs: cus_lang,
+    //     open_set_date: open_set_date,
+    //   ),
+    // );
+    // listViews.add(
+    //   TitleView(
+    //     titleTxt: cus_lang == 'EN' ? 'Overdue Today' : 'เกินกำหนดชำระ',
+    //     subTxt: 'X',
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 4, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //   ),
+    // );
+
+    // listViews.add(
+    //   BodyMeasurementView(
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 5, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //     totaltodays: totaltoday,
+    //     invoiceModels: _InvoiceModels,
+    //     cuslangs: cus_lang,
+    //   ),
+    // );
     // listViews.add(
     //   TitleView(
     //     titleTxt: cus_lang == 'EN' ? 'News' : 'ข่าว',
