@@ -330,9 +330,9 @@ class MealsView extends StatelessWidget {
                               ),
                             ),
 
-                            // 2. Slim Gradient Footer (Bottom 44px)
+                            // 2. Slim Gradient Footer (Bottom 42px)
                             Container(
-                              height: 44,
+                              height: 42,
                               width: double.infinity,
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
@@ -341,54 +341,63 @@ class MealsView extends StatelessWidget {
                                   end: Alignment.bottomRight,
                                 ),
                               ),
-                              padding: const EdgeInsets.fromLTRB(12, 4, 12, 5),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
+                              padding: const EdgeInsets.fromLTRB(12, 3, 12, 4),
+                              child: Stack(
                                 children: [
-                                  Text(
-                                    cuslangs == 'EN' ? 'Total Pay' : 'ยอดชำระ',
-                                    style: TextStyle(
-                                      fontFamily: FitnessAppTheme.fontName,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                      color: FitnessAppTheme.white,
+                                  Positioned(
+                                    top: 0,
+                                    left: 0,
+                                    child: Text(
+                                      cuslangs == 'EN'
+                                          ? 'Total Pay'
+                                          : 'ยอดชำระ',
+                                      style: TextStyle(
+                                        fontFamily: FitnessAppTheme.fontName,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: FitnessAppTheme.white,
+                                      ),
                                     ),
                                   ),
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Expanded(
-                                        child: AutoSizeText(
-                                          sumAll.toString(),
-                                          maxLines: 1,
-                                          minFontSize: 7,
-                                          maxFontSize: 15,
-                                          style: TextStyle(
-                                            fontFamily:
-                                                FitnessAppTheme.fontName,
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 17,
-                                            color: Colors.white,
+                                  Positioned(
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Expanded(
+                                          child: AutoSizeText(
+                                            sumAll.toString(),
+                                            maxLines: 1,
+                                            minFontSize: 7,
+                                            maxFontSize: 15,
+                                            style: TextStyle(
+                                              fontFamily:
+                                                  FitnessAppTheme.fontName,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 17,
+                                              color: Colors.white,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                      if (sumAll != '0.00')
-                                        Container(
-                                          width: 22,
-                                          height: 22,
-                                          decoration: BoxDecoration(
-                                            color: Colors.white,
-                                            shape: BoxShape.circle,
+                                        if (sumAll != '0.00')
+                                          Container(
+                                            width: 22,
+                                            height: 22,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(
+                                              Icons.arrow_forward_ios_rounded,
+                                              color: gradientColors[0],
+                                              size: 10,
+                                            ),
                                           ),
-                                          child: Icon(
-                                            Icons.arrow_forward_ios_rounded,
-                                            color: gradientColors[0],
-                                            size: 10,
-                                          ),
-                                        ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
