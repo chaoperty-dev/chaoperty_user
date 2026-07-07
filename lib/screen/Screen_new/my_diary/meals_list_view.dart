@@ -331,85 +331,67 @@ class MealsView extends StatelessWidget {
                             ),
 
                             // 2. Slim Gradient Footer (Bottom 52px)
-                            Stack(
-                              children: [
-                                Container(
-                                  height: 55,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: gradientColors,
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
+                            Container(
+                              height: 52,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: gradientColors,
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                              ),
+                              padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    cuslangs == 'EN' ? 'Total Pay' : 'ยอดชำระ',
+                                    style: TextStyle(
+                                      fontFamily: FitnessAppTheme.fontName,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: FitnessAppTheme.white,
                                     ),
                                   ),
-                                  child: Padding(
-                                    // padding: const EdgeInsets.symmetric(
-                                    //     horizontal: 12.0),
-                                    padding:
-                                        const EdgeInsets.fromLTRB(4, 4, 4, 4),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Expanded(
-                                          child: AutoSizeText(
-                                            sumAll.toString(),
-                                            maxLines: 1,
-                                            // User Custom Fonts
-                                            minFontSize: 7,
-                                            maxFontSize: 16,
-                                            style: TextStyle(
-                                              fontFamily:
-                                                  FitnessAppTheme.fontName,
-                                              fontWeight: FontWeight.w900,
-                                              fontSize: 20,
-                                              color: Colors.white,
-                                            ),
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Expanded(
+                                        child: AutoSizeText(
+                                          sumAll.toString(),
+                                          maxLines: 1,
+                                          minFontSize: 7,
+                                          maxFontSize: 16,
+                                          style: TextStyle(
+                                            fontFamily:
+                                                FitnessAppTheme.fontName,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 18,
+                                            color: Colors.white,
                                           ),
                                         ),
-                                        if (sumAll != '0.00')
-                                          Container(
-                                            width: 28,
-                                            height: 28,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: Icon(
-                                              Icons.arrow_forward_ios_rounded,
-                                              color: gradientColors[0],
-                                              size: 12,
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-
-                                // if ((sumPaid ?? '0.00') == '0.00')
-                                Positioned(
-                                  top: 0,
-                                  left: 0,
-                                  // right: 0,
-                                  // bottom: 0,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                        bottom: 6.0, left: 8),
-                                    child: Text(
-                                      cuslangs == 'EN'
-                                          ? 'Total Pay'
-                                          : 'ยอดชำระ',
-                                      style: TextStyle(
-                                        fontFamily: FitnessAppTheme.fontName,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: FitnessAppTheme.white,
                                       ),
-                                    ),
+                                      if (sumAll != '0.00')
+                                        Container(
+                                          width: 24,
+                                          height: 24,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            Icons.arrow_forward_ios_rounded,
+                                            color: gradientColors[0],
+                                            size: 11,
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                                )
-                              ],
+                                ],
+                              ),
                             ),
                           ],
                         ),
