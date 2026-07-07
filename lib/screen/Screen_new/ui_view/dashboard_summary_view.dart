@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../Model/GetInvoice_Model.dart';
 import '../../../Model/GetTeNant_Model.dart';
-import '../../../color.dart';
 import '../../../main.dart';
 import '../fitness_app_home_screen.dart';
 import '../fitness_app_theme.dart';
@@ -108,111 +107,80 @@ class DashboardSummaryView extends StatelessWidget {
                   borderRadius: BorderRadius.circular(18.0),
                   child: Column(
                     children: <Widget>[
-                      // ── Top section: total outstanding + contract stats ──
-                      Padding(
-                        padding: const EdgeInsets.only(
-                            top: 20, left: 20, right: 20, bottom: 16),
+                      // ── Header with total outstanding ──
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: total > 0
+                                ? [HexColor('#ff8385'), HexColor('#ff4f52')]
+                                : [HexColor('#5271ff'), HexColor('#3a50b5')],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
                         child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[
-                            // Left: total outstanding
-                            Expanded(
-                              flex: 3,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Row(
-                                    children: [
-                                      Container(
-                                        height: 18,
-                                        width: 4,
-                                        decoration: BoxDecoration(
-                                          color: total > 0
-                                              ? FitnessAppTheme.nearlyDarkRed
-                                              : HexColor('#5271ff'),
-                                          borderRadius:
-                                              BorderRadius.circular(2.0),
-                                        ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  isEN
+                                      ? 'Total Outstanding'
+                                      : 'ยอดค้างชำระทั้งหมด',
+                                  style: const TextStyle(
+                                    fontFamily: 'LINESeed2',
+                                    fontSize: 13,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: <Widget>[
+                                    AutoSizeText(
+                                      nFormat.format(total),
+                                      minFontSize: 22,
+                                      maxFontSize: 30,
+                                      maxLines: 1,
+                                      style: const TextStyle(
+                                        fontFamily: 'LINESeed2',
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 30,
+                                        color: Colors.white,
                                       ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        isEN
-                                            ? 'Total Outstanding'
-                                            : 'ยอดค้างชำระทั้งหมด',
-                                        style: TextStyle(
-                                          fontFamily: Font_.Fonts_T,
-                                          fontWeight: FontWeight.w500,
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                          left: 6, bottom: 4),
+                                      child: Text(
+                                        isEN ? 'BHT' : 'บาท',
+                                        style: const TextStyle(
+                                          fontFamily: 'LINESeed2',
                                           fontSize: 14,
-                                          color: FitnessAppTheme.grey
-                                              .withOpacity(0.7),
+                                          color: Colors.white,
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: <Widget>[
-                                      AutoSizeText(
-                                        nFormat.format(total),
-                                        minFontSize: 20,
-                                        maxFontSize: 30,
-                                        maxLines: 1,
-                                        style: TextStyle(
-                                          fontFamily: FitnessAppTheme.fontName,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 30,
-                                          color: total > 0
-                                              ? FitnessAppTheme.nearlyDarkRed
-                                              : FitnessAppTheme.nearlyDarkBlue,
-                                        ),
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                            left: 6, bottom: 4),
-                                        child: Text(
-                                          isEN ? 'BHT' : 'บาท',
-                                          style: TextStyle(
-                                            fontFamily: Font_.Fonts_T,
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 14,
-                                            color: FitnessAppTheme.grey
-                                                .withOpacity(0.6),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                            // Right: contract count mini stat
                             Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: FitnessAppTheme.background,
-                                borderRadius: BorderRadius.circular(12),
+                                color: Colors.white.withOpacity(0.15),
+                                shape: BoxShape.circle,
                               ),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    '$contractCount',
-                                    style: TextStyle(
-                                      fontFamily: FitnessAppTheme.fontName,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 20,
-                                      color: FitnessAppTheme.nearlyDarkBlue,
-                                    ),
-                                  ),
-                                  Text(
-                                    isEN ? 'Contracts' : 'สัญญา',
-                                    style: TextStyle(
-                                      fontFamily: Font_.Fonts_T,
-                                      fontSize: 11,
-                                      color:
-                                          FitnessAppTheme.grey.withOpacity(0.7),
-                                    ),
-                                  ),
-                                ],
+                              child: Icon(
+                                total > 0
+                                    ? Icons.warning_amber_rounded
+                                    : Icons.account_balance_wallet_outlined,
+                                color: Colors.white,
+                                size: 26,
                               ),
                             ),
                           ],
@@ -221,7 +189,7 @@ class DashboardSummaryView extends StatelessWidget {
                       // ── Status chips ──
                       Padding(
                         padding: const EdgeInsets.only(
-                            left: 20, right: 20, bottom: 16),
+                            left: 20, right: 20, top: 16, bottom: 12),
                         child: Row(
                           children: [
                             _statusChip(
@@ -244,78 +212,45 @@ class DashboardSummaryView extends StatelessWidget {
                           ],
                         ),
                       ),
-                      // ── Divider ──
-                      Container(
-                        height: 1,
-                        margin: const EdgeInsets.symmetric(horizontal: 20),
-                        decoration: BoxDecoration(
-                          color: FitnessAppTheme.background,
-                          borderRadius:
-                              const BorderRadius.all(Radius.circular(4.0)),
-                        ),
-                      ),
-                      // ── Bottom section: today + invoices + pay button ──
+                      // ── Bottom section: today + invoices + contracts ──
                       Padding(
                         padding: const EdgeInsets.only(
-                            left: 20, right: 20, top: 16, bottom: 16),
+                            left: 20, right: 20, bottom: 12),
                         child: Row(
                           children: <Widget>[
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    isEN ? 'Today' : 'วันนี้',
-                                    style: TextStyle(
-                                      fontFamily: Font_.Fonts_T,
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 12,
-                                      color:
-                                          FitnessAppTheme.grey.withOpacity(0.6),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    nFormat.format(today),
-                                    style: TextStyle(
-                                      fontFamily: FitnessAppTheme.fontName,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 18,
-                                      color: FitnessAppTheme.nearlyDarkBlue,
-                                    ),
-                                  ),
-                                ],
+                              child: _miniStat(
+                                isEN ? 'Today' : 'วันนี้',
+                                nFormat.format(today),
+                                FitnessAppTheme.nearlyDarkBlue,
                               ),
                             ),
+                            const SizedBox(width: 10),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    isEN ? 'Invoices' : 'บิล',
-                                    style: TextStyle(
-                                      fontFamily: Font_.Fonts_T,
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 12,
-                                      color:
-                                          FitnessAppTheme.grey.withOpacity(0.6),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '$invoiceCount',
-                                    style: TextStyle(
-                                      fontFamily: FitnessAppTheme.fontName,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 18,
-                                      color: FitnessAppTheme.darkText,
-                                    ),
-                                  ),
-                                ],
+                              child: _miniStat(
+                                isEN ? 'Invoices' : 'บิล',
+                                '$invoiceCount',
+                                FitnessAppTheme.darkText,
                               ),
                             ),
-                            _payButton(context, isEN),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _miniStat(
+                                isEN ? 'Contracts' : 'สัญญา',
+                                '$contractCount',
+                                FitnessAppTheme.nearlyDarkBlue,
+                              ),
+                            ),
                           ],
+                        ),
+                      ),
+                      // ── Pay button ──
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            left: 20, right: 20, bottom: 16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: _payButton(context, isEN),
                         ),
                       ),
                     ],
@@ -353,13 +288,45 @@ class DashboardSummaryView extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontFamily: Font_.Fonts_T,
+                fontFamily: 'LINESeed2',
                 fontSize: 10,
                 color: FitnessAppTheme.grey.withOpacity(0.7),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _miniStat(String label, String value, Color valueColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: FitnessAppTheme.background,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: FitnessAppTheme.fontName,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: valueColor,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'LINESeed2',
+              fontSize: 10,
+              color: FitnessAppTheme.grey.withOpacity(0.7),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -400,20 +367,21 @@ class DashboardSummaryView extends StatelessWidget {
             );
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(
                   Icons.play_arrow_rounded,
                   color: Colors.white,
-                  size: 20,
+                  size: 22,
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 Text(
-                  isEN ? 'Pay' : 'ชำระ',
-                  style: TextStyle(
-                    fontFamily: Font_.Fonts_T,
-                    fontSize: 13,
+                  isEN ? 'Pay Now' : 'ชำระค่าบริการ',
+                  style: const TextStyle(
+                    fontFamily: 'LINESeed2',
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,
                   ),
