@@ -499,9 +499,9 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       _buildContractSummaryTable(),
     );
 
-    // ✅ ตารางสรุปสัญญา
+    // ✅ ตารางสรุปสถานะสัญญา
     listViews.add(
-      _buildContractSummaryTable(),
+      _buildContractStatusTable(),
     );
 
 // ✅ การ์ดสรุป Dashboard รวม (ยอดค้าง + สัญญา + วันนี้ + บิล + ชำระ)
@@ -826,6 +826,237 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// ตารางสรุปสถานะสัญญา (ปัจจุบัน / หมดสัญญา / ใกล้หมด)
+  Widget _buildContractStatusTable() {
+    final isEN = cus_lang == 'EN';
+
+    int activeCount = 0;
+    int expiredCount = 0;
+    int almostCount = 0;
+
+    for (final tenant in teNantModels) {
+      if (tenant.quantity == '2' || tenant.quantity == '3') {
+        activeCount++;
+        continue;
+      }
+      if (tenant.quantity != '1') continue;
+
+      final lDate = tenant.ldate == null
+          ? DateTime(_DateTimeNew.year, _DateTimeNew.month, _DateTimeNew.day)
+          : DateTime.tryParse(tenant.ldate.toString()) ?? _DateTimeNew;
+      final isExpired = _DateTimeNew.isAfter(lDate);
+      final isAlmost =
+          _DateTimeNew.isAfter(lDate.subtract(Duration(days: open_set_date)));
+
+      if (isExpired) {
+        expiredCount++;
+      } else if (isAlmost) {
+        almostCount++;
+      } else {
+        activeCount++;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: FitnessAppTheme.grey.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+              decoration: BoxDecoration(
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+                border: Border(
+                  bottom: BorderSide(
+                      color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.1),
+                      width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.pie_chart_outline,
+                      size: 18, color: FitnessAppTheme.nearlyDarkBlue),
+                  const SizedBox(width: 10),
+                  Text(
+                    isEN ? 'Contract Status Summary' : 'สรุปสถานะสัญญา',
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: FitnessAppTheme.nearlyDarkBlue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Table Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      isEN ? 'Status' : 'สถานะ',
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Text(
+                      isEN ? 'Count' : 'จำนวน',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Active row
+            _statusRow(
+              isEN ? 'Active' : 'ปัจจุบัน',
+              activeCount,
+              const Color(0xFF5271ff),
+              true,
+            ),
+            // Expired row
+            _statusRow(
+              isEN ? 'Expired' : 'หมดสัญญา',
+              expiredCount,
+              const Color(0xFFff8385),
+              false,
+            ),
+            // Almost expired row
+            _statusRow(
+              isEN ? 'Almost Expired' : 'ใกล้หมดสัญญา',
+              almostCount,
+              const Color(0xFFF1B440),
+              true,
+            ),
+            // Total row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      isEN ? 'Total Contracts' : 'สัญญาทั้งหมด',
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: FitnessAppTheme.nearlyDarkBlue,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Text(
+                      '${teNantModels.length}',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: FitnessAppTheme.nearlyDarkBlue,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusRow(String label, int count, Color color, bool isEven) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: isEven ? Colors.white : Colors.grey.shade50,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontFamily: Font_.Fonts_T,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: FitnessAppTheme.darkerText,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '$count',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontFamily: Font_.Fonts_T,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: count > 0 ? color : Colors.grey.shade500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
