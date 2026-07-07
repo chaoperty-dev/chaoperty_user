@@ -22,6 +22,7 @@ class MealsListView extends StatefulWidget {
     this.mainScreenAnimation,
     this.teNantModel,
     this.totallist,
+    this.totallistPaid,
     this.cuslangs,
     this.open_set_date = 30,
   }) : super(key: key);
@@ -29,6 +30,7 @@ class MealsListView extends StatefulWidget {
   final AnimationController? mainScreenAnimationController;
   final Animation<double>? mainScreenAnimation;
   final List<String>? totallist;
+  final List<String>? totallistPaid;
   final List<TeNantModel>? teNantModel;
   final String? cuslangs;
   final int open_set_date;
@@ -71,7 +73,7 @@ class _MealsListViewState extends State<MealsListView>
             transform: Matrix4.translationValues(
                 0.0, 30 * (1.0 - widget.mainScreenAnimation!.value), 0.0),
             child: Container(
-              height: 240,
+              height: 250,
               width: double.infinity,
               child: ScrollConfiguration(
                 behavior:
@@ -103,6 +105,11 @@ class _MealsListViewState extends State<MealsListView>
                       codecolor: (256 + (index * 10)).toString(),
                       sumAll: nFormat
                           .format(double.parse(widget.totallist![index])),
+                      sumPaid: nFormat.format(double.parse(
+                          (widget.totallistPaid?.length != null &&
+                                  widget.totallistPaid!.length > index)
+                              ? widget.totallistPaid![index]
+                              : '0.00')),
                       cuslangs: widget.cuslangs,
                       open_set_date: widget.open_set_date,
                     ); //mealsListData[index].total
@@ -125,6 +132,7 @@ class MealsView extends StatelessWidget {
       this.animation,
       this.codecolor,
       this.sumAll,
+      this.sumPaid,
       this.cuslangs,
       this.open_set_date = 30})
       : super(key: key);
@@ -134,9 +142,68 @@ class MealsView extends StatelessWidget {
   final Animation<double>? animation;
   final String? codecolor;
   final String? sumAll;
+  final String? sumPaid;
   final String? cuslangs;
   final int open_set_date;
   DateTime datex = DateTime.now();
+
+  // แบดจ์ข้อมูล (โซน/พื้นที่/ประเภท) แบบมีไอคอน ดูเรียบร้อยขึ้น
+  Widget _infoChip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: FitnessAppTheme.background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: FitnessAppTheme.grey.withOpacity(0.7)),
+          const SizedBox(width: 4),
+          AutoSizeText(
+            label,
+            minFontSize: 6,
+            maxFontSize: 12,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: FitnessAppTheme.fontName,
+              fontWeight: FontWeight.w600,
+              color: FitnessAppTheme.grey.withOpacity(0.85),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // แบดจ์แสดงยอดที่มี payment intent อยู่แล้ว/ชำระไปแล้ว
+  Widget _paidChip() {
+    return Container(
+      margin: const EdgeInsets.only(left: 6, top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle_outline, size: 10, color: Colors.white),
+          const SizedBox(width: 3),
+          Text(
+            '${cuslangs == 'EN' ? 'Paid' : 'รอตรวจสอบ'} $sumPaid',
+            style: TextStyle(
+              fontFamily: FitnessAppTheme.fontName,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   List<Color> _getGradientColors() {
     if (mealsListData!.quantity == '1') {
@@ -182,7 +249,7 @@ class MealsView extends StatelessWidget {
                 100 * (1.0 - animation!.value), 0.0, 0.0),
             child: SizedBox(
               width: 140,
-              height: 190,
+              height: 230,
               child: Stack(
                 children: <Widget>[
                   Padding(
@@ -240,88 +307,25 @@ class MealsView extends StatelessWidget {
                                           ),
                                           SizedBox(height: 6),
                                           // Zone Badge (Grey Pill)
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                                horizontal: 4, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: FitnessAppTheme.background,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: AutoSizeText(
-                                              cuslangs == 'EN'
-                                                  ? 'Zone: ${mealsListData!.zn}'
-                                                  : 'โซน: ${mealsListData!.zn}',
-                                              minFontSize: 8,
-                                              maxFontSize: 14,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontFamily:
-                                                    FitnessAppTheme.fontName,
-                                                fontWeight: FontWeight.w600,
-                                                color: FitnessAppTheme.grey
-                                                    .withOpacity(0.8),
-                                              ),
-                                            ),
+                                          _infoChip(
+                                            Icons.map_outlined,
+                                            cuslangs == 'EN'
+                                                ? 'Zone: ${mealsListData!.zn}'
+                                                : 'โซน: ${mealsListData!.zn}',
                                           ),
-                                          SizedBox(height: 2),
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                                horizontal: 4, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: FitnessAppTheme.background,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: AutoSizeText(
-                                              cuslangs == 'EN'
-                                                  ? 'Area: ${mealsListData!.ln}'
-                                                  : 'พื้นที่: ${mealsListData!.ln}',
-                                              // cuslangs == 'EN'
-                                              //     ? 'Zone ${mealsListData!.zn}'
-                                              //     : 'โซน ${mealsListData!.zn}',
-                                              minFontSize: 8,
-                                              maxFontSize: 14,
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontFamily:
-                                                    FitnessAppTheme.fontName,
-                                                fontWeight: FontWeight.w600,
-                                                color: FitnessAppTheme.grey
-                                                    .withOpacity(0.8),
-                                              ),
-                                            ),
+                                          SizedBox(height: 6),
+                                          _infoChip(
+                                            Icons.square_foot_outlined,
+                                            cuslangs == 'EN'
+                                                ? 'Area: ${mealsListData!.ln}'
+                                                : 'พื้นที่: ${mealsListData!.ln}',
                                           ),
-                                          SizedBox(height: 2),
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                                horizontal: 4, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: FitnessAppTheme.background,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            child: AutoSizeText(
-                                              cuslangs == 'EN'
-                                                  ? 'Type: ${mealsListData!.stype}'
-                                                  : 'ประเภท: ${mealsListData!.stype}',
-                                              // cuslangs == 'EN'
-                                              //     ? 'Zone ${mealsListData!.zn}'
-                                              //     : 'โซน ${mealsListData!.zn}',
-                                              minFontSize: 8,
-                                              maxFontSize: 14,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontFamily:
-                                                    FitnessAppTheme.fontName,
-                                                fontWeight: FontWeight.w600,
-                                                color: FitnessAppTheme.grey
-                                                    .withOpacity(0.8),
-                                              ),
-                                            ),
+                                          SizedBox(height: 6),
+                                          _infoChip(
+                                            Icons.category_outlined,
+                                            cuslangs == 'EN'
+                                                ? 'Type: ${mealsListData!.stype}'
+                                                : 'ประเภท: ${mealsListData!.stype}',
                                           ),
                                         ],
                                       ),
@@ -405,6 +409,8 @@ class MealsView extends StatelessWidget {
                                     ),
                                   ),
                                 ),
+
+                                // if ((sumPaid ?? '0.00') == '0.00')
                                 Positioned(
                                   top: 0,
                                   left: 0,
@@ -478,6 +484,14 @@ class MealsView extends StatelessWidget {
                         ),
                       ),
                     ),
+                  // if ((sumPaid ?? '0.00') != '0.00')
+                  //   Positioned(
+                  //     bottom: 0,
+                  //     left: 0, width: 135,
+                  //     // width: ((sumPaid ?? '0.00') != '0.00') ? null : 60,
+                  //     // height: ((sumPaid ?? '0.00') != '0.00') ? null : 60,
+                  //     child: _paidChip(),
+                  //   ),
                   // Maintenance Icon (Grey/Red)
                   if (mealsListData!.mainten.toString() == '1' ||
                       mealsListData!.mainten.toString() == '2')
