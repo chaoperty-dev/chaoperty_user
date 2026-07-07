@@ -227,7 +227,7 @@ class MealsView extends StatelessWidget {
                 children: <Widget>[
                   Padding(
                     padding: const EdgeInsets.only(
-                        top: 16, left: 8, right: 8, bottom: 16),
+                        top: 12, left: 8, right: 8, bottom: 12),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -235,10 +235,10 @@ class MealsView extends StatelessWidget {
                             const BorderRadius.all(Radius.circular(18.0)),
                         boxShadow: <BoxShadow>[
                           BoxShadow(
-                              color: const Color(0xff384250).withOpacity(0.10),
-                              offset: const Offset(0, 6),
-                              blurRadius: 14,
-                              spreadRadius: 1),
+                              color: const Color(0xff384250).withOpacity(0.06),
+                              offset: const Offset(0, 4),
+                              blurRadius: 10,
+                              spreadRadius: 0),
                         ],
                         border: Border.all(
                           color: FitnessAppTheme.grey.withOpacity(0.08),
@@ -255,7 +255,7 @@ class MealsView extends StatelessWidget {
                                 color: Colors.white,
                                 // Decreased top padding as we handle spacing via Column/Stack
                                 padding:
-                                    const EdgeInsets.fromLTRB(12, 36, 12, 0),
+                                    const EdgeInsets.fromLTRB(12, 28, 12, 0),
                                 child: Padding(
                                   padding: const EdgeInsets.only(
                                       left: 0.0), // Space for GIF
@@ -330,9 +330,9 @@ class MealsView extends StatelessWidget {
                               ),
                             ),
 
-                            // 2. Slim Gradient Footer (Bottom 52px)
+                            // 2. Slim Gradient Footer (Bottom 46px)
                             Container(
-                              height: 52,
+                              height: 46,
                               width: double.infinity,
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
@@ -341,7 +341,7 @@ class MealsView extends StatelessWidget {
                                   end: Alignment.bottomRight,
                                 ),
                               ),
-                              padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+                              padding: const EdgeInsets.fromLTRB(12, 5, 12, 6),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisAlignment:
@@ -351,7 +351,7 @@ class MealsView extends StatelessWidget {
                                     cuslangs == 'EN' ? 'Total Pay' : 'ยอดชำระ',
                                     style: TextStyle(
                                       fontFamily: FitnessAppTheme.fontName,
-                                      fontSize: 11,
+                                      fontSize: 10,
                                       fontWeight: FontWeight.w700,
                                       color: FitnessAppTheme.white,
                                     ),
@@ -364,20 +364,20 @@ class MealsView extends StatelessWidget {
                                           sumAll.toString(),
                                           maxLines: 1,
                                           minFontSize: 7,
-                                          maxFontSize: 16,
+                                          maxFontSize: 15,
                                           style: TextStyle(
                                             fontFamily:
                                                 FitnessAppTheme.fontName,
                                             fontWeight: FontWeight.w900,
-                                            fontSize: 18,
+                                            fontSize: 17,
                                             color: Colors.white,
                                           ),
                                         ),
                                       ),
                                       if (sumAll != '0.00')
                                         Container(
-                                          width: 24,
-                                          height: 24,
+                                          width: 22,
+                                          height: 22,
                                           decoration: BoxDecoration(
                                             color: Colors.white,
                                             shape: BoxShape.circle,
@@ -385,7 +385,7 @@ class MealsView extends StatelessWidget {
                                           child: Icon(
                                             Icons.arrow_forward_ios_rounded,
                                             color: gradientColors[0],
-                                            size: 11,
+                                            size: 10,
                                           ),
                                         ),
                                     ],
@@ -431,12 +431,12 @@ class MealsView extends StatelessWidget {
                   // GIF: Positioned Top-Left (Inside Clipping)
                   if (sumAll != '0.00')
                     Positioned(
-                      top: 0,
-                      left: 0,
-                      width: 60,
-                      height: 60,
+                      top: 4,
+                      left: 4,
+                      width: 44,
+                      height: 44,
                       child: Opacity(
-                        opacity: 1.0,
+                        opacity: 0.9,
                         child: Image.asset(
                           'assets/fitness_app/giphy7.gif',
                           fit: BoxFit.contain,
@@ -455,12 +455,26 @@ class MealsView extends StatelessWidget {
                   if (mealsListData!.mainten.toString() == '1' ||
                       mealsListData!.mainten.toString() == '2')
                     Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Icon(
-                        Icons.build,
-                        color: Colors.redAccent,
-                        size: 18,
+                      right: 4,
+                      top: 4,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.08),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.build_circle,
+                          color: Colors.redAccent.withOpacity(0.85),
+                          size: 16,
+                        ),
                       ),
                     ),
                 ],
