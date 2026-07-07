@@ -41,6 +41,14 @@ class ApiSession {
     await prefs.remove('api_nonce_id');
   }
 
+  /// Reset static fields without touching SharedPreferences
+  /// (ใช้ตอน logout เพื่อเคลียร์ memory cache ทันที)
+  static void reset() {
+    _bearerToken = '';
+    _nonceId = '';
+    _isInitialized = false;
+  }
+
   /// Check if token exists
   static bool get hasToken => _bearerToken.isNotEmpty;
 }

@@ -1,9 +1,9 @@
 ﻿import 'dart:async';
 import 'dart:convert';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
+import 'package:chaoperty_user/screen_Intents_V3/payment_subV3_InvAll.dart';
 import 'package:chaoperty_user/video_player_helper.dart';
 import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
-import 'package:chaoperty_user/screen_Intents/payment_subV2_InvAll.dart';
-import 'package:chaoperty_user/screen_Intents_V3/payment_subV3_InvAll.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4_InvAll.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
@@ -24,7 +24,6 @@ import '../screen/Screen_new/fitness_app_home_screen.dart';
 import '../screen/Screen_new/fitness_app_theme.dart';
 import '../screen/Screen_new/ui_view/running_view_pay.dart';
 import '../screen/model/contractInvoice.dart';
-import '../screen/pay_bill_screen.dart';
 
 class paymentMainV3InvAll extends StatefulWidget {
   final AnimationController? mainScreenAnimationController;
@@ -176,10 +175,8 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
 
   DateTime datex = DateTime.now();
   int tap_pay = 0;
-  int? _serPayment, _serptPayment;
   ////--------------------->
   List<InvoicePayModel> invoicePayModels = [];
-  List<InvoiceModel> _InvoiceModels = [];
   List<InvoiceModel> invoicePayModels2 = [];
   List<dynamic> InvoicePay = [];
   ////--------------------->
@@ -194,7 +191,6 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
   Timer? _timer;
   String countdownText = '';
   Offset _fabPos = Offset.zero;
-  double _fabDragDistance = 0;
   Offset _cardPos = Offset.zero;
 
   static const String _guideCardLastShownKey = 'guideCardLastShownV3';
@@ -1298,7 +1294,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                     width: itemW,
                     icon: Icons.payments,
                     label: isEN ? 'TOTAL' : 'ยอดสุทธิรวม',
-                    value: fmtMoney(totalAll ?? 0),
+                    value: fmtMoney(totalAll),
                     // fmtMoney(inv.totalAll ?? 0),
                     color: Colors.blue,
                     // TOTAL = 100%
@@ -1401,8 +1397,6 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     final bank = g.bank ?? '';
     final bno = g.bno ?? '';
     final bname = g.bname ?? ''; // Added definition
-    final title =
-        g.bank ?? (widget.cuslang == 'EN' ? 'Payment method' : 'ช่องทางชำระ');
     // หารหัสไฟล์โลโก้
 
     final bankInfo = bankCodeMap[bank];
@@ -1452,8 +1446,8 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                 Expanded(
                   child: Text(
                       widget.cuslang == 'EN'
-                          ? bankEn! + ' ($bankCode)'
-                          : bank! + ' ($bankCode)',
+                          ? (bankEn ?? '') + ' ($bankCode)'
+                          : bank + ' ($bankCode)',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -1605,8 +1599,6 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
 
                           setState(() {
                             tap_pay = 1;
-                            _serPayment = payser;
-                            _serptPayment = payptser;
                           });
                           Navigator.push(
                             context,
@@ -1990,9 +1982,44 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
 
   Future<List<String>?> _showBillSelectionDialog(List<Bill> bills) async {
     final sortedBills = _sortedBills(bills);
-    List<String> selectedDocNos =
-        sortedBills.map((b) => b.docno ?? '').toList();
     final isEN = widget.cuslang == 'EN';
+    final preferences = await SharedPreferences.getInstance();
+    final custNo = preferences.getString('custno');
+    final ren = preferences.getString('renTalSer');
+
+    // Check bulk availability before showing dialog
+    Map<String, bool> initiatedMap = {};
+    try {
+      final allDocNos = sortedBills
+          .map((b) => b.docno ?? '')
+          .where((d) => d.isNotEmpty)
+          .toList();
+      if (allDocNos.isNotEmpty) {
+        final response = await postPaymentIntentsBillReferenceAvailableBulk(
+          cusno: custNo.toString(),
+          propertyno: ren.toString(),
+          billreference: allDocNos,
+        );
+        if (response != null &&
+            response.statusCode >= 200 &&
+            response.statusCode < 300) {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map && decoded['data'] is Map) {
+            final data = decoded['data'] as Map<String, dynamic>;
+            data.forEach((key, value) {
+              initiatedMap[key] = value == false;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Bulk availability check error: $e');
+    }
+
+    List<String> selectedDocNos = sortedBills
+        .map((b) => b.docno ?? '')
+        .where((d) => d.isNotEmpty && !(initiatedMap[d] == true))
+        .toList();
 
     return await showDialog<List<String>>(
       context: context,
@@ -2027,6 +2054,18 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                         color: Colors.grey.shade600,
                         fontWeight: FontWeight.w500),
                   ),
+                  Text(
+                    isEN
+                        ? '#Note: If payment has already been initiated, please confirm to complete the process.'
+                        : '#หมายเหตุ : หากมีการเริ่มการชำระแล้ว กรุณากดยืนยันเพื่อดำเนินการต่อให้เสร็จสิ้น',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 10.5,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500),
+                  ),
                   const SizedBox(height: 12),
                   const Divider(height: 1),
                 ],
@@ -2039,57 +2078,46 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: sortedBills.map((bill) {
-                      final docno = bill.docno ?? '';
-                      final isSelected = selectedDocNos.contains(docno);
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Colors.indigo.withOpacity(0.04)
-                              : Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isSelected
-                                ? Colors.indigo.withOpacity(0.4)
-                                : Colors.grey.shade200,
-                            width: 1.2,
+                    children: (() {
+                      // เรียงบิลที่ยังไม่เริ่มชำระขึ้นก่อน
+                      final displayBills = sortedBills.toList();
+                      displayBills.sort((a, b) {
+                        final aInit = initiatedMap[a.docno ?? ''] == true;
+                        final bInit = initiatedMap[b.docno ?? ''] == true;
+                        if (aInit == bInit) return 0;
+                        return aInit ? 1 : -1;
+                      });
+                      return displayBills.map((bill) {
+                        final docno = bill.docno ?? '';
+                        final bool isAlreadyInitiated =
+                            initiatedMap[docno] == true;
+                        final isSelected = !isAlreadyInitiated &&
+                            selectedDocNos.contains(docno);
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          decoration: BoxDecoration(
+                            color: isAlreadyInitiated
+                                ? Colors.grey.shade100
+                                : (isSelected
+                                    ? Colors.indigo.withOpacity(0.04)
+                                    : Colors.grey.shade50),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isAlreadyInitiated
+                                  ? Colors.grey.shade300
+                                  : (isSelected
+                                      ? Colors.indigo.withOpacity(0.4)
+                                      : Colors.grey.shade200),
+                              width: 1.2,
+                            ),
                           ),
-                        ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () {
-                            setDialogState(() {
-                              if (!isSelected) {
-                                selectedDocNos.add(docno);
-                              } else {
-                                if (selectedDocNos.length > 1) {
-                                  selectedDocNos.remove(docno);
-                                } else {
-                                  Fluttertoast.showToast(
-                                    msg: isEN
-                                        ? "Please select at least one bill."
-                                        : "กรุณาเลือกอย่างน้อย 1 รายการ",
-                                    backgroundColor: Colors.red,
-                                    textColor: Colors.white,
-                                  );
-                                }
-                              }
-                            });
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 12),
-                            child: Row(
-                              children: [
-                                Checkbox(
-                                  value: isSelected,
-                                  activeColor: Colors.indigo,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(5)),
-                                  onChanged: (bool? value) {
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(14),
+                            onTap: isAlreadyInitiated
+                                ? null
+                                : () {
                                     setDialogState(() {
-                                      if (value == true) {
+                                      if (!isSelected) {
                                         selectedDocNos.add(docno);
                                       } else {
                                         if (selectedDocNos.length > 1) {
@@ -2106,67 +2134,132 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                                       }
                                     });
                                   },
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 12),
+                              child: Row(
+                                children: [
+                                  (isAlreadyInitiated)
+                                      ? SizedBox(
+                                          width: 30,
+                                          child: Center(
+                                            child: Icon(Icons.hourglass_bottom,
+                                                size: 20,
+                                                color: Colors.grey.shade700),
+                                          ),
+                                        )
+                                      : Checkbox(
+                                          value: isSelected,
+                                          activeColor: Colors.indigo,
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(5)),
+                                          onChanged: isAlreadyInitiated
+                                              ? null
+                                              : (bool? value) {
+                                                  setDialogState(() {
+                                                    if (value == true) {
+                                                      selectedDocNos.add(docno);
+                                                    } else {
+                                                      if (selectedDocNos
+                                                              .length >
+                                                          1) {
+                                                        selectedDocNos
+                                                            .remove(docno);
+                                                      } else {
+                                                        Fluttertoast.showToast(
+                                                          msg: isEN
+                                                              ? "Please select at least one bill."
+                                                              : "กรุณาเลือกอย่างน้อย 1 รายการ",
+                                                          backgroundColor:
+                                                              Colors.red,
+                                                          textColor:
+                                                              Colors.white,
+                                                        );
+                                                      }
+                                                    }
+                                                  });
+                                                },
+                                        ),
+                                  const SizedBox(width: 4),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          docno,
+                                          style: const TextStyle(
+                                              fontFamily: Font_.Fonts_T,
+                                              fontSize: 14.5,
+                                              fontWeight: FontWeight.w700),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              isAlreadyInitiated
+                                                  ? Icons.info_outline
+                                                  : Icons
+                                                      .calendar_month_outlined,
+                                              size: 13,
+                                              color: isAlreadyInitiated
+                                                  ? Colors.orange.shade700
+                                                  : Colors.grey.shade600,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              isAlreadyInitiated
+                                                  ? (isEN
+                                                      ? 'Payment initiation already started'
+                                                      : 'มีการเริ่มสร้างการชำระแล้ว')
+                                                  : fmtDate(bill.date),
+                                              style: TextStyle(
+                                                fontFamily: Font_.Fonts_T,
+                                                fontSize: isAlreadyInitiated
+                                                    ? 11.5
+                                                    : 12,
+                                                color: isAlreadyInitiated
+                                                    ? Colors.orange.shade700
+                                                    : Colors.grey.shade600,
+                                                fontWeight: isAlreadyInitiated
+                                                    ? FontWeight.w500
+                                                    : FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
                                     children: [
                                       Text(
-                                        docno,
+                                        fmtMoney(bill.totalBill),
                                         style: const TextStyle(
                                             fontFamily: Font_.Fonts_T,
-                                            fontSize: 14.5,
-                                            fontWeight: FontWeight.w700),
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.indigo),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Icon(Icons.calendar_month_outlined,
-                                              size: 13,
-                                              color: Colors.grey.shade600),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            fmtDate(bill.date),
-                                            style: TextStyle(
-                                                fontFamily: Font_.Fonts_T,
-                                                fontSize: 12,
-                                                color: Colors.grey.shade600,
-                                                fontWeight: FontWeight.w500),
-                                          ),
-                                        ],
+                                      Text(
+                                        isEN ? 'THB' : 'บาท',
+                                        style: TextStyle(
+                                            fontFamily: Font_.Fonts_T,
+                                            fontSize: 10,
+                                            color: Colors.grey.shade500,
+                                            fontWeight: FontWeight.w600),
                                       ),
                                     ],
                                   ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      fmtMoney(bill.totalBill),
-                                      style: const TextStyle(
-                                          fontFamily: Font_.Fonts_T,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.indigo),
-                                    ),
-                                    Text(
-                                      isEN ? 'THB' : 'บาท',
-                                      style: TextStyle(
-                                          fontFamily: Font_.Fonts_T,
-                                          fontSize: 10,
-                                          color: Colors.grey.shade500,
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
+                        );
+                      }).toList();
+                    })(),
                   ),
                 ),
               ),

@@ -8,7 +8,7 @@
 // /  flutter build web --release --no-sound-null-safety
 // /  flutter build web --web-renderer html --release --dart-define=web-browser-flag=--disable-web-security (แก้ปัญหา security  CORS (Cross-Origin Resource Sharing))
 // /  flutter build web --web-renderer html --release --no-sound-null-safety --dart-define=web-browser-flag=--disable-web-security (แก้ปัญหา security  CORS (Cross-Origin Resource Sharing))
-// /  flutter build web --release --web-renderer=html --dart-define=web-browser-flag=--disable-web-security
+// / flutter build web --release --web-renderer=html --dart-define=web-browser-flag=--disable-web-security
 // /
 // /
 // /flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false   (แก้ปัญหา Security Capture Screen )
@@ -34,6 +34,7 @@ import 'screen/loginscreen.dart';
 import 'screen/provider/homeprovider.dart';
 import 'screen/provider/payhisprovider.dart';
 import 'screen/provider/payprovider.dart';
+import 'screen/signin_service.dart';
 import 'security/watermark_widget.dart';
 
 // ==== ตัวแปรเก็บ URL เริ่มต้น (แก้ปัญหา Router ลบ Hash) ====
@@ -146,8 +147,37 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthGate extends StatelessWidget {
+/// AuthGate - ตัวตัดสินใจว่าจะเปิดหน้าไหนเมื่อแอปเริ่มทำงาน (รวมถึงตอน refresh)
+/// เลียนแบบ signInThread() ใน loginscreen.dart แต่อ่าน credentials จาก SharedPreferences
+/// เพื่อให้ตอนรีเฟรชหน้าเว็บแล้ว ระบบเช็คก่อนว่าควรไปหน้าไหน
+///   - ไม่มี credentials          -> LoginScreen
+///   - backend ตอบ 1 ตลาด          -> FitnessAppHomeScreen(custno)
+///   - backend ตอบหลายตลาด         -> MarketSelectScreen (ให้ผู้ใช้เลือก)
+///   - backend ตอบผิดพลาด / error  -> LoginScreen
+class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  Future<SignInResult>? _resultFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ Defer async validateSavedSession() ไปหลัง frame แรก
+    // เพื่อหลีกเลี่ยง _LocalizationsScope assertion ใน window.dart
+    if (_shouldLetLoginHandleUrl()) {
+      _resultFuture = null;
+    } else {
+      // ใช้ Future.microtask แทน เพื่อให้แน่ใจว่า widget tree พร้อมแล้ว
+      _resultFuture = Future<SignInResult>.microtask(
+        () async => await SignInService.validateSavedSession(),
+      );
+    }
+  }
 
   bool _shouldLetLoginHandleUrl() {
     final url = initialAppUrl.isNotEmpty ? initialAppUrl : Uri.base.toString();
@@ -159,20 +189,15 @@ class AuthGate extends StatelessWidget {
         url.contains('line_error=');
   }
 
-  Future<String?> _readSavedCustomerNo() async {
-    if (_shouldLetLoginHandleUrl()) return null;
-
-    final preferences = await SharedPreferences.getInstance();
-    final custno = preferences.getString('custno')?.trim();
-    if (custno == null || custno.isEmpty) return null;
-
-    return custno;
-  }
-
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<String?>(
-      future: _readSavedCustomerNo(),
+    // URL พิเศษ -> ให้ LoginScreen จัดการเอง
+    if (_resultFuture == null) {
+      return const LoginScreen();
+    }
+
+    return FutureBuilder<SignInResult>(
+      future: _resultFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Scaffold(
@@ -185,11 +210,28 @@ class AuthGate extends StatelessWidget {
           );
         }
 
-        final custno = snapshot.data;
-        if (custno != null) {
-          return FitnessAppHomeScreen(custno_s: custno);
+        if (!snapshot.hasData) {
+          return const LoginScreen();
         }
 
+        final result = snapshot.data!;
+
+        // ✅ กรณีสำเร็จและ backend ตอบ 1 ตลาด -> เปิด FitnessAppHomeScreen
+        if (result.destination != null) {
+          return result.destination!;
+        }
+
+        // ✅ กรณี backend ตอบหลายตลาด -> เปิด MarketSelectScreen ให้ผู้ใช้เลือก
+        if (result.requiresMarketSelection && result.validMarkets.isNotEmpty) {
+          return SignInService.buildMarketSelectScreen(
+              context, result.validMarkets);
+        }
+
+        // ✅ กรณี failure (ไม่มี creds / password ผิด / error) -> LoginScreen
+        // ถ้ามี errorMessage สามารถแสดงเป็น SnackBar ได้ในอนาคต
+        if (result.errorMessage != null) {
+          debugPrint('AuthGate failure: ${result.errorMessage}');
+        }
         return const LoginScreen();
       },
     );

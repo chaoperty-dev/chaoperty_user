@@ -5,6 +5,14 @@ import '../model/payhis_Model.dart';
 class PayHisProvider extends ChangeNotifier {
   List<RebillModel> Rebill = [];
   String foder = "";
+
+  /// รีเซ็ต state (เรียกตอน logout)
+  void reset() {
+    Rebill = <RebillModel>[];
+    foder = "";
+    notifyListeners();
+  }
+
   List<RebillModel> getTransaction() {
     return Rebill;
   }

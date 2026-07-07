@@ -1,13 +1,15 @@
 import 'dart:convert';
 import 'dart:html' as html;
-import 'dart:math';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../Constant/Myconstant.dart';
 import '../Constant/api_session.dart';
+import '../Constant/session_service.dart';
 import '../Model/GetC_regis_Model.dart';
 import '../Model/GetCustomer_Model.dart';
 import '../Model/GetRenTal_Model.dart';
@@ -19,6 +21,9 @@ import 'Screen_new/ui_view/workout_view.dart';
 import '../Constant/app_markets.dart';
 import 'market_select_screen.dart';
 import 'market_service.dart';
+import 'provider/homeprovider.dart';
+import 'provider/payhisprovider.dart';
+import 'provider/payprovider.dart';
 import '../main.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -38,20 +43,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscureText = true;
   String? _codeVerifier;
   html.EventListener? _messageHandler;
-
-  // เพิ่มฟังก์ชันสำหรับสร้าง Code Verifier
-  String _generateCodeVerifier() {
-    var random = Random.secure();
-    var values = List<int>.generate(32, (i) => random.nextInt(256));
-    return base64UrlEncode(values).replaceAll('=', '');
-  }
-
-  // เพิ่มฟังก์ชันสำหรับสร้าง Code Challenge
-  String _generateCodeChallenge(String verifier) {
-    var bytes = utf8.encode(verifier);
-    var digest = sha256.convert(bytes);
-    return base64UrlEncode(digest.bytes).replaceAll('=', '');
-  }
+  // เก็บข้อความแจ้งเตือนจาก LINE callback เพื่อแสดงใน build()
+  // (ห้ามเรียก ScaffoldMessenger.of(context) ใน initState)
+  String? _pendingLineErrorMessage;
 
   @override
   void initState() {
@@ -77,6 +71,11 @@ class _LoginScreenState extends State<LoginScreen> {
     print('=== _checkLineCallback ===');
     print('URL hash: $hash');
 
+    // ✅ ล้าง hash ทันทีเสมอ เพื่อป้องกัน stale error ตอน refresh
+    if (hash.isNotEmpty) {
+      html.window.history.replaceState(null, '', '/');
+    }
+
     if (hash.contains('line_code=')) {
       // ดึง code จาก URL fragment
       final params = Uri.parse('http://localhost/?${hash.substring(1)}');
@@ -85,19 +84,18 @@ class _LoginScreenState extends State<LoginScreen> {
           'Extracted code: ${code?.substring(0, 10)}...'); // แสดงแค่ 10 ตัวแรก
 
       if (code != null) {
-        // ล้าง URL fragment
-        html.window.history.replaceState(null, '', '/');
         // แลก code เป็น token
         _exchangeCodeForToken(code);
       }
     } else if (hash.contains('line_error=')) {
       final params = Uri.parse('http://localhost/?${hash.substring(1)}');
       final error = params.queryParameters['line_error'];
-      html.window.history.replaceState(null, '', '/');
       print('LINE Login Error: $error');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('LINE Login Failed: $error')),
-      );
+      // ❌ ห้ามเรียก ScaffoldMessenger.of(context) ใน initState()
+      // เก็บข้อความไว้แสดงใน build() แทน
+      _pendingLineErrorMessage = 'LINE Login Failed: $error';
+      // trigger rebuild เพื่อให้ build() แสดง SnackBar
+      if (mounted) setState(() {});
     } else {
       print('No LINE callback data in URL');
     }
@@ -118,11 +116,11 @@ class _LoginScreenState extends State<LoginScreen> {
           } else if (map['type'] == 'LINE_LOGIN_ERROR') {
             final error = map['error'] as String?;
             print('LINE Login Error: $error');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('LINE Login Failed: $error')),
-              );
-            }
+            // ❌ ห้ามเรียก ScaffoldMessenger.of(context) ตรงนี้
+            // เพราะ message event อาจมาถึงก่อน initState() เสร็จ
+            // เก็บข้อความไว้แสดงใน build() แทน
+            _pendingLineErrorMessage = 'LINE Login Failed: $error';
+            if (mounted) setState(() {});
           }
         } catch (_) {}
       }
@@ -204,12 +202,9 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         print('Token exchange failed!');
         print('Error: ${response.body}');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text('LINE Login Failed: ${response.statusCode}')),
-          );
-        }
+        // ❌ ห้ามเรียก ScaffoldMessenger.of(context) ใน initState() chain
+        _pendingLineErrorMessage = 'LINE Login Failed: ${response.statusCode}';
+        if (mounted) setState(() {});
       }
     } catch (e, stackTrace) {
       print('Error exchanging code: $e');
@@ -285,16 +280,6 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {}
   }
 
-  List<Color> _kDefaultRainbowColors = const [
-    Colors.red,
-    Colors.orange,
-    Colors.yellow,
-    Colors.green,
-    Colors.blue,
-    Colors.indigo,
-    Colors.purple,
-  ];
-
   Future<int> Line_IoginAuto() async {
     // ใช้ initialAppUrl ที่เก็บไว้ตอนเปิดแอปก่อนโดน router ลบทิ้ง
     String url = initialAppUrl;
@@ -333,7 +318,6 @@ class _LoginScreenState extends State<LoginScreen> {
         if (endIndex4 == -1) endIndex4 = url.length;
         if (endIndex5 == -1) endIndex5 = url.length;
 
-        String userWeb = url.substring(index, endIndex);
         String usernameWeb = url.substring(index2, endIndex2);
         String passwdWeb = url.substring(index3, endIndex3);
         String rser = url.substring(index4, endIndex4);
@@ -383,48 +367,21 @@ class _LoginScreenState extends State<LoginScreen> {
     return ser_Web;
   }
 
-  // LINE Official OAuth Login
-  void _lineLoginOAuth() {
-    // === ตั้งค่า LINE OAuth ที่นี่ ===
-    const String lineChannelId = '2007879464'; // Channel ID จาก LINE Console
-
-    // ใช้ redirect_uri เดียวสำหรับทุก environment
-    // ต้องลงทะเบียน URL นี้ใน LINE Developers Console
-    // เปลี่ยนตาม path ที่ deploy: /user/ หรือ /user_test/
-    const String lineCallbackUrl =
-        'https://chaoperties.com/user_test/auth.html';
-    print('=== _lineLoginOAuth ===');
-    print('Callback URL: $lineCallbackUrl');
-    const String lineState = 'chaoperty_login_state';
-
-    _codeVerifier = _generateCodeVerifier();
-    html.window.localStorage['line_code_verifier'] = _codeVerifier!;
-    final String codeChallenge = _generateCodeChallenge(_codeVerifier!);
-
-    // สร้าง LINE Login URL
-    final String encodedCallback = Uri.encodeComponent(lineCallbackUrl);
-    final String lineLoginUrl = 'https://access.line.me/oauth2/v2.1/authorize?'
-        'response_type=code'
-        '&client_id=$lineChannelId'
-        '&redirect_uri=$encodedCallback'
-        '&state=$lineState'
-        '&scope=profile%20openid%20email'
-        '&code_challenge_method=S256'
-        '&code_challenge=$codeChallenge'
-        '&prompt=consent';
-
-    // เปิด LINE Login เป็น Popup (เพื่อไม่ให้เสีย State ของ Flutter)
-    final int width = 500;
-    final int height = 600;
-    final int left = ((html.window.screen?.width ?? 1024) - width) ~/ 2;
-    final int top = ((html.window.screen?.height ?? 768) - height) ~/ 2;
-
-    html.window.open(lineLoginUrl, 'line_login',
-        'width=$width,height=$height,top=$top,left=$left');
-  }
-
   @override
   Widget build(BuildContext context) {
+    // ✅ แสดง SnackBar จาก LINE error หลัง widget tree พร้อมแล้ว
+    // (ห้ามเรียก ScaffoldMessenger.of(context) ใน initState)
+    if (_pendingLineErrorMessage != null) {
+      final msg = _pendingLineErrorMessage!;
+      _pendingLineErrorMessage = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      });
+    }
+
     return Scaffold(
       backgroundColor: FitnessAppTheme.background,
       body: Stack(
@@ -940,9 +897,18 @@ class _LoginScreenState extends State<LoginScreen> {
           'password': password,
           'idtoken': id_token,
           'line_rser': line_rser,
-          'is_line_oauth':  isLineOAuth ? '1' : '0',
+          'is_line_oauth': isLineOAuth ? '1' : '0',
         }),
       );
+
+      print(json.encode({
+        'isAdd': 'true',
+        'username': user,
+        'password': password,
+        'idtoken': id_token,
+        'line_rser': line_rser,
+        'is_line_oauth': isLineOAuth ? '1' : '0',
+      }));
       print('Response status: ${response.statusCode}');
       print('Response body: ${response.body}');
 
@@ -961,13 +927,14 @@ class _LoginScreenState extends State<LoginScreen> {
         print('Found user data, processing...');
 
         // Parse all results
-        final List<c_regis_Model> allModels = (result as List)
+        final List<c_regis_Model> allModels = result
             .map<c_regis_Model>((map) => c_regis_Model.fromJson(map))
             .toList();
 
         // For LINE / auto-login all rows are valid; for normal login check password once
         List<c_regis_Model> validModels;
-        if (isLineOAuth || ser_Web == 1) { // <--- เพิ่ม ser_Web == 1
+        if (isLineOAuth || ser_Web == 1) {
+          // <--- เพิ่ม ser_Web == 1
           validModels = allModels;
         } else {
           // All rows belong to the same user — check password against first row
@@ -1006,26 +973,47 @@ class _LoginScreenState extends State<LoginScreen> {
               );
             },
           );
-        } else if (validModels.length == 1) {
-          // Single market — proceed directly
-          final m = validModels.first;
-          print('Single market login: ${m.custno}');
-          routeToService(FitnessAppHomeScreen(custno_s: m.custno), m);
         } else {
-          // Multiple markets — save list then let user pick
-          AppMarkets.markets = validModels;
-          print('Multiple markets (${validModels.length}) — showing selection');
-          if (!mounted) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => MarketSelectScreen(
-                markets: validModels,
-                onSelect: (selected) =>
-                    MarketService.applyMarket(context, selected),
+          // ✅ ก่อน login user ใหม่: ล้างข้อมูล user เก่าทั้งหมด
+          // (กัน provider state, AppMarkets, ApiSession ค้างจาก user ก่อนหน้า)
+          await SessionService.clearAll(providers: <ChangeNotifier>[
+            context.read<WaitPayListProvider>(),
+            context.read<PayFormProvider>(),
+            context.read<PayHisProvider>(),
+          ]);
+
+          // ✅ เซฟ credentials ทันที (ก่อนเลือกตลาด)
+          // เพื่อให้ AuthGate ตอน refresh อ่านเจอ
+          // (ไม่ต้องรอให้เลือกตลาด)
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('UsernameUSer', userController.text.toString());
+          await prefs.setString('pass_word', password);
+          debugPrint(
+              '✅ Saved credentials to SharedPreferences: ${userController.text.toString()}');
+
+          if (validModels.length == 1) {
+            // Single market — proceed directly
+            final m = validModels.first;
+            print('Single market login: ${m.custno}');
+            if (!mounted) return;
+            routeToService(FitnessAppHomeScreen(custno_s: m.custno), m);
+          } else {
+            // Multiple markets — save list then let user pick
+            AppMarkets.markets = validModels;
+            print(
+                'Multiple markets (${validModels.length}) — showing selection');
+            if (!mounted) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => MarketSelectScreen(
+                  markets: validModels,
+                  onSelect: (selected) =>
+                      MarketService.applyMarket(context, selected),
+                ),
               ),
-            ),
-          );
+            );
+          }
         }
       } else {
         // แจ้งเตือนเมื่อไม่พบผู้ใช้หรือเข้าสู่ระบบไม่สำเร็จ
@@ -1043,7 +1031,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -1083,27 +1071,33 @@ class _LoginScreenState extends State<LoginScreen> {
 
       SharedPreferences preferences = await SharedPreferences.getInstance();
       if (ser_Web == 1) {
-        preferences.setString('custno', cregisModel.custno!);
-        preferences.setString('pass_word', cregisModel.passwd.toString());
-        preferences.setString('UsernameUSer', cregisModel.username.toString());
-        preferences.setString('renTalSer', cregisModel.rser!);
-        preferences.setString('renTalName', cregisModel.pn!);
-        preferences.setString('lintid', user_id.toString());
-        preferences.setString('ser', u_ser.toString());
-        preferences.setString('cname', customerModel.cname.toString());
-        preferences.setString('sname', customerModel.scname.toString());
-        preferences.setString('email', customerModel.email.toString());
-        preferences.setString('photo', customerModel.addr2.toString());
-        preferences.setString('address', customerModel.addr1.toString());
-        preferences.setString('contact', customerModel.attn.toString());
-        preferences.setString('stype', customerModel.stype.toString());
-        preferences.setString('tel', customerModel.tel.toString());
-        preferences.setString('tax', customerModel.tax.toString());
-        preferences.setString('foder', customerModel.foder.toString());
-        preferences.setString('lang', cregisModel.language.toString());
-        preferences.setString('pay_token', cregisModel.payToken ?? '');
-        preferences.setString('pay_encoded64', cregisModel.payEncoded64 ?? '');
-        preferences.setString('fid', cregisModel.fid ?? '');
+        // ✅ await ทั้งหมดก่อน navigate เพื่อให้แน่ใจว่า SharedPreferences flush เสร็จ
+        // (กัน AuthGate ตอน refresh อ่านไม่เจอ)
+        await Future.wait(<Future<bool>>[
+          preferences.setString('custno', cregisModel.custno!),
+          preferences.setString('pass_word', cregisModel.passwd.toString()),
+          preferences.setString(
+              'UsernameUSer', cregisModel.username.toString()),
+          preferences.setString('renTalSer', cregisModel.rser!),
+          preferences.setString('renTalName', cregisModel.pn!),
+          preferences.setString('lintid', user_id.toString()),
+          preferences.setString('ser', u_ser.toString()),
+          preferences.setString('cname', customerModel.cname.toString()),
+          preferences.setString('sname', customerModel.scname.toString()),
+          preferences.setString('email', customerModel.email.toString()),
+          preferences.setString('photo', customerModel.addr2.toString()),
+          preferences.setString('address', customerModel.addr1.toString()),
+          preferences.setString('contact', customerModel.attn.toString()),
+          preferences.setString('stype', customerModel.stype.toString()),
+          preferences.setString('tel', customerModel.tel.toString()),
+          preferences.setString('tax', customerModel.tax.toString()),
+          preferences.setString('foder', customerModel.foder.toString()),
+          preferences.setString('lang', cregisModel.language.toString()),
+          preferences.setString('pay_token', cregisModel.payToken ?? ''),
+          preferences.setString(
+              'pay_encoded64', cregisModel.payEncoded64 ?? ''),
+          preferences.setString('fid', cregisModel.fid ?? ''),
+        ]);
 
         // Get customer JWT token for payment API
         await _getAndStoreCustomerToken(cusno, rser);
@@ -1112,27 +1106,33 @@ class _LoginScreenState extends State<LoginScreen> {
           ser_Web = 0;
         });
       } else {
-        preferences.setString('custno', cregisModel.custno!);
-        preferences.setString('lang', cregisModel.language.toString());
-        preferences.setString('pass_word', passwordController.text.toString());
-        preferences.setString('UsernameUSer', userController.text.toString());
-        preferences.setString('renTalSer', cregisModel.rser!);
-        preferences.setString('renTalName', cregisModel.pn!);
-        preferences.setString('lintid', customerModel.lineid.toString());
-        preferences.setString('ser', u_ser.toString());
-        preferences.setString('cname', customerModel.cname.toString());
-        preferences.setString('sname', customerModel.scname.toString());
-        preferences.setString('email', customerModel.email.toString());
-        preferences.setString('photo', customerModel.addr2.toString());
-        preferences.setString('address', customerModel.addr1.toString());
-        preferences.setString('contact', customerModel.attn.toString());
-        preferences.setString('stype', customerModel.stype.toString());
-        preferences.setString('tel', customerModel.tel.toString());
-        preferences.setString('tax', customerModel.tax.toString());
-        preferences.setString('foder', customerModel.foder.toString());
-        preferences.setString('pay_token', cregisModel.payToken ?? '');
-        preferences.setString('pay_encoded64', cregisModel.payEncoded64 ?? '');
-        preferences.setString('fid', cregisModel.fid ?? '');
+        await Future.wait(<Future<bool>>[
+          preferences.setString('custno', cregisModel.custno!),
+          preferences.setString('lang', cregisModel.language.toString()),
+          // ✅ ใช้ MD5 hash ของ password (ให้ตรงกับ backend)
+          // เพื่อให้ AuthGate ตอน refresh login ได้ถูกต้อง
+          preferences.setString('pass_word',
+              md5.convert(utf8.encode(passwordController.text)).toString()),
+          preferences.setString('UsernameUSer', userController.text.toString()),
+          preferences.setString('renTalSer', cregisModel.rser!),
+          preferences.setString('renTalName', cregisModel.pn!),
+          preferences.setString('lintid', customerModel.lineid.toString()),
+          preferences.setString('ser', u_ser.toString()),
+          preferences.setString('cname', customerModel.cname.toString()),
+          preferences.setString('sname', customerModel.scname.toString()),
+          preferences.setString('email', customerModel.email.toString()),
+          preferences.setString('photo', customerModel.addr2.toString()),
+          preferences.setString('address', customerModel.addr1.toString()),
+          preferences.setString('contact', customerModel.attn.toString()),
+          preferences.setString('stype', customerModel.stype.toString()),
+          preferences.setString('tel', customerModel.tel.toString()),
+          preferences.setString('tax', customerModel.tax.toString()),
+          preferences.setString('foder', customerModel.foder.toString()),
+          preferences.setString('pay_token', cregisModel.payToken ?? ''),
+          preferences.setString(
+              'pay_encoded64', cregisModel.payEncoded64 ?? ''),
+          preferences.setString('fid', cregisModel.fid ?? ''),
+        ]);
 
         // Get customer JWT token for payment API
         await _getAndStoreCustomerToken(cusno, rser);

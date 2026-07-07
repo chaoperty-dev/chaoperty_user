@@ -17,12 +17,14 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:marquee/marquee.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 // import 'package:chaoperty_user/screen/mobile_scanner_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 // import 'package:x_message/x_message.dart';
 
 import '../Constant/Myconstant.dart';
+import '../Constant/session_service.dart';
 import '../Model/GetContractx_Model.dart';
 import '../Model/GetInvoice_Model.dart';
 import '../Model/GetInvoice_history_Model.dart';
@@ -41,6 +43,9 @@ import 'bill_history.dart';
 import 'home_select_cid.dart';
 import 'loginscreen.dart';
 import 'meter_screen.dart';
+import 'provider/homeprovider.dart';
+import 'provider/payhisprovider.dart';
+import 'provider/payprovider.dart';
 // import 'metercheck_screen.dart';
 import 'package:http/http.dart' as http;
 // import 'package:grouped_list/grouped_list.dart';
@@ -2179,10 +2184,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.all(8.0),
                         child: TextButton(
                           onPressed: () async {
-                            // widget.navigateToMeter(1);
-                            SharedPreferences preferences =
-                                await SharedPreferences.getInstance();
-                            await preferences.clear();
+                            // ✅ Clear ทุกอย่าง: SharedPreferences, ApiSession,
+                            //    AppMarkets, web localStorage, Provider state
+                            await SessionService.clearAll(
+                                providers: <ChangeNotifier>[
+                                  context.read<WaitPayListProvider>(),
+                                  context.read<PayFormProvider>(),
+                                  context.read<PayHisProvider>(),
+                                ]);
+                            if (!context.mounted) return;
                             MaterialPageRoute route = MaterialPageRoute(
                               builder: (context) => const LoginScreen(),
                             );

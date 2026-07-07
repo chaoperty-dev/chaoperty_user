@@ -265,6 +265,7 @@ Future<http.Response?> postPaymentIntents(
     required double depositAmount,
     required double insuranceAmount,
     required double withholdingAmount,
+    required double requestedTotal,
     // required String createdById,
     required bool isAdminCreated,
     required int bankMerchantId,
@@ -311,7 +312,7 @@ Future<http.Response?> postPaymentIntents(
         "deposit_amount": depositAmount,
         "insurance_amount": insuranceAmount,
         "withholding_amount": withholdingAmount,
-        "total": requestedAmount,
+        "total": requestedTotal,
         "bank_merchant_id": bankMerchantId,
         // "currency": "",
         "description": descripTion ?? "",
@@ -320,7 +321,6 @@ Future<http.Response?> postPaymentIntents(
         "bank_merchant_type": bankMerchantType,
         "invoices": inVoices, // ✅ key ให้ตรง API
         "trans": transSelect,
-        
       }
     };
 
@@ -355,7 +355,9 @@ Future<http.Response?> postPaymentIntents(
   } catch (e, st) {
     debugPrint('❌ Exception in postPaymentIntents: $e');
     debugPrint('🧭 StackTrace:\n$st');
-    return null;
+    // ✅ rethrow เพื่อให้ caller (PostPaymentIntent) เห็น exception จริง
+    // และแสดง popup พร้อม endpoint URL + status + error detail
+    rethrow;
   }
 }
 
@@ -424,7 +426,9 @@ Future<http.Response?> postGeneratePaymentIntents({
   } catch (e, st) {
     debugPrint('❌ Exception in post Generate PaymentIntents: $e');
     debugPrint('🧭 StackTrace:\n$st');
-    return null;
+    // ✅ rethrow เพื่อให้ caller (_renewQrAndReload) เห็น exception จริง
+    // และแสดง popup พร้อม endpoint URL + status + error detail
+    rethrow;
   }
 }
 

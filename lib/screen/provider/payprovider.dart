@@ -6,6 +6,12 @@ class PayFormProvider with ChangeNotifier {
   //รับค่า
   List<PayFormModel> data = [];
 
+  /// รีเซ็ต state (เรียกตอน logout)
+  void reset() {
+    data = <PayFormModel>[];
+    notifyListeners();
+  }
+
   //ดึงข้อมูล
   List<PayFormModel> getTransaction() {
     return data;

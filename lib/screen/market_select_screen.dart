@@ -169,7 +169,7 @@ class _MarketCard extends StatelessWidget {
                   if ((model.rentalIdCard ?? '').isNotEmpty) ...[
                     const SizedBox(height: 3),
                     _row(Icons.storefront_outlined,
-                        'เลขที่ห้อง : ${model.rentalIdCard}'),
+                        'ํเลขประจำตัวประชาชน : ${model.rentalIdCard}'),
                   ],
                 ],
               ),

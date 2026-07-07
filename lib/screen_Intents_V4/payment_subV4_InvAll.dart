@@ -972,6 +972,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         payser: int.tryParse('${widget.serPayment}') ?? 0,
         typepayser: int.tryParse('${widget.serptPayment}') ?? 0,
         requestedAmount: _d(requestedAmountTotalBill), // ✅ ไม่ใช้ string format
+        requestedTotal: _d(requestedAmountTotalBill), // ✅ API ต้องการ
         lateFee: All_lateFee,
         discountAmount: All_discountAmount,
         depositAmount: All_depositAmount,
@@ -1036,6 +1037,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       required double depositAmount,
       required double insuranceAmount,
       required double withholdingAmount,
+      required double requestedTotal,
       required List<Map<String, dynamic>> inVoices,
       required List<Map<String, dynamic>> transselect,
       required String PayBno,
@@ -1065,6 +1067,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         depositAmount: depositAmount,
         insuranceAmount: insuranceAmount,
         withholdingAmount: withholdingAmount,
+        requestedTotal: requestedTotal,
         // createdById: "10101010101010",
         isAdminCreated: true,
         bankMerchantId: payser,

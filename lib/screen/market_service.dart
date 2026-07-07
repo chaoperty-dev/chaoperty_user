@@ -25,25 +25,27 @@ class MarketService {
     for (var map in result) {
       final cm = CustomerModel.fromJson(map);
       final prefs = await SharedPreferences.getInstance();
-      prefs.setString('custno', model.custno ?? '');
-      prefs.setString('lang', model.language?.toString() ?? 'TH');
-      prefs.setString('renTalSer', model.rser ?? '');
-      prefs.setString('renTalName', model.pn ?? '');
-      prefs.setString('lintid', cm.lineid.toString());
-      prefs.setString('ser', model.ser.toString());
-      prefs.setString('cname', cm.cname.toString());
-      prefs.setString('sname', cm.scname.toString());
-      prefs.setString('email', cm.email.toString());
-      prefs.setString('photo', cm.addr2.toString());
-      prefs.setString('address', cm.addr1.toString());
-      prefs.setString('contact', cm.attn.toString());
-      prefs.setString('stype', cm.stype.toString());
-      prefs.setString('tel', cm.tel.toString());
-      prefs.setString('tax', cm.tax.toString());
-      prefs.setString('foder', cm.foder.toString());
-      prefs.setString('pay_token', model.payToken ?? '');
-      prefs.setString('pay_encoded64', model.payEncoded64 ?? '');
-      prefs.setString('fid', model.fid ?? '');
+      // ✅ await ทุกครั้งเพื่อให้แน่ใจว่า SharedPreferences flush เสร็จ
+      // ก่อนที่ AuthGate (ตอน refresh) จะอ่านกลับมา
+      await prefs.setString('custno', model.custno ?? '');
+      await prefs.setString('lang', model.language?.toString() ?? 'TH');
+      await prefs.setString('renTalSer', model.rser ?? '');
+      await prefs.setString('renTalName', model.pn ?? '');
+      await prefs.setString('lintid', cm.lineid.toString());
+      await prefs.setString('ser', model.ser.toString());
+      await prefs.setString('cname', cm.cname.toString());
+      await prefs.setString('sname', cm.scname.toString());
+      await prefs.setString('email', cm.email.toString());
+      await prefs.setString('photo', cm.addr2.toString());
+      await prefs.setString('address', cm.addr1.toString());
+      await prefs.setString('contact', cm.attn.toString());
+      await prefs.setString('stype', cm.stype.toString());
+      await prefs.setString('tel', cm.tel.toString());
+      await prefs.setString('tax', cm.tax.toString());
+      await prefs.setString('foder', cm.foder.toString());
+      await prefs.setString('pay_token', model.payToken ?? '');
+      await prefs.setString('pay_encoded64', model.payEncoded64 ?? '');
+      await prefs.setString('fid', model.fid ?? '');
 
       await _storeCustomerToken(cusno, rser);
     }

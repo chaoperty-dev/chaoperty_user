@@ -2284,95 +2284,137 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     return clean.substring(0, 16);
   }
 
-  Future<void> OKuploadFile_Slip(newValuePDFimg) async {
-    setState(() => extension_ = 'png');
-
-    final preferences = await SharedPreferences.getInstance();
-    final ciddoc_ = widget.teNantModel == null
-        ? preferences.getString('usercid')
-        : preferences.getString('custno');
-
-    final unique = _uniqueSuffix();
-
-    final base = 'slip_${ciddoc_ ?? "NA"}_$unique';
-    fileName_Slip = '$base.$extension_';
-
-    debugPrint(
-        '📎 OKuploadFile_Slip: fileName=$fileName_Slip, foder=$foder, ext=$extension_');
-    debugPrint(
-        '📎 OKuploadFile_Slip: _slipImageBytes=${_slipImageBytes != null ? _slipImageBytes!.length : "null"} bytes');
-    debugPrint(
-        '📎 OKuploadFile_Slip: base64_Slip=${base64_Slip != null ? "${base64_Slip!.length} chars" : "null"}');
-
-    // สร้าง URI โดยใช้ replace(queryParameters:) เพื่อให้ encode ค่าพารามิเตอร์ถูกต้อง
-    final uri =
-        Uri.parse('${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php')
-            .replace(
-      queryParameters: {
-        'name': fileName_Slip ?? '',
-        'Foder': foder ?? '',
-        'extension': extension_?.toString() ?? 'png',
-      },
-    );
-    debugPrint('📎 OKuploadFile_Slip: url=$uri');
-
+  /// อัปโหลดสลิปไปยังเซิร์ฟเวอร์
+  /// คืนค่า true เมื่ออัปโหลดสำเร็จ (HTTP 200/201) ไม่เช่นนั้น false
+  /// ⚠️ ห้าม catch error เงียบๆ แล้วคืน success — ต้องให้ caller รู้ว่าล้มเหลว
+  ///
+  /// ✅ Retry-safety design (2026-07-02):
+  ///    - ทุกครั้งที่เรียก `OKuploadFile_Slip` จะสร้าง **ชื่อไฟล์ใหม่** ด้วย UUID ใหม่
+  ///    - `_pickSlipImage` รีเซ็ต `fileName_Slip = null` ทันทีที่ผู้ใช้เลือกไฟล์ใหม่
+  ///    - แม้ upload ล้มเหลว → user re-selects ไฟล์ → upload จะได้ filename ใหม่
+  ///    - filename จะไม่หายระหว่างทาง (เก็บไว้ใน state ตลอด)
+  ///    - จะถูก clear เฉพาะตอน `in_Trans_invoice` สำเร็จเท่านั้น
+  Future<bool> OKuploadFile_Slip(newValuePDFimg) async {
     try {
-      if (kIsWeb) {
-        // ✅ Web: MultipartRequest ไม่ทำงานบน web (dart:io ไม่มี)
-        // ต้องใช้ base64 POST เท่านั้น
-        if (base64_Slip != null && base64_Slip!.isNotEmpty) {
-          final response = await http.post(
-            uri,
-            body: {
-              'image': base64_Slip,
-              'Foder': foder ?? '',
-              'name': fileName_Slip ?? '',
-              'ex': extension_?.toString() ?? 'png',
-            },
-          );
-          debugPrint(
-              '📎 OKuploadFile_Slip: web base64 status=${response.statusCode}, body=${response.body}');
-        } else {
-          debugPrint('❌ OKuploadFile_Slip: Web ไม่มี base64_Slip');
-        }
-      } else {
-        // ✅ Mobile/Desktop: ใช้ MultipartRequest ส่งไฟล์ binary ได้
-        if (_slipImageBytes != null) {
-          final request = http.MultipartRequest('POST', uri);
-          request.fields['Foder'] = foder ?? '';
-          request.fields['name'] = fileName_Slip ?? '';
-          request.fields['ex'] = extension_?.toString() ?? 'png';
-          request.files.add(http.MultipartFile.fromBytes(
-            'image',
-            _slipImageBytes!,
-            filename: fileName_Slip ?? 'slip.png',
-            contentType: MediaType('image', 'png'),
-          ));
-          final response = await request.send();
-          final responseBody = await response.stream.bytesToString();
-          debugPrint(
-              '📎 OKuploadFile_Slip: multipart status=${response.statusCode}, body=$responseBody');
-        } else if (base64_Slip != null && base64_Slip!.isNotEmpty) {
-          // Fallback to base64 if binary not available
-          final response = await http.post(
-            uri,
-            body: {
-              'image': base64_Slip,
-              'Foder': foder ?? '',
-              'name': fileName_Slip ?? '',
-              'ex': extension_?.toString() ?? 'png',
-            },
-          );
-          debugPrint(
-              '📎 OKuploadFile_Slip: base64 status=${response.statusCode}, body=${response.body}');
-        } else {
-          debugPrint(
-              '❌ OKuploadFile_Slip: ไม่มีข้อมูลรูปภาพ (_slipImageBytes=null, base64_Slip=null)');
-        }
+      setState(() => extension_ = 'png');
+
+      final preferences = await SharedPreferences.getInstance();
+      final ciddoc_ = widget.teNantModel == null
+          ? preferences.getString('usercid')
+          : preferences.getString('custno');
+
+      final unique = _uniqueSuffix();
+
+      final base = 'slip_${ciddoc_ ?? "NA"}_$unique';
+      fileName_Slip = '$base.$extension_';
+      // ✅ safety: even if upload fails below, fileName_Slip is preserved
+      // (the user wants traceability — losing the filename is not acceptable)
+
+      debugPrint(
+          '📎 OKuploadFile_Slip: fileName=$fileName_Slip, foder=$foder, ext=$extension_');
+      debugPrint(
+          '📎 OKuploadFile_Slip: _slipImageBytes=${_slipImageBytes != null ? _slipImageBytes!.length : "null"} bytes');
+      debugPrint(
+          '📎 OKuploadFile_Slip: base64_Slip=${base64_Slip != null ? "${base64_Slip!.length} chars" : "null"}');
+
+      // สร้าง URI — ส่งเฉพาะ query params ที่จำเป็น (กันซ้ำซ้อนกับ body)
+      final uri =
+          Uri.parse('${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php')
+              .replace(
+        queryParameters: {
+          'Foder': foder ?? '',
+        },
+      );
+      debugPrint('📎 OKuploadFile_Slip: url=$uri');
+
+      // ✅ ตรวจสอบข้อมูลรูปภาพก่อน — ป้องกันอัปโหลดเปล่า
+      final hasBinary = _slipImageBytes != null && _slipImageBytes!.isNotEmpty;
+      final hasBase64 = base64_Slip != null && base64_Slip!.isNotEmpty;
+      if (!hasBinary && !hasBase64) {
+        debugPrint(
+            '❌ OKuploadFile_Slip: ไม่มีข้อมูลรูปภาพ (_slipImageBytes=null, base64_Slip=null)');
+        return false;
       }
+      // ต้องมี foder เพื่อให้ PHP รู้จัก path จัดเก็บ
+      if (foder == null || foder!.isEmpty) {
+        debugPrint('❌ OKuploadFile_Slip: foder ว่าง — รอ read_GC_rental()');
+        return false;
+      }
+
+      if (kIsWeb) {
+        // ✅ Web: ใช้ base64 POST (MultipartRequest ใช้ dart:io ซึ่งใช้ไม่ได้บน web)
+        if (!hasBase64) {
+          debugPrint('❌ OKuploadFile_Slip: Web ต้องมี base64_Slip');
+          return false;
+        }
+        final response = await http.post(
+          uri,
+          body: {
+            'image': base64_Slip,
+            'Foder': foder ?? '',
+            'name': fileName_Slip ?? '',
+            'ex': extension_?.toString() ?? 'png',
+          },
+        ).timeout(const Duration(seconds: 20));
+        debugPrint(
+            '📎 OKuploadFile_Slip: web base64 status=${response.statusCode}, body=${response.body}');
+        final ok = response.statusCode == 200 || response.statusCode == 201;
+        if (!ok) {
+          debugPrint(
+              '❌ OKuploadFile_Slip: web upload failed status=${response.statusCode}');
+        }
+        return ok;
+      }
+
+      // ✅ Mobile/Desktop
+      if (hasBinary) {
+        final request = http.MultipartRequest('POST', uri);
+        request.fields['Foder'] = foder ?? '';
+        request.fields['name'] = fileName_Slip ?? '';
+        request.fields['ex'] = extension_?.toString() ?? 'png';
+        request.files.add(http.MultipartFile.fromBytes(
+          'image',
+          _slipImageBytes!,
+          filename: fileName_Slip ?? 'slip.png',
+          contentType: MediaType('image', 'png'),
+        ));
+        final streamed =
+            await request.send().timeout(const Duration(seconds: 30));
+        final responseBody = await streamed.stream.bytesToString().timeout(
+              const Duration(seconds: 10),
+            );
+        debugPrint(
+            '📎 OKuploadFile_Slip: multipart status=${streamed.statusCode}, body=$responseBody');
+        final ok = streamed.statusCode == 200 || streamed.statusCode == 201;
+        if (!ok) {
+          debugPrint(
+              '❌ OKuploadFile_Slip: multipart failed status=${streamed.statusCode}');
+        }
+        return ok;
+      }
+
+      // Fallback: base64 POST (กรณี binary ไม่มี)
+      final response = await http.post(
+        uri,
+        body: {
+          'image': base64_Slip,
+          'Foder': foder ?? '',
+          'name': fileName_Slip ?? '',
+          'ex': extension_?.toString() ?? 'png',
+        },
+      ).timeout(const Duration(seconds: 20));
+      debugPrint(
+          '📎 OKuploadFile_Slip: base64 status=${response.statusCode}, body=${response.body}');
+      final ok = response.statusCode == 200 || response.statusCode == 201;
+      if (!ok) {
+        debugPrint(
+            '❌ OKuploadFile_Slip: base64 failed status=${response.statusCode}');
+      }
+      return ok;
     } catch (e, stack) {
       debugPrint('❌ OKuploadFile_Slip error: $e');
       debugPrint('🧭 StackTrace:\n$stack');
+      return false;
     }
   }
 
@@ -5977,7 +6019,11 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     int second = now.second;
 
     /////////------------------->
-    String? fileName_Slip_ = fileName_Slip.toString().trim();
+    // ✅ ป้องกันไม่ให้ส่ง 'null' ไปยัง PHP
+    String? fileName_Slip_ =
+        (fileName_Slip != null && fileName_Slip!.isNotEmpty)
+            ? fileName_Slip!.trim()
+            : null;
     ////////////////------------------------------------------------------>
     SharedPreferences preferences = await SharedPreferences.getInstance();
     var custno = preferences.getString('custno');
@@ -6081,7 +6127,20 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     int second = now.second;
 
     /////////------------------->
-    String? fileName_Slip_ = fileName_Slip.toString().trim();
+    // ✅ ป้องกันไม่ให้ส่ง 'null' ไปยัง PHP — ถ้า fileName_Slip ว่าง/หาย
+    //    ให้ abort ทันที (อย่าสร้าง transaction ที่มี fileNameSlip ผิด)
+    String? fileName_Slip_ =
+        (fileName_Slip != null && fileName_Slip!.isNotEmpty)
+            ? fileName_Slip!.trim()
+            : null;
+    if (fileName_Slip_ == null || fileName_Slip_!.isEmpty) {
+      debugPrint(
+          '❌ in_Trans_invoice: fileName_Slip is empty — abort to avoid bad record');
+      if (mounted) {
+        isLoading = false;
+      }
+      return;
+    }
     ////////////////------------------------------------------------------>
     SharedPreferences preferences = await SharedPreferences.getInstance();
     var custno = preferences.getString('custno');
@@ -6216,22 +6275,44 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   // }
 
   Future<bool> _processPaymentConfirmation(BuildContext ctx) async {
-    // Navigator.of(ctx).pop(); // Close the dialog // Removed to handle manually
+    // ✅ null-safe ป้องกัน RangeError ตอน renTalModels ว่าง
+    final imgLogo = (renTalModels.isNotEmpty)
+        ? (renTalModels[0].imglogo?.trim() ?? '')
+        : '';
     List newValuePDFimg = [];
-    for (int index = 0; index < 1; index++) {
-      if (renTalModels[0].imglogo!.trim() != '') {
-        newValuePDFimg.add(
-            '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
-      }
+    if (imgLogo.isNotEmpty) {
+      newValuePDFimg
+          .add('${MyConstant().domain_chao}/files/$foder/logo/$imgLogo');
     }
     try {
-      await OKuploadFile_Slip(newValuePDFimg);
+      // ✅ ตรวจสอบผลอัปโหลดก่อน — ถ้าไฟล์ไม่เข้าเซิร์ฟเวอร์ ห้ามบันทึกรายการ
+      final uploadOk = await OKuploadFile_Slip(newValuePDFimg);
+      if (!uploadOk) {
+        debugPrint(
+            '❌ _processPaymentConfirmation: upload failed, abort invoice');
+        // ✅ ปิด Dialog หลัก (SlideConfirm) ก่อน
+        if (Navigator.of(ctx).canPop()) {
+          Navigator.of(ctx).pop();
+        }
+        // ⚠️ ห้ามเรียก in_Trans_invoice! เพราะไฟล์ยังไม่เข้าเซิร์ฟเวอร์
+        // บังคับให้ user เริ่มทำรายการใหม่ (QR อาจหมดอายุแล้ว)
+        _showMyDialogPay_Error(widget.cuslang == 'EN'
+            ? "Slip upload failed. Please start a new transaction."
+            : 'อัปโหลดหลักฐานไม่สำเร็จ\nกรุณาเริ่มทำรายการใหม่');
+        return false;
+      }
       await in_Trans_invoice(newValuePDFimg, showSuccess: false);
       return true;
     } catch (e) {
+      debugPrint('❌ _processPaymentConfirmation error: $e');
+      // ✅ ปิด Dialog หลัก (SlideConfirm) ก่อน
+      if (Navigator.of(ctx).canPop()) {
+        Navigator.of(ctx).pop();
+      }
+      // ⚠️ ห้ามเรียก in_Trans_invoice!
       _showMyDialogPay_Error(widget.cuslang == 'EN'
-          ? "An error occurred. Please check the information. Please try again!"
-          : 'เกิดข้อผิดพลาด ตรวจสอบความถูกต้อง กรุณาลองอีกครั้ง!');
+          ? "An error occurred. Please start a new transaction."
+          : 'เกิดข้อผิดพลาด\nกรุณาเริ่มทำรายการใหม่');
       return false;
     }
   }
@@ -6395,6 +6476,31 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
                         // Close loading dialog
                         Navigator.of(context).pop();
+
+                        if (!success) {
+                          // ✅ อัปโหลดไม่เข้า — ปิด confirm dialog แล้วพากลับหน้า home ทันที
+                          // (popup แจ้งเตือนเปิดค้างไว้ให้ user กดปิดเอง)
+                          // ปิด Alert dialog หลัก (SlideConfirm)
+                          if (Navigator.of(ctx).canPop()) {
+                            Navigator.of(ctx).pop();
+                          }
+                          // ใช้ cid จาก TeNantModel ถ้ามี ไม่งั้น fallback เป็น custno จาก SharedPreferences
+                          String? navigateCustno;
+                          if (widget.teNantModel != null &&
+                              widget.teNantModel!.isNotEmpty) {
+                            navigateCustno = widget.teNantModel![0].cid;
+                          } else {
+                            final prefs = await SharedPreferences.getInstance();
+                            navigateCustno = prefs.getString('custno');
+                          }
+                          if (!mounted) return;
+                          Navigator.pushAndRemoveUntil(context,
+                              MaterialPageRoute(builder: (context) {
+                            return FitnessAppHomeScreen(
+                                custno_s: navigateCustno);
+                          }), (route) => false);
+                          return;
+                        }
 
                         if (success) {
                           Navigator.of(ctx).pop(); // Close Alert dialog
@@ -6618,7 +6724,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 child: const Icon(Icons.check_rounded,
                     color: Colors.white, size: 44),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
               Text(
                 isEN ? 'Completed' : 'ดำเนินการเสร็จสิ้น',
                 style: TextStyle(
@@ -6642,6 +6748,20 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 ),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 20),
+              Text(
+                isEN
+                    ? 'If the slip is not uploaded, please attach the payment slip again.'
+                    : 'หากหลักฐานไม่เข้าในระบบ กรุณาแนบหลักฐานการชำระเงินอีกครั้ง',
+                style: TextStyle(
+                  fontSize: 14,
+                  // fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade900,
+                  fontFamily: Font_.Fonts_T,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
               const SizedBox(height: 24),
               // ✅ ปุ่มดูรายการ + ตกลง
               Row(
@@ -6681,50 +6801,50 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // ปุ่มตกลง
-                  Expanded(
-                    child: SizedBox(
-                      height: 50,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Colors.indigo, Color(0xFF283593)],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.indigo.withValues(alpha: 0.35),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () {
-                              Navigator.pop(ctx);
-                              if (onDismiss != null) onDismiss();
-                            },
-                            child: Center(
-                              child: Text(
-                                isEN ? 'OK' : 'ตกลง',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  // const SizedBox(width: 12),
+                  // // ปุ่มตกลง
+                  // Expanded(
+                  //   child: SizedBox(
+                  //     height: 50,
+                  //     child: Container(
+                  //       decoration: BoxDecoration(
+                  //         gradient: const LinearGradient(
+                  //           colors: [Colors.indigo, Color(0xFF283593)],
+                  //           begin: Alignment.centerLeft,
+                  //           end: Alignment.centerRight,
+                  //         ),
+                  //         borderRadius: BorderRadius.circular(14),
+                  //         boxShadow: [
+                  //           BoxShadow(
+                  //             color: Colors.indigo.withValues(alpha: 0.35),
+                  //             blurRadius: 12,
+                  //             offset: const Offset(0, 4),
+                  //           ),
+                  //         ],
+                  //       ),
+                  //       child: Material(
+                  //         color: Colors.transparent,
+                  //         child: InkWell(
+                  //           borderRadius: BorderRadius.circular(14),
+                  //           onTap: () {
+                  //             Navigator.pop(ctx);
+                  //             if (onDismiss != null) onDismiss();
+                  //           },
+                  //           child: Center(
+                  //             child: Text(
+                  //               isEN ? 'OK' : 'ตกลง',
+                  //               style: const TextStyle(
+                  //                 color: Colors.white,
+                  //                 fontSize: 16,
+                  //                 fontWeight: FontWeight.bold,
+                  //               ),
+                  //             ),
+                  //           ),
+                  //         ),
+                  //       ),
+                  //     ),
+                  //   ),
+                  // ),
                 ],
               ),
             ],
@@ -6828,6 +6948,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                   _uploadedSlipData = _slipImageBytes;
                   // Defer base64 encoding to avoid blocking UI
                   base64_Slip = base64Encode(_slipImageBytes!);
+                  // ✅ Reset fileName_Slip & extension_ so the NEXT upload
+                  //    attempt generates a FRESH UUID-based filename.
+                  //    This guarantees: upload fail → user re-selects file →
+                  //    upload uses a new filename (not the failed attempt's).
+                  fileName_Slip = null;
+                  extension_ = null;
                 });
                 _hideProcessing();
               }
@@ -6889,6 +7015,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                     images.length > 1 ? "merged_slip.jpg" : images[0].name;
                 _uploadedSlipData = _slipImageBytes;
                 base64_Slip = base64Str;
+                // ✅ Reset fileName_Slip & extension_ so the NEXT upload
+                //    attempt generates a FRESH UUID-based filename.
+                //    This guarantees: upload fail → user re-selects file →
+                //    upload uses a new filename (not the failed attempt's).
+                fileName_Slip = null;
+                extension_ = null;
               });
               _hideProcessing();
             }
@@ -9199,7 +9331,25 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   }
 
                                   // sucress(); // Removed early call
-                                  await OKuploadFile_Slip(newValuePDFimg);
+                                  // ✅ ตรวจสอบผลอัปโหลดก่อน — ถ้าไฟล์ไม่เข้า ไม่ต้องบันทึกรายการ (กันสลิปหาย)
+                                  final uploadOk =
+                                      await OKuploadFile_Slip(newValuePDFimg);
+                                  if (!uploadOk) {
+                                    debugPrint(
+                                        '❌ BottomSheet confirm: upload failed, abort');
+                                    if (!mounted) return;
+                                    // Close Loading Dialog
+                                    Navigator.of(context).pop();
+                                    // Close Sheet
+                                    Navigator.pop(context);
+                                    // ⚠️ ห้ามเรียก in_Trans_invoice! ไฟล์ยังไม่เข้าเซิร์ฟเวอร์
+                                    // บังคับให้ user เริ่มทำรายการใหม่
+                                    _showMyDialogPay_Error(widget.cuslang ==
+                                            'EN'
+                                        ? "Slip upload failed. Please start a new transaction."
+                                        : 'อัปโหลดหลักฐานไม่สำเร็จ\nกรุณาเริ่มทำรายการใหม่');
+                                    return;
+                                  }
                                   await in_Trans_invoice(newValuePDFimg,
                                       showSuccess: false);
 
@@ -9228,9 +9378,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   // Close Loading Dialog
                                   Navigator.of(context).pop();
 
+                                  // ⚠️ ห้ามเรียก in_Trans_invoice!
                                   _showMyDialogPay_Error(widget.cuslang == 'EN'
-                                      ? "An error occurred. Please check the information. Please try again!"
-                                      : 'เกิดข้อผิดพลาด ตรวจสอบความถูกต้อง กรุณาลองอีกครั้ง!');
+                                      ? "An error occurred. Please start a new transaction."
+                                      : 'เกิดข้อผิดพลาด\nกรุณาเริ่มทำรายการใหม่');
                                 } finally {
                                   if (mounted) {
                                     setStateSheet(

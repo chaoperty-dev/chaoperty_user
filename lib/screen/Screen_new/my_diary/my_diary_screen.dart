@@ -88,7 +88,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
               addAllListData();
 
               // ✅ แสดง popup แจ้งปัญหาระบบแนบหลักฐาน (ช่วง 25-28 พ.ค. 2569)
-              _showSlipIssuePopup();
+              // _showSlipIssuePopup();
 
               scrollController.addListener(() {
                 if (scrollController.offset >= 24) {
@@ -854,17 +854,33 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        Text(
-                                          'Hello,',
+                                        // Text(
+                                        //   '$renTal_name ยินดีต้อนรับ',
+                                        //   style: TextStyle(
+                                        //     fontFamily: Font_.Fonts_T,
+                                        //     fontSize: 10,
+                                        //     color: FitnessAppTheme.grey,
+                                        //   ),
+                                        // ),
+
+                                        AutoSizeText(
+                                          minFontSize: 8,
+                                          maxFontSize: 12,
+                                          maxLines: 1,
+                                          '$renTal_name ยินดีต้อนรับ',
+                                          textAlign: TextAlign.left,
+                                          overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             fontFamily: Font_.Fonts_T,
-                                            fontSize: 12,
+                                            fontSize:
+                                                12 + 6 - 6 * topBarOpacity,
+                                            letterSpacing: 1.2,
                                             color: FitnessAppTheme.grey,
                                           ),
                                         ),
                                         AutoSizeText(
-                                          minFontSize: 14,
-                                          maxFontSize: 18,
+                                          minFontSize: 10,
+                                          maxFontSize: 16,
                                           maxLines: 1,
                                           '$cus_cname',
                                           textAlign: TextAlign.left,
@@ -873,7 +889,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                                             fontFamily: Font_.Fonts_T,
                                             fontWeight: FontWeight.w700,
                                             fontSize:
-                                                18 + 6 - 6 * topBarOpacity,
+                                                16 + 6 - 6 * topBarOpacity,
                                             letterSpacing: 1.2,
                                             color: FitnessAppTheme.darkerText,
                                           ),
