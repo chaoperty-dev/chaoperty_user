@@ -269,9 +269,9 @@ class DashboardSummaryView extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: FitnessAppTheme.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.2), width: 1),
+          border: Border.all(color: color.withOpacity(0.25), width: 1),
         ),
         child: Column(
           children: [
@@ -303,8 +303,12 @@ class DashboardSummaryView extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        color: FitnessAppTheme.background,
+        color: FitnessAppTheme.white,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: FitnessAppTheme.grey.withOpacity(0.1),
+          width: 1,
+        ),
       ),
       child: Column(
         children: [
@@ -334,22 +338,12 @@ class DashboardSummaryView extends StatelessWidget {
   Widget _payButton(BuildContext context, bool isEN) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            FitnessAppTheme.nearlyDarkRed,
-            HexColor('#FF6B6B'),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: FitnessAppTheme.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: FitnessAppTheme.nearlyDarkRed.withOpacity(0.25),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        border: Border.all(
+          color: FitnessAppTheme.nearlyDarkRed,
+          width: 1.5,
+        ),
       ),
       child: Material(
         color: Colors.transparent,
@@ -371,19 +365,19 @@ class DashboardSummaryView extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(
+                Icon(
                   Icons.play_arrow_rounded,
-                  color: Colors.white,
+                  color: FitnessAppTheme.nearlyDarkRed,
                   size: 22,
                 ),
                 const SizedBox(width: 6),
                 Text(
                   isEN ? 'Pay Now' : 'ชำระค่าบริการ',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontFamily: 'LINESeed2',
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: FitnessAppTheme.nearlyDarkRed,
                   ),
                 ),
               ],
