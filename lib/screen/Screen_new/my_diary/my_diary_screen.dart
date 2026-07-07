@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:chaoperty_user/screen/Screen_new/my_diary/water_view.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
@@ -290,61 +291,138 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   }
 
   /////////////////////////////////////////////////////////////////////
-  List<String> total_list = [];
+  List<String> total_list = []; // ยอดค้าง (ยังไม่มี payment intent)
+  List<String> total_list_paid =
+      []; // ยอดที่มี payment intent อยู่แล้ว/ชำระไปแล้ว
   double All_total = 0.00, totaltoday = 0.00;
 
-  Future<Null> red_Trans_bill() async {
-    if (_InvoiceModels.length != 0) {
-      setState(() {
-        _InvoiceModels.clear();
-        totaltoday = 0;
-      });
+  // รวมยอดบิล (amtall + vatall) อย่างปลอดภัยแม้ค่าจะเป็น null/empty
+  double _billAmount(InvoiceModel inv) =>
+      (double.tryParse(inv.amtall ?? '') ?? 0) +
+      (double.tryParse(inv.vatall ?? '') ?? 0);
+
+  /// ตรวจสอบสถานะ "ชำระได้" ของบิลแบบกลุ่ม (1 ครั้งต่อสัญญา)
+  /// คืนค่า Map<billReference, bool> (true = ชำระได้)
+  Future<Map<String, bool>> _fetchBillAvailability({
+    required String? custNo,
+    required String? ren,
+    required List<String> docnos,
+  }) async {
+    final result = <String, bool>{};
+    if (docnos.isEmpty || custNo == null || custNo.isEmpty || ren == null) {
+      return result;
     }
-    ////////////////------------------------------------------------------>
-    SharedPreferences preferences = await SharedPreferences.getInstance();
-    var ren = preferences.getString('renTalSer');
-    // var ciddoc_ = preferences.getString('usercid');
-    var qutser_ = preferences.getString('qutser');
-    ////////////////------------------------------------------------------>
-    double total = 0.00;
+
+    try {
+      final response = await postPaymentIntentsBillReferenceAvailableBulk(
+        cusno: custNo,
+        propertyno: ren,
+        billreference: docnos,
+      );
+      if (response == null ||
+          response.statusCode < 200 ||
+          response.statusCode >= 300) {
+        return result;
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['data'] is Map) {
+        final data = decoded['data'] as Map;
+        data.forEach((key, value) {
+          if (value is bool) result[key.toString()] = value;
+        });
+      }
+    } catch (e) {
+      debugPrint('_fetchBillAvailability error: $e');
+    }
+    return result;
+  }
+
+  Future<Null> red_Trans_bill() async {
+    // รีเซ็ตก่อนโหลดข้อมูลใหม่ (ทำนอก setState เพื่อลดการ rebuild ซ้ำซ้อน)
+    _InvoiceModels.clear();
+    totaltoday = 0;
+    total_list.clear();
+    total_list_paid.clear();
+
+    final preferences = await SharedPreferences.getInstance();
+    final ren = preferences.getString('renTalSer');
+    final custNo = preferences.getString('custno');
+    final qutser_ = preferences.getString('qutser');
+
+    if (ren == null) {
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final todayStr = DateFormat('yyyy-MM-dd').format(_DateTimeNew);
+
     for (int index = 0; index < teNantModels.length; index++) {
-      var ciddoc_ = teNantModels[index].cid;
-      String url =
+      final ciddoc_ = teNantModels[index].cid;
+      if (ciddoc_ == null || ciddoc_.isEmpty) {
+        total_list.add('0.00');
+        continue;
+      }
+
+      final url =
           '${MyConstant().domain_chao}/GC_bill_invoice.php?isAdd=true&ren=$ren&ciddoc=$ciddoc_&qutser=$qutser_';
+
       try {
-        var response = await http.get(Uri.parse(url));
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode != 200) {
+          debugPrint('red_Trans_bill HTTP ${response.statusCode} ($ciddoc_)');
+          total_list.add('0.00');
+          continue;
+        }
 
-        var result = json.decode(response.body);
+        final decoded = json.decode(response.body);
+        final invoices = (decoded is List) ? decoded : const <dynamic>[];
 
-        if (result.toString() != 'null') {
-          for (var map in result) {
-            InvoiceModel _InvoiceModel = InvoiceModel.fromJson(map);
-            var in_amtx = double.parse(_InvoiceModel.amtall!) +
-                double.parse(_InvoiceModel.vatall!);
-            var in_docnox = _InvoiceModel.docno;
-            var in_ser = _InvoiceModel.ser;
-            var in_amtall = _InvoiceModel.amtall;
-            var disendbill = double.parse(_InvoiceModel.disendbill!);
+        // แปลงเป็นโมเดล + รวมยอด (คำนวณนอก setState ก่อน)
+        final parsed = <InvoiceModel>[];
+        for (final map in invoices) {
+          if (map is! Map<String, dynamic>) continue;
+          final inv = InvoiceModel.fromJson(map);
+          if (inv.billdate == todayStr) {
+            totaltoday += _billAmount(inv);
+          }
+          parsed.add(inv);
+        }
 
-            setState(() {
-              if (_InvoiceModel.billdate ==
-                  DateFormat('yyy-MM-dd').format(_DateTimeNew)) {
-                totaltoday = totaltoday + in_amtx;
-              }
-              // sum_disamt_in = sum_disamt_in + disendbill;
-              total = total + in_amtx;
-              // invoicePayModels.add(invoicePayModel);
-              _InvoiceModels.add(_InvoiceModel);
-            });
+        // เช็ค availability ทีเดียวเป็นกลุ่ม ลดการเรียก network ต่อบิล
+        final docnos = parsed
+            .map((e) => (e.docno ?? '').toString())
+            .where((d) => d.isNotEmpty)
+            .toList();
+        final availability = await _fetchBillAvailability(
+            custNo: custNo, ren: ren, docnos: docnos);
+
+        // แยกยอดเป็น 2 กลุ่ม:
+        // - outstandingTotal : บิลที่ "ยังไม่มี payment intent" (ชำระได้/ค้างชำระ)
+        // - paidOrPendingTotal : บิลที่ "มี payment intent อยู่แล้ว/ชำระไปแล้ว"
+        // หากเช็คไม่ได้ (ไม่มีใน map) ถือว่าเป็นบิลปกติ → นับเข้า outstanding
+        double outstandingTotal = 0.00;
+        double paidOrPendingTotal = 0.00;
+        for (final inv in parsed) {
+          final isAvailable = availability[inv.docno?.toString()] ?? true;
+          if (isAvailable) {
+            outstandingTotal += _billAmount(inv);
+          } else {
+            paidOrPendingTotal += _billAmount(inv);
           }
         }
 
-        setState(() {
-          total_list.add(total.toString());
-          total = 0.00;
-        });
-      } catch (e) {}
+        _InvoiceModels.addAll(parsed);
+        total_list.add(outstandingTotal.toStringAsFixed(2));
+        total_list_paid.add(paidOrPendingTotal.toStringAsFixed(2));
+      } catch (e, stack) {
+        debugPrint('red_Trans_bill error (tenant $ciddoc_): $e');
+        debugPrint('$stack');
+        total_list.add('0.00');
+      }
     }
+
+    if (mounted) setState(() {});
   }
 
   void addAllListData() {
@@ -396,9 +474,15 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         mainScreenAnimationController: widget.animationController,
         teNantModel: teNantModels,
         totallist: total_list,
+        totallistPaid: total_list_paid,
         cuslangs: cus_lang,
         open_set_date: open_set_date,
       ),
+    );
+
+    // ✅ ตารางสรุปยอดต่อสัญญา (เลขสัญญา / ยอดรอตรวจสอบ / ยอดค้างชำระ)
+    listViews.add(
+      _buildContractSummaryTable(),
     );
 
     listViews.add(
@@ -463,6 +547,248 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   Future<bool> getData() async {
     await Future<dynamic>.delayed(const Duration(milliseconds: 50));
     return true;
+  }
+
+  /// ตารางสรุปยอดต่อสัญญา (เลขสัญญา / ยอดรอตรวจสอบ / ยอดค้างชำระ)
+  Widget _buildContractSummaryTable() {
+    final isEN = cus_lang == 'EN';
+    final nFormat = NumberFormat("#,##0.00", "en_US");
+
+    // คำนวณยอดรวม
+    double totalOutstanding = 0.0;
+    double totalPending = 0.0;
+    for (int i = 0; i < teNantModels.length; i++) {
+      totalOutstanding +=
+          double.tryParse(total_list.length > i ? total_list[i] : '0.00') ??
+              0.0;
+      totalPending += double.tryParse(
+              total_list_paid.length > i ? total_list_paid[i] : '0.00') ??
+          0.0;
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            decoration: BoxDecoration(
+              color: Colors.indigo.shade50,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.table_chart_outlined,
+                    size: 18, color: Colors.indigo.shade700),
+                const SizedBox(width: 8),
+                Text(
+                  isEN ? 'Contract Payment Summary' : 'สรุปยอดชำระต่อสัญญา',
+                  style: TextStyle(
+                    fontFamily: Font_.Fonts_T,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.indigo.shade800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    isEN ? 'Contract No.' : 'เลขสัญญา',
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    isEN ? 'Pending Review' : 'ยอดรอตรวจสอบ',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    isEN ? 'Outstanding' : 'ยอดค้างชำระ',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Table Rows
+          ...List.generate(teNantModels.length, (index) {
+            final tenant = teNantModels[index];
+            final outstanding = double.tryParse(
+                    total_list.length > index ? total_list[index] : '0.00') ??
+                0.0;
+            final pending = double.tryParse(total_list_paid.length > index
+                    ? total_list_paid[index]
+                    : '0.00') ??
+                0.0;
+            final hasAny = outstanding > 0 || pending > 0;
+
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: hasAny ? Colors.white : Colors.grey.shade50,
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      tenant.cid ?? '-',
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: hasAny ? Colors.black87 : Colors.grey.shade500,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      nFormat.format(pending),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: pending > 0
+                            ? Colors.orange.shade700
+                            : Colors.grey.shade500,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      nFormat.format(outstanding),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: outstanding > 0
+                            ? Colors.red.shade600
+                            : Colors.grey.shade500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+          // Total Row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.indigo.shade50,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    isEN ? 'Total' : 'รวม',
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.indigo.shade800,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    nFormat.format(totalPending),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: totalPending > 0
+                          ? Colors.orange.shade800
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    nFormat.format(totalOutstanding),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: totalOutstanding > 0
+                          ? Colors.red.shade700
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// ✅ แสดง popup แจ้งปัญหาระบบแนบหลักฐานการชำระ (ช่วง 25-28 พ.ค. 2569)
