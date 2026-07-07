@@ -974,6 +974,11 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               decoration: BoxDecoration(
                 color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+                border: Border(
+                  top: BorderSide(
+                      color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.15),
+                      width: 1),
+                ),
               ),
               child: Row(
                 children: [
@@ -996,7 +1001,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                       textAlign: TextAlign.right,
                       style: TextStyle(
                         fontFamily: Font_.Fonts_T,
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: FontWeight.bold,
                         color: FitnessAppTheme.nearlyDarkBlue,
                       ),

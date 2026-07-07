@@ -146,12 +146,12 @@ class DashboardSummaryView extends StatelessWidget {
                                 ),
                                 Padding(
                                   padding:
-                                      const EdgeInsets.only(left: 6, bottom: 5),
+                                      const EdgeInsets.only(left: 4, bottom: 6),
                                   child: Text(
                                     isEN ? 'BHT' : 'บาท',
                                     style: TextStyle(
                                       fontFamily: 'LINESeed2',
-                                      fontSize: 15,
+                                      fontSize: 14,
                                       color:
                                           FitnessAppTheme.grey.withOpacity(0.6),
                                     ),
@@ -285,7 +285,7 @@ class DashboardSummaryView extends StatelessWidget {
 
   Widget _payButton(BuildContext context, bool isEN) {
     return Container(
-      height: 64,
+      height: 68,
       decoration: BoxDecoration(
         color: HexColor('#ff8385'),
         borderRadius: BorderRadius.circular(12),
@@ -318,14 +318,14 @@ class DashboardSummaryView extends StatelessWidget {
               const Icon(
                 Icons.play_arrow_rounded,
                 color: Colors.white,
-                size: 22,
+                size: 24,
               ),
               const SizedBox(height: 2),
               Text(
-                isEN ? 'Pay' : 'ชำระ',
+                isEN ? 'Pay Now' : 'ชำระค่าบริการ',
                 style: const TextStyle(
                   fontFamily: 'LINESeed2',
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
