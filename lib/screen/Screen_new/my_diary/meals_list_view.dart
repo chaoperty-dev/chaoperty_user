@@ -222,17 +222,17 @@ class MealsView extends StatelessWidget {
                 100 * (1.0 - animation!.value), 0.0, 0.0),
             child: SizedBox(
               width: 140,
-              height: 230,
+              height: 206,
               child: Stack(
                 children: <Widget>[
                   Padding(
                     padding: const EdgeInsets.only(
-                        top: 12, left: 8, right: 8, bottom: 10),
+                        top: 10, left: 8, right: 8, bottom: 10),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius:
-                            const BorderRadius.all(Radius.circular(18.0)),
+                            const BorderRadius.all(Radius.circular(16.0)),
                         boxShadow: <BoxShadow>[
                           BoxShadow(
                               color: const Color(0xff384250).withOpacity(0.06),
@@ -246,7 +246,7 @@ class MealsView extends StatelessWidget {
                         ),
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(16),
                         child: Column(
                           children: [
                             // 1. Top Section (White) - ID, Zone, Total Pay Label
@@ -255,7 +255,7 @@ class MealsView extends StatelessWidget {
                                 color: Colors.white,
                                 // Decreased top padding as we handle spacing via Column/Stack
                                 padding:
-                                    const EdgeInsets.fromLTRB(12, 28, 12, 0),
+                                    const EdgeInsets.fromLTRB(12, 24, 12, 0),
                                 child: Padding(
                                   padding: const EdgeInsets.only(
                                       left: 0.0), // Space for GIF
@@ -277,12 +277,12 @@ class MealsView extends StatelessWidget {
                                               fontFamily:
                                                   FitnessAppTheme.fontName,
                                               fontWeight: FontWeight.w800,
-                                              fontSize: 16,
+                                              fontSize: 15,
                                               color: FitnessAppTheme
                                                   .nearlyDarkBlue,
                                             ),
                                           ),
-                                          SizedBox(height: 6),
+                                          SizedBox(height: 5),
                                           // Zone Badge (Grey Pill)
                                           _infoChip(
                                             Icons.map_outlined,
@@ -290,14 +290,14 @@ class MealsView extends StatelessWidget {
                                                 ? 'Zone: ${mealsListData!.zn}'
                                                 : 'โซน: ${mealsListData!.zn}',
                                           ),
-                                          SizedBox(height: 6),
+                                          SizedBox(height: 5),
                                           _infoChip(
                                             Icons.square_foot_outlined,
                                             cuslangs == 'EN'
                                                 ? 'Area: ${mealsListData!.ln}'
                                                 : 'พื้นที่: ${mealsListData!.ln}',
                                           ),
-                                          SizedBox(height: 6),
+                                          SizedBox(height: 5),
                                           _infoChip(
                                             Icons.category_outlined,
                                             cuslangs == 'EN'
@@ -330,9 +330,9 @@ class MealsView extends StatelessWidget {
                               ),
                             ),
 
-                            // 2. Slim Gradient Footer (Bottom 42px)
+                            // 2. Slim Gradient Footer (Bottom 40px)
                             Container(
-                              height: 42,
+                              height: 40,
                               width: double.infinity,
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
@@ -377,15 +377,15 @@ class MealsView extends StatelessWidget {
                                               fontFamily:
                                                   FitnessAppTheme.fontName,
                                               fontWeight: FontWeight.w900,
-                                              fontSize: 17,
+                                              fontSize: 16,
                                               color: Colors.white,
                                             ),
                                           ),
                                         ),
                                         if (sumAll != '0.00')
                                           Container(
-                                            width: 22,
-                                            height: 22,
+                                            width: 20,
+                                            height: 20,
                                             decoration: BoxDecoration(
                                               color: Colors.white,
                                               shape: BoxShape.circle,
@@ -440,10 +440,10 @@ class MealsView extends StatelessWidget {
                   // GIF: Positioned Top-Left (Inside Clipping)
                   if (sumAll != '0.00')
                     Positioned(
-                      top: 4,
-                      left: 4,
-                      width: 44,
-                      height: 44,
+                      top: 2,
+                      left: 2,
+                      width: 40,
+                      height: 40,
                       child: Opacity(
                         opacity: 0.9,
                         child: Image.asset(
