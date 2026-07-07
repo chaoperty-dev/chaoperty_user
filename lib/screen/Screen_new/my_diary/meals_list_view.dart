@@ -7,13 +7,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:syncfusion_flutter_barcodes/barcodes.dart';
 import '../../../Model/GetTeNant_Model.dart';
-import '../../../Model/GetTranBill_model.dart';
 import '../../../main.dart';
 import '../fitness_app_home_screen.dart';
 import '../fitness_app_theme.dart';
-import '../models/meals_list_data.dart';
 
 class MealsListView extends StatefulWidget {
   const MealsListView({
@@ -154,6 +151,10 @@ class MealsView extends StatelessWidget {
       decoration: BoxDecoration(
         color: FitnessAppTheme.background,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: FitnessAppTheme.grey.withOpacity(0.12),
+          width: 1,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -163,41 +164,13 @@ class MealsView extends StatelessWidget {
           AutoSizeText(
             label,
             minFontSize: 6,
-            maxFontSize: 12,
+            maxFontSize: 11,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontFamily: FitnessAppTheme.fontName,
               fontWeight: FontWeight.w600,
               color: FitnessAppTheme.grey.withOpacity(0.85),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // แบดจ์แสดงยอดที่มี payment intent อยู่แล้ว/ชำระไปแล้ว
-  Widget _paidChip() {
-    return Container(
-      margin: const EdgeInsets.only(left: 6, top: 2),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: Colors.green.withOpacity(0.8),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.check_circle_outline, size: 10, color: Colors.white),
-          const SizedBox(width: 3),
-          Text(
-            '${cuslangs == 'EN' ? 'Paid' : 'รอตรวจสอบ'} $sumPaid',
-            style: TextStyle(
-              fontFamily: FitnessAppTheme.fontName,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
             ),
           ),
         ],
@@ -262,11 +235,15 @@ class MealsView extends StatelessWidget {
                             const BorderRadius.all(Radius.circular(18.0)),
                         boxShadow: <BoxShadow>[
                           BoxShadow(
-                              color: const Color(0xff384250).withOpacity(0.12),
-                              offset: const Offset(0, 8),
-                              blurRadius: 16,
-                              spreadRadius: 2),
+                              color: const Color(0xff384250).withOpacity(0.10),
+                              offset: const Offset(0, 6),
+                              blurRadius: 14,
+                              spreadRadius: 1),
                         ],
+                        border: Border.all(
+                          color: FitnessAppTheme.grey.withOpacity(0.08),
+                          width: 1,
+                        ),
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(18),

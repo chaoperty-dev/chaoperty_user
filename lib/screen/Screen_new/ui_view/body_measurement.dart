@@ -10,8 +10,9 @@ class BodyMeasurementView extends StatelessWidget {
   final AnimationController? animationController;
   final Animation<double>? animation;
   final List<InvoiceModel>? invoiceModels;
-  double? totaltodays;
+  final double? totaltodays;
   final String? cuslangs;
+
   BodyMeasurementView({
     Key? key,
     this.animationController,
@@ -21,7 +22,7 @@ class BodyMeasurementView extends StatelessWidget {
     this.cuslangs,
   }) : super(key: key);
 
-  List<String> month = [
+  final List<String> month = [
     "",
     "มกราคม",
     "กุมภาพันธ์",
@@ -36,8 +37,8 @@ class BodyMeasurementView extends StatelessWidget {
     "พฤศจิกายน",
     "ธันวาคม"
   ];
-  var nFormat = NumberFormat("#,##0.00", "en_US");
-  DateTime _DateTimeNew = DateTime.now();
+  final nFormat = NumberFormat("#,##0.00", "en_US");
+  final DateTime _DateTimeNew = DateTime.now();
   @override
   Widget build(BuildContext context) {
     // print('invoiceModels >> ${invoiceModels!.length}');
@@ -55,17 +56,18 @@ class BodyMeasurementView extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: FitnessAppTheme.white,
-                  borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(16.0),
-                      bottomLeft: Radius.circular(16.0),
-                      bottomRight: Radius.circular(16.0),
-                      topRight: Radius.circular(16.0)),
+                  borderRadius: BorderRadius.circular(18.0),
                   boxShadow: <BoxShadow>[
                     BoxShadow(
-                        color: FitnessAppTheme.grey.withOpacity(0.2),
-                        offset: Offset(1.1, 1.1),
-                        blurRadius: 10.0),
+                        color: FitnessAppTheme.grey.withOpacity(0.12),
+                        offset: const Offset(0, 5),
+                        blurRadius: 14,
+                        spreadRadius: 1),
                   ],
+                  border: Border.all(
+                    color: FitnessAppTheme.grey.withOpacity(0.08),
+                    width: 1,
+                  ),
                 ),
                 child: Column(
                   children: <Widget>[

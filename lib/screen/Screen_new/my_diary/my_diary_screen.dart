@@ -567,118 +567,60 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     }
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      margin: const EdgeInsets.fromLTRB(24, 8, 24, 8),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
+            color: FitnessAppTheme.grey.withOpacity(0.12),
+            blurRadius: 12,
             offset: const Offset(0, 4),
+            spreadRadius: 1,
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            decoration: BoxDecoration(
-              color: Colors.indigo.shade50,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.table_chart_outlined,
-                    size: 18, color: Colors.indigo.shade700),
-                const SizedBox(width: 8),
-                Text(
-                  isEN ? 'Contract Payment Summary' : 'สรุปยอดชำระต่อสัญญา',
-                  style: TextStyle(
-                    fontFamily: Font_.Fonts_T,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.indigo.shade800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Table Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: Colors.grey.shade200, width: 1),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    isEN ? 'Contract No.' : 'เลขสัญญา',
-                    style: TextStyle(
-                      fontFamily: Font_.Fonts_T,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    isEN ? 'Pending Review' : 'ยอดรอตรวจสอบ',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontFamily: Font_.Fonts_T,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    isEN ? 'Outstanding' : 'ยอดค้างชำระ',
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontFamily: Font_.Fonts_T,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.grey.shade700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // Table Rows
-          ...List.generate(teNantModels.length, (index) {
-            final tenant = teNantModels[index];
-            final outstanding = double.tryParse(
-                    total_list.length > index ? total_list[index] : '0.00') ??
-                0.0;
-            final pending = double.tryParse(total_list_paid.length > index
-                    ? total_list_paid[index]
-                    : '0.00') ??
-                0.0;
-            final hasAny = outstanding > 0 || pending > 0;
-
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
               decoration: BoxDecoration(
-                color: hasAny ? Colors.white : Colors.grey.shade50,
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
                 border: Border(
-                  bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+                  bottom: BorderSide(
+                      color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.1),
+                      width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.table_chart_outlined,
+                      size: 18, color: FitnessAppTheme.nearlyDarkBlue),
+                  const SizedBox(width: 10),
+                  Text(
+                    isEN ? 'Contract Payment Summary' : 'สรุปยอดชำระต่อสัญญา',
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: FitnessAppTheme.nearlyDarkBlue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Table Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200, width: 1),
                 ),
               ),
               child: Row(
@@ -686,107 +628,170 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                   Expanded(
                     flex: 2,
                     child: Text(
-                      tenant.cid ?? '-',
+                      isEN ? 'Contract No.' : 'เลขสัญญา',
                       style: TextStyle(
                         fontFamily: Font_.Fonts_T,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: hasAny ? Colors.black87 : Colors.grey.shade500,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
                       ),
                     ),
                   ),
                   Expanded(
                     flex: 2,
                     child: Text(
-                      nFormat.format(pending),
+                      isEN ? 'Pending Review' : 'ยอดรอตรวจสอบ',
                       textAlign: TextAlign.right,
                       style: TextStyle(
                         fontFamily: Font_.Fonts_T,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: pending > 0
-                            ? Colors.orange.shade700
-                            : Colors.grey.shade500,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
                       ),
                     ),
                   ),
                   Expanded(
                     flex: 2,
                     child: Text(
-                      nFormat.format(outstanding),
+                      isEN ? 'Outstanding' : 'ยอดค้างชำระ',
                       textAlign: TextAlign.right,
                       style: TextStyle(
                         fontFamily: Font_.Fonts_T,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: outstanding > 0
-                            ? Colors.red.shade600
-                            : Colors.grey.shade500,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
                       ),
                     ),
                   ),
                 ],
               ),
-            );
-          }),
-          // Total Row
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.indigo.shade50,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
+            ),
+            // Table Rows
+            ...List.generate(teNantModels.length, (index) {
+              final tenant = teNantModels[index];
+              final outstanding = double.tryParse(
+                      total_list.length > index ? total_list[index] : '0.00') ??
+                  0.0;
+              final pending = double.tryParse(total_list_paid.length > index
+                      ? total_list_paid[index]
+                      : '0.00') ??
+                  0.0;
+              final hasAny = outstanding > 0 || pending > 0;
+
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                  color: index.isEven ? Colors.white : Colors.grey.shade50,
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        tenant.cid ?? '-',
+                        style: TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: hasAny
+                              ? FitnessAppTheme.darkerText
+                              : Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        nFormat.format(pending),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: pending > 0
+                              ? FitnessAppTheme.orange
+                              : Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        nFormat.format(outstanding),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: outstanding > 0
+                              ? FitnessAppTheme.nearlyDarkRed
+                              : Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            // Total Row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      isEN ? 'Total' : 'รวม',
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: FitnessAppTheme.nearlyDarkBlue,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      nFormat.format(totalPending),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: totalPending > 0
+                            ? FitnessAppTheme.orange
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      nFormat.format(totalOutstanding),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: totalOutstanding > 0
+                            ? FitnessAppTheme.nearlyDarkRed
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    isEN ? 'Total' : 'รวม',
-                    style: TextStyle(
-                      fontFamily: Font_.Fonts_T,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.indigo.shade800,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    nFormat.format(totalPending),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontFamily: Font_.Fonts_T,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: totalPending > 0
-                          ? Colors.orange.shade800
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    nFormat.format(totalOutstanding),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontFamily: Font_.Fonts_T,
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: totalOutstanding > 0
-                          ? Colors.red.shade700
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
