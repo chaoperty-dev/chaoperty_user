@@ -7,8 +7,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:syncfusion_flutter_barcodes/barcodes.dart';
 import '../../../Model/GetTeNant_Model.dart';
+import '../../../Model/GetTranBill_model.dart';
+import '../../../main.dart';
 import '../fitness_app_home_screen.dart';
+import '../fitness_app_theme.dart';
+import '../models/meals_list_data.dart';
 
 class MealsListView extends StatefulWidget {
   const MealsListView({
@@ -29,7 +34,6 @@ class MealsListView extends StatefulWidget {
   final List<TeNantModel>? teNantModel;
   final String? cuslangs;
   final int open_set_date;
-
   @override
   _MealsListViewState createState() => _MealsListViewState();
 }
@@ -38,14 +42,13 @@ class _MealsListViewState extends State<MealsListView>
     with TickerProviderStateMixin {
   AnimationController? animationController;
   List<TeNantModel> mealsListData = [];
-  final nFormat = NumberFormat("#,##0.00", "en_US");
-
+  var nFormat = NumberFormat("#,##0.00", "en_US");
   @override
   void initState() {
     animationController = AnimationController(
-        duration: const Duration(milliseconds: 1200), vsync: this);
+        duration: const Duration(milliseconds: 2000), vsync: this);
     super.initState();
-    mealsListData = widget.teNantModel ?? [];
+    mealsListData = widget.teNantModel!;
   }
 
   Future<bool> getData() async {
@@ -70,7 +73,7 @@ class _MealsListViewState extends State<MealsListView>
             transform: Matrix4.translationValues(
                 0.0, 30 * (1.0 - widget.mainScreenAnimation!.value), 0.0),
             child: Container(
-              height: 220,
+              height: 250,
               width: double.infinity,
               child: ScrollConfiguration(
                 behavior:
@@ -95,28 +98,21 @@ class _MealsListViewState extends State<MealsListView>
                                     curve: Curves.fastOutSlowIn)));
                     animationController?.forward();
 
-                    final outstanding = double.tryParse(
-                            widget.totallist?.length != null &&
-                                    widget.totallist!.length > index
-                                ? widget.totallist![index]
-                                : '0.00') ??
-                        0.0;
-                    final pending = double.tryParse(
-                            widget.totallistPaid?.length != null &&
-                                    widget.totallistPaid!.length > index
-                                ? widget.totallistPaid![index]
-                                : '0.00') ??
-                        0.0;
-
                     return MealsView(
                       mealsListData: mealsListData[index],
                       animation: animation,
                       animationController: animationController!,
-                      sumAll: nFormat.format(outstanding),
-                      sumPaid: nFormat.format(pending),
+                      codecolor: (256 + (index * 10)).toString(),
+                      sumAll: nFormat
+                          .format(double.parse(widget.totallist![index])),
+                      sumPaid: nFormat.format(double.parse(
+                          (widget.totallistPaid?.length != null &&
+                                  widget.totallistPaid!.length > index)
+                              ? widget.totallistPaid![index]
+                              : '0.00')),
                       cuslangs: widget.cuslangs,
                       open_set_date: widget.open_set_date,
-                    );
+                    ); //mealsListData[index].total
                   },
                 ),
               ),
@@ -129,49 +125,79 @@ class _MealsListViewState extends State<MealsListView>
 }
 
 class MealsView extends StatelessWidget {
-  MealsView({
-    Key? key,
-    this.mealsListData,
-    this.animationController,
-    this.animation,
-    this.sumAll,
-    this.sumPaid,
-    this.cuslangs,
-    this.open_set_date = 30,
-  }) : super(key: key);
+  MealsView(
+      {Key? key,
+      this.mealsListData,
+      this.animationController,
+      this.animation,
+      this.codecolor,
+      this.sumAll,
+      this.sumPaid,
+      this.cuslangs,
+      this.open_set_date = 30})
+      : super(key: key);
 
   final TeNantModel? mealsListData;
   final AnimationController? animationController;
   final Animation<double>? animation;
+  final String? codecolor;
   final String? sumAll;
   final String? sumPaid;
   final String? cuslangs;
   final int open_set_date;
-  final DateTime datex = DateTime.now();
+  DateTime datex = DateTime.now();
 
+  // แบดจ์ข้อมูล (โซน/พื้นที่/ประเภท) แบบมีไอคอน ดูเรียบร้อยขึ้น
   Widget _infoChip(IconData icon, String label) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F4F6),
+        color: FitnessAppTheme.background,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: const Color(0xFF6B7280)),
+          Icon(icon, size: 11, color: FitnessAppTheme.grey.withOpacity(0.7)),
           const SizedBox(width: 4),
           AutoSizeText(
             label,
             minFontSize: 6,
-            maxFontSize: 11,
+            maxFontSize: 12,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontFamily: 'LINESeed2',
-              fontSize: 10,
+            style: TextStyle(
+              fontFamily: FitnessAppTheme.fontName,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF4B5563),
+              color: FitnessAppTheme.grey.withOpacity(0.85),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // แบดจ์แสดงยอดที่มี payment intent อยู่แล้ว/ชำระไปแล้ว
+  Widget _paidChip() {
+    return Container(
+      margin: const EdgeInsets.only(left: 6, top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle_outline, size: 10, color: Colors.white),
+          const SizedBox(width: 3),
+          Text(
+            '${cuslangs == 'EN' ? 'Paid' : 'รอตรวจสอบ'} $sumPaid',
+            style: TextStyle(
+              fontFamily: FitnessAppTheme.fontName,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
             ),
           ),
         ],
@@ -180,47 +206,38 @@ class MealsView extends StatelessWidget {
   }
 
   List<Color> _getGradientColors() {
-    final q = mealsListData?.quantity;
-    if (q == '2' || q == '3') {
-      return const [Color(0xFF4F46E5), Color(0xFF7C3AED)];
-    }
-    if (q == '1') {
-      final lDate = mealsListData?.ldate == null
-          ? DateTime(datex.year, datex.month, datex.day)
-          : DateTime.tryParse(mealsListData!.ldate.toString()) ?? datex;
-      if (datex.isAfter(lDate)) {
-        return const [Color(0xFFF87171), Color(0xFFDC2626)];
-      } else if (datex.isAfter(lDate.subtract(Duration(days: open_set_date)))) {
-        return const [Color(0xFFFBBF24), Color(0xFFF59E0B)];
+    if (mealsListData!.quantity == '1') {
+      DateTime lDate;
+      if (mealsListData!.ldate == null) {
+        lDate = DateTime.parse(DateFormat('yyyy-MM-dd').format(datex));
+      } else {
+        lDate = DateTime.parse('${mealsListData!.ldate} 00:00:00.000');
       }
-    }
-    return const [Color(0xFF4F46E5), Color(0xFF7C3AED)];
-  }
 
-  String _statusLabel() {
-    final q = mealsListData?.quantity;
-    if (q == '2' || q == '3') {
-      return cuslangs == 'EN' ? 'Active' : 'ปัจจุบัน';
-    }
-    if (q == '1') {
-      final lDate = mealsListData?.ldate == null
-          ? DateTime(datex.year, datex.month, datex.day)
-          : DateTime.tryParse(mealsListData!.ldate.toString()) ?? datex;
-      if (datex.isAfter(lDate)) {
-        return cuslangs == 'EN' ? 'Expired' : 'หมดสัญญา';
-      } else if (datex.isAfter(lDate.subtract(Duration(days: open_set_date)))) {
-        return cuslangs == 'EN' ? 'Almost' : 'ใกล้หมด';
+      // Check if Datex is After LDate (Expired) -> Red Gradient
+      if (datex.isAfter(lDate.subtract(const Duration(days: 0)))) {
+        return [HexColor('#ff8385'), HexColor('#ff4f52')];
       }
+      // Check if Datex is After Start Date (Open for Payment) -> Yellow/Orange Gradient
+      else if (datex.isAfter(lDate.subtract(Duration(days: open_set_date)))) {
+        return [HexColor('#F1B440'), HexColor('#FF8C00')];
+      }
+      // Else (Not yet in window?) -> Blue Gradient
+      else {
+        return [HexColor('#5271ff'), HexColor('#3a50b5')];
+      }
+    } else if (mealsListData!.quantity == '2') {
+      return [HexColor('#5271ff'), HexColor('#3a50b5')];
+    } else if (mealsListData!.quantity == '3') {
+      return [HexColor('#5271ff'), HexColor('#3a50b5')];
+    } else {
+      return [Colors.greenAccent, Colors.green[700]!];
     }
-    return cuslangs == 'EN' ? 'Active' : 'ปัจจุบัน';
   }
 
   @override
   Widget build(BuildContext context) {
-    final gradientColors = _getGradientColors();
-    final isEN = cuslangs == 'EN';
-    final hasOutstanding = (sumAll ?? '0.00') != '0.00';
-    final hasPending = (sumPaid ?? '0.00') != '0.00';
+    List<Color> gradientColors = _getGradientColors();
 
     return AnimatedBuilder(
       animation: animationController!,
@@ -229,229 +246,265 @@ class MealsView extends StatelessWidget {
           opacity: animation!,
           child: Transform(
             transform: Matrix4.translationValues(
-                80 * (1.0 - animation!.value), 0.0, 0.0),
+                100 * (1.0 - animation!.value), 0.0, 0.0),
             child: SizedBox(
-              width: 170,
-              height: 200,
-              child: Padding(
-                padding: const EdgeInsets.only(
-                    top: 12, left: 8, right: 8, bottom: 12),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xff384250).withOpacity(0.08),
-                        offset: const Offset(0, 6),
-                        blurRadius: 16,
-                        spreadRadius: 1,
+              width: 140,
+              height: 230,
+              child: Stack(
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.only(
+                        top: 16, left: 8, right: 8, bottom: 16),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius:
+                            const BorderRadius.all(Radius.circular(18.0)),
+                        boxShadow: <BoxShadow>[
+                          BoxShadow(
+                              color: const Color(0xff384250).withOpacity(0.12),
+                              offset: const Offset(0, 8),
+                              blurRadius: 16,
+                              spreadRadius: 2),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: hasOutstanding
-                            ? () async {
-                                final preferences =
-                                    await SharedPreferences.getInstance();
-                                await preferences.setString(
-                                    'usercid', mealsListData!.cid.toString());
-                                await preferences.setString('payby', 'PAY');
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => FitnessAppHomeScreen(
-                                      pageroot: 'PAY',
-                                      initialCid: mealsListData!.cid.toString(),
-                                    ),
-                                  ),
-                                );
-                              }
-                            : null,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Header gradient
-                            Container(
-                              width: double.infinity,
-                              padding:
-                                  const EdgeInsets.fromLTRB(14, 10, 14, 10),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: gradientColors,
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    child: AutoSizeText(
-                                      mealsListData?.cid ?? '-',
-                                      maxLines: 1,
-                                      minFontSize: 10,
-                                      maxFontSize: 15,
-                                      style: const TextStyle(
-                                        fontFamily: 'LINESeed2',
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      _statusLabel(),
-                                      style: const TextStyle(
-                                        fontFamily: 'LINESeed2',
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            // Body
+                            // 1. Top Section (White) - ID, Zone, Total Pay Label
                             Expanded(
-                              child: Padding(
+                              child: Container(
+                                color: Colors.white,
+                                // Decreased top padding as we handle spacing via Column/Stack
                                 padding:
-                                    const EdgeInsets.fromLTRB(14, 12, 14, 12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _infoChip(
-                                      Icons.map_outlined,
-                                      isEN
-                                          ? 'Zone ${mealsListData?.zn ?? '-'}'
-                                          : 'โซน ${mealsListData?.zn ?? '-'}',
-                                    ),
-                                    const SizedBox(height: 6),
-                                    _infoChip(
-                                      Icons.square_foot_outlined,
-                                      isEN
-                                          ? 'Area ${mealsListData?.ln ?? '-'}'
-                                          : 'พื้นที่ ${mealsListData?.ln ?? '-'}',
-                                    ),
-                                    const SizedBox(height: 6),
-                                    _infoChip(
-                                      Icons.category_outlined,
-                                      isEN
-                                          ? '${mealsListData?.stype ?? '-'}'
-                                          : '${mealsListData?.stype ?? '-'}',
-                                    ),
-                                    const Spacer(),
-                                    // Outstanding
-                                    Text(
-                                      isEN ? 'Outstanding' : 'ยอดค้าง',
-                                      style: const TextStyle(
-                                        fontFamily: 'LINESeed2',
-                                        fontSize: 10,
-                                        color: Color(0xFF9CA3AF),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    AutoSizeText(
-                                      sumAll ?? '0.00',
-                                      maxLines: 1,
-                                      minFontSize: 10,
-                                      maxFontSize: 18,
-                                      style: TextStyle(
-                                        fontFamily: 'LINESeed2',
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: hasOutstanding
-                                            ? const Color(0xFFDC2626)
-                                            : const Color(0xFF6B7280),
-                                      ),
-                                    ),
-                                    // Pending
-                                    if (hasPending) ...[
-                                      const SizedBox(height: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFFFEF3C7),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            const Icon(
-                                              Icons.pending_outlined,
-                                              size: 10,
-                                              color: Color(0xFFD97706),
+                                    const EdgeInsets.fromLTRB(12, 36, 12, 0),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                      left: 0.0), // Space for GIF
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          // ID (Dark Blue)
+                                          AutoSizeText(
+                                            mealsListData!.cid!,
+                                            maxLines: 1,
+                                            style: TextStyle(
+                                              fontFamily:
+                                                  FitnessAppTheme.fontName,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 16,
+                                              color: FitnessAppTheme
+                                                  .nearlyDarkBlue,
                                             ),
-                                            const SizedBox(width: 4),
-                                            Text(
-                                              isEN
-                                                  ? 'Pending $sumPaid'
-                                                  : 'รอตรวจ $sumPaid',
-                                              style: const TextStyle(
-                                                fontFamily: 'LINESeed2',
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.w700,
-                                                color: Color(0xFFD97706),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
+                                          ),
+                                          SizedBox(height: 6),
+                                          // Zone Badge (Grey Pill)
+                                          _infoChip(
+                                            Icons.map_outlined,
+                                            cuslangs == 'EN'
+                                                ? 'Zone: ${mealsListData!.zn}'
+                                                : 'โซน: ${mealsListData!.zn}',
+                                          ),
+                                          SizedBox(height: 6),
+                                          _infoChip(
+                                            Icons.square_foot_outlined,
+                                            cuslangs == 'EN'
+                                                ? 'Area: ${mealsListData!.ln}'
+                                                : 'พื้นที่: ${mealsListData!.ln}',
+                                          ),
+                                          SizedBox(height: 6),
+                                          _infoChip(
+                                            Icons.category_outlined,
+                                            cuslangs == 'EN'
+                                                ? 'Type: ${mealsListData!.stype}'
+                                                : 'ประเภท: ${mealsListData!.stype}',
+                                          ),
+                                        ],
                                       ),
+
+                                      // "Total Pay" Label
+                                      // Padding(
+                                      //   padding:
+                                      //       const EdgeInsets.only(bottom: 6.0),
+                                      //   child: Text(
+                                      //     cuslangs == 'EN'
+                                      //         ? 'Total Pay'
+                                      //         : 'ยอดชำระ',
+                                      //     style: TextStyle(
+                                      //       fontFamily:
+                                      //           FitnessAppTheme.fontName,
+                                      //       fontSize: 14,
+                                      //       fontWeight: FontWeight.w700,
+                                      //       color: FitnessAppTheme.grey,
+                                      //     ),
+                                      //   ),
+                                      // ),
                                     ],
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
-                            // Maintenance indicator
-                            if (mealsListData?.mainten.toString() == '1' ||
-                                mealsListData?.mainten.toString() == '2')
-                              Container(
-                                width: double.infinity,
-                                color: const Color(0xFFFEF2F2),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.build,
-                                      size: 12,
-                                      color: Color(0xFFEF4444),
+
+                            // 2. Slim Gradient Footer (Bottom 52px)
+                            Stack(
+                              children: [
+                                Container(
+                                  height: 55,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: gradientColors,
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
                                     ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      isEN ? 'Maintenance' : 'ซ่อมบำรุง',
-                                      style: const TextStyle(
-                                        fontFamily: 'LINESeed2',
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: Color(0xFFEF4444),
+                                  ),
+                                  child: Padding(
+                                    // padding: const EdgeInsets.symmetric(
+                                    //     horizontal: 12.0),
+                                    padding:
+                                        const EdgeInsets.fromLTRB(4, 4, 4, 4),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Expanded(
+                                          child: AutoSizeText(
+                                            sumAll.toString(),
+                                            maxLines: 1,
+                                            // User Custom Fonts
+                                            minFontSize: 7,
+                                            maxFontSize: 16,
+                                            style: TextStyle(
+                                              fontFamily:
+                                                  FitnessAppTheme.fontName,
+                                              fontWeight: FontWeight.w900,
+                                              fontSize: 20,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                        if (sumAll != '0.00')
+                                          Container(
+                                            width: 28,
+                                            height: 28,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(
+                                              Icons.arrow_forward_ios_rounded,
+                                              color: gradientColors[0],
+                                              size: 12,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
+                                // if ((sumPaid ?? '0.00') == '0.00')
+                                Positioned(
+                                  top: 0,
+                                  left: 0,
+                                  // right: 0,
+                                  // bottom: 0,
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(
+                                        bottom: 6.0, left: 8),
+                                    child: Text(
+                                      cuslangs == 'EN'
+                                          ? 'Total Pay'
+                                          : 'ยอดชำระ',
+                                      style: TextStyle(
+                                        fontFamily: FitnessAppTheme.fontName,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: FitnessAppTheme.white,
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                )
+                              ],
+                            ),
                           ],
                         ),
                       ),
                     ),
                   ),
-                ),
+
+                  // 3. Full Tap Interaction
+                  Positioned.fill(
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.all(16.0), // Match container padding
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(24),
+                          onTap: sumAll == '0.00'
+                              ? null
+                              : () async {
+                                  SharedPreferences preferences =
+                                      await SharedPreferences.getInstance();
+                                  preferences.setString(
+                                      'usercid', mealsListData!.cid.toString());
+                                  preferences.setString('payby', 'PAY');
+                                  MaterialPageRoute route = MaterialPageRoute(
+                                    builder: (context) => FitnessAppHomeScreen(
+                                      pageroot: 'PAY',
+                                      initialCid: mealsListData!.cid.toString(),
+                                    ),
+                                  );
+                                  Navigator.push(context, route);
+                                },
+                        ),
+                      ),
+                    ),
+                  ),
+                  // GIF: Positioned Top-Left (Inside Clipping)
+                  if (sumAll != '0.00')
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      width: 60,
+                      height: 60,
+                      child: Opacity(
+                        opacity: 1.0,
+                        child: Image.asset(
+                          'assets/fitness_app/giphy7.gif',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ),
+                  // if ((sumPaid ?? '0.00') != '0.00')
+                  //   Positioned(
+                  //     bottom: 0,
+                  //     left: 0, width: 135,
+                  //     // width: ((sumPaid ?? '0.00') != '0.00') ? null : 60,
+                  //     // height: ((sumPaid ?? '0.00') != '0.00') ? null : 60,
+                  //     child: _paidChip(),
+                  //   ),
+                  // Maintenance Icon (Grey/Red)
+                  if (mealsListData!.mainten.toString() == '1' ||
+                      mealsListData!.mainten.toString() == '2')
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Icon(
+                        Icons.build,
+                        color: Colors.redAccent,
+                        size: 18,
+                      ),
+                    ),
+                ],
               ),
             ),
           ),

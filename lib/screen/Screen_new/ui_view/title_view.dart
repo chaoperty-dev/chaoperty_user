@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../color.dart';
 import '../fitness_app_home_screen.dart';
+import '../fitness_app_theme.dart';
 
 class TitleView extends StatelessWidget {
   final String titleTxt;
@@ -9,14 +11,14 @@ class TitleView extends StatelessWidget {
   final AnimationController? animationController;
   final Animation<double>? animation;
 
-  const TitleView({
-    Key? key,
-    this.titleTxt = "",
-    this.subTxt = "",
-    this.imagePath = "",
-    this.animationController,
-    this.animation,
-  }) : super(key: key);
+  const TitleView(
+      {Key? key,
+      this.titleTxt = "",
+      this.subTxt = "",
+      this.imagePath = "",
+      this.animationController,
+      this.animation})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -25,99 +27,89 @@ class TitleView extends StatelessWidget {
       builder: (BuildContext context, Widget? child) {
         return FadeTransition(
           opacity: animation!,
-          child: Transform(
-            transform: Matrix4.translationValues(
+          child: new Transform(
+            transform: new Matrix4.translationValues(
                 0.0, 30 * (1.0 - animation!.value), 0.0),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-              child: Row(
-                children: [
-                  if (imagePath != "") ...[
-                    Image.asset(
-                      imagePath,
-                      height: 26,
-                      width: 26,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(width: 10),
-                  ],
-                  Container(
-                    width: 4,
-                    height: 22,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
+            child: Container(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 24, right: 24),
+                child: Row(
+                  children: <Widget>[
+                    if (imagePath != "") ...[
+                      Image.asset(
+                        imagePath,
+                        height: 30,
+                        width: 30,
+                        fit: BoxFit.contain,
                       ),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      titleTxt,
-                      textAlign: TextAlign.left,
-                      style: const TextStyle(
-                        fontFamily: 'LINESeed2',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 17,
-                        letterSpacing: 0.2,
-                        color: Color(0xFF1F2937),
-                      ),
-                    ),
-                  ),
-                  if (subTxt != 'X')
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: () {
-                          if (subTxt == 'Details' || subTxt == 'รายละเอียด') {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const FitnessAppHomeScreen(
-                                    pageroot: 'INFO'),
-                              ),
-                            );
-                          } else if (subTxt == 'Rental contract All' ||
-                              subTxt == 'สัญญาทั้งหมด') {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const FitnessAppHomeScreen(
-                                    pageroot: 'CONTACT'),
-                              ),
-                            );
-                          }
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          child: Row(
-                            children: [
-                              Text(
-                                subTxt,
-                                style: const TextStyle(
-                                  fontFamily: 'LINESeed2',
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: Color(0xFF4F46E5),
-                                ),
-                              ),
-                              const SizedBox(width: 2),
-                              const Icon(
-                                Icons.arrow_forward_ios_rounded,
-                                color: Color(0xFF4F46E5),
-                                size: 14,
-                              ),
-                            ],
-                          ),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        titleTxt,
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 18,
+                          letterSpacing: 0.5,
+                          color: FitnessAppTheme.lightText,
                         ),
                       ),
                     ),
-                ],
+                    subTxt == 'X'
+                        ? SizedBox()
+                        : InkWell(
+                            highlightColor: Colors.transparent,
+                            borderRadius:
+                                BorderRadius.all(Radius.circular(4.0)),
+                            onTap: () {
+                              if (subTxt == 'Details' ||
+                                  subTxt == 'รายละเอียด') {
+                                MaterialPageRoute route = MaterialPageRoute(
+                                  builder: (context) =>
+                                      FitnessAppHomeScreen(pageroot: 'INFO'),
+                                );
+                                Navigator.push(context, route);
+                              } else if (subTxt == 'Rental contract All' ||
+                                  subTxt == 'สัญญาทั้งหมด') {
+                                MaterialPageRoute route = MaterialPageRoute(
+                                  builder: (context) =>
+                                      FitnessAppHomeScreen(pageroot: 'CONTACT'),
+                                );
+                                Navigator.push(context, route);
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: Row(
+                                children: <Widget>[
+                                  Text(
+                                    subTxt,
+                                    textAlign: TextAlign.left,
+                                    style: TextStyle(
+                                      fontFamily: Font_.Fonts_T,
+                                      fontWeight: FontWeight.normal,
+                                      fontSize: 16,
+                                      letterSpacing: 0.5,
+                                      color: FitnessAppTheme.nearlyDarkBlue,
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    height: 38,
+                                    width: 26,
+                                    child: Icon(
+                                      Icons.arrow_forward,
+                                      color: FitnessAppTheme.darkText,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                  ],
+                ),
               ),
             ),
           ),
