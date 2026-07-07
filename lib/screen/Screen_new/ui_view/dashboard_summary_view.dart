@@ -69,64 +69,65 @@ class DashboardSummaryView extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   color: FitnessAppTheme.white,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16.0),
-                    bottomLeft: Radius.circular(16.0),
-                    bottomRight: Radius.circular(16.0),
-                    topRight: Radius.circular(16.0),
-                  ),
+                  borderRadius: BorderRadius.circular(18.0),
                   boxShadow: <BoxShadow>[
                     BoxShadow(
-                        color: FitnessAppTheme.grey.withOpacity(0.2),
-                        offset: const Offset(1.1, 1.1),
-                        blurRadius: 10.0),
+                        color: FitnessAppTheme.grey.withOpacity(0.12),
+                        offset: const Offset(0, 5),
+                        blurRadius: 14,
+                        spreadRadius: 1),
                   ],
+                  border: Border.all(
+                    color: FitnessAppTheme.grey.withOpacity(0.08),
+                    width: 1,
+                  ),
                 ),
-                child: Column(
-                  children: <Widget>[
-                    // ── Top section: total outstanding + contract stats ──
-                    Padding(
-                      padding:
-                          const EdgeInsets.only(top: 16, left: 16, right: 16),
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(
-                                  left: 8, right: 8, top: 4),
-                              child: Column(
-                                children: <Widget>[
-                                  _statRow(
-                                    isEN ? 'Rental contract' : 'สัญญาทั้งหมด',
-                                    '$contractCount',
-                                    isEN ? 'Rental' : 'สัญญา',
-                                    HexColor('#5271ff'),
-                                    'assets/fitness_app/eaten.png',
-                                  ),
-                                  const SizedBox(height: 8),
-                                  _statRow(
-                                    isEN ? 'Overdue' : 'ค้างชำระ',
-                                    nFormat.format(total),
-                                    '',
-                                    HexColor('#ff8385'),
-                                    'assets/fitness_app/burned.png',
-                                  ),
-                                ],
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18.0),
+                  child: Column(
+                    children: <Widget>[
+                      // ── Top section: total outstanding + contract stats ──
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            top: 20, left: 20, right: 20, bottom: 16),
+                        child: Row(
+                          children: <Widget>[
+                            // Left: stat rows
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                    left: 4, right: 12, top: 4),
+                                child: Column(
+                                  children: <Widget>[
+                                    _statRow(
+                                      isEN ? 'Rental contract' : 'สัญญาทั้งหมด',
+                                      '$contractCount',
+                                      isEN ? 'Rental' : 'สัญญา',
+                                      HexColor('#5271ff'),
+                                      'assets/fitness_app/eaten.png',
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _statRow(
+                                      isEN ? 'Overdue' : 'ค้างชำระ',
+                                      nFormat.format(total),
+                                      '',
+                                      HexColor('#ff8385'),
+                                      'assets/fitness_app/burned.png',
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                          // Circular total display (original style)
-                          Padding(
-                            padding: const EdgeInsets.only(right: 0),
-                            child: Center(
+                            // Circular total display
+                            Center(
                               child: Stack(
                                 clipBehavior: Clip.none,
                                 children: <Widget>[
                                   Padding(
                                     padding: const EdgeInsets.all(8.0),
                                     child: Container(
-                                      width: 130,
-                                      height: 130,
+                                      width: 120,
+                                      height: 120,
                                       decoration: BoxDecoration(
                                         color: FitnessAppTheme.white,
                                         borderRadius: const BorderRadius.all(
@@ -136,7 +137,7 @@ class DashboardSummaryView extends StatelessWidget {
                                             width: 4,
                                             color: FitnessAppTheme
                                                 .nearlyDarkBlue
-                                                .withOpacity(0.2)),
+                                                .withOpacity(0.15)),
                                       ),
                                       child: Column(
                                         mainAxisAlignment:
@@ -144,11 +145,11 @@ class DashboardSummaryView extends StatelessWidget {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.center,
                                         children: <Widget>[
-                                          const SizedBox(height: 10),
+                                          const SizedBox(height: 8),
                                           AutoSizeText(
                                             nFormat.format(total),
-                                            minFontSize: 16,
-                                            maxFontSize: 22,
+                                            minFontSize: 14,
+                                            maxFontSize: 20,
                                             maxLines: 1,
                                             textAlign: TextAlign.center,
                                             style: TextStyle(
@@ -160,14 +161,14 @@ class DashboardSummaryView extends StatelessWidget {
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
-                                          const SizedBox(height: 10),
+                                          const SizedBox(height: 6),
                                           Text(
                                             isEN ? 'BHT' : 'บาท',
                                             textAlign: TextAlign.center,
                                             style: TextStyle(
                                               fontFamily: Font_.Fonts_T,
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 12,
+                                              fontSize: 11,
                                               letterSpacing: 0.0,
                                               color: FitnessAppTheme.grey
                                                   .withOpacity(0.5),
@@ -192,127 +193,55 @@ class DashboardSummaryView extends StatelessWidget {
                                               (360 - 140) *
                                                   (1.0 - animation!.value)),
                                       child: const SizedBox(
-                                        width: 138,
-                                        height: 138,
+                                        width: 128,
+                                        height: 128,
                                       ),
                                     ),
                                   )
                                 ],
                               ),
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
-                    // ── Divider ──
-                    Padding(
-                      padding: const EdgeInsets.only(
-                          left: 24, right: 24, top: 8, bottom: 8),
-                      child: Container(
-                        height: 2,
-                        decoration: BoxDecoration(
-                          color: FitnessAppTheme.background,
-                          borderRadius:
-                              const BorderRadius.all(Radius.circular(4.0)),
+                            )
+                          ],
                         ),
                       ),
-                    ),
-                    // ── Bottom section: today + invoices + contracts + pay ──
-                    Padding(
-                      padding: const EdgeInsets.only(
-                          left: 24, right: 24, top: 8, bottom: 16),
-                      child: Row(
-                        children: <Widget>[
-                          Expanded(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  isEN ? 'Today' : 'วันนี้',
-                                  style: TextStyle(
-                                    fontFamily: FitnessAppTheme.fontName,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                    color:
-                                        FitnessAppTheme.grey.withOpacity(0.5),
-                                  ),
-                                ),
-                                Text(
-                                  nFormat.format(today),
-                                  style: TextStyle(
-                                    fontFamily: FitnessAppTheme.fontName,
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: 16,
-                                    letterSpacing: -0.2,
-                                    color: FitnessAppTheme.nearlyDarkBlue,
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    isEN
-                                        ? '${nFormat.format(total)} BHT'
-                                        : '${nFormat.format(total)} บาท',
-                                    style: TextStyle(
-                                      fontFamily: FitnessAppTheme.fontName,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                      color:
-                                          FitnessAppTheme.grey.withOpacity(0.5),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: <Widget>[
-                                Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    Text(
-                                      isEN ? 'Invoices' : 'บิล',
-                                      style: TextStyle(
-                                        fontFamily: FitnessAppTheme.fontName,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                        color: FitnessAppTheme.grey
-                                            .withOpacity(0.5),
-                                      ),
-                                    ),
-                                    Text(
-                                      '$invoiceCount',
-                                      style: TextStyle(
-                                        fontFamily: FitnessAppTheme.fontName,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 16,
-                                        letterSpacing: -0.2,
-                                        color: FitnessAppTheme.nearlyDarkBlue,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: <Widget>[
-                                _payButton(context, isEN),
-                              ],
-                            ),
-                          ),
-                        ],
+                      // ── Divider ──
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Container(
+                          height: 1,
+                          color: FitnessAppTheme.background,
+                        ),
                       ),
-                    ),
-                  ],
+                      // ── Bottom section: today + invoices + pay ──
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            left: 20, right: 20, top: 16, bottom: 16),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: _miniStat(
+                                isEN ? 'Today' : 'วันนี้',
+                                nFormat.format(today),
+                                FitnessAppTheme.nearlyDarkBlue,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _miniStat(
+                                isEN ? 'Invoices' : 'บิล',
+                                '$invoiceCount',
+                                FitnessAppTheme.darkText,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _payButton(context, isEN),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -327,66 +256,57 @@ class DashboardSummaryView extends StatelessWidget {
     return Row(
       children: <Widget>[
         Container(
-          height: 48,
-          width: 2,
+          height: 44,
+          width: 3,
           decoration: BoxDecoration(
-            color: accent.withOpacity(0.5),
+            color: accent,
             borderRadius: const BorderRadius.all(Radius.circular(4.0)),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.only(left: 12.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: 2),
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontFamily: Font_.Fonts_T,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 16,
-                    letterSpacing: -0.1,
-                    color: FitnessAppTheme.grey.withOpacity(0.5),
-                  ),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: Font_.Fonts_T,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                  color: FitnessAppTheme.grey.withOpacity(0.6),
                 ),
               ),
+              const SizedBox(height: 4),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: <Widget>[
                   SizedBox(
-                    width: 28,
-                    height: 28,
+                    width: 22,
+                    height: 22,
                     child: Image.asset(imageAsset),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 3),
-                    child: Text(
-                      value,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 16,
-                        color: FitnessAppTheme.darkerText,
-                      ),
+                  const SizedBox(width: 6),
+                  Text(
+                    value,
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: FitnessAppTheme.darkerText,
                     ),
                   ),
                   if (unit.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 3),
+                      padding: const EdgeInsets.only(left: 4, bottom: 2),
                       child: Text(
                         unit,
-                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontFamily: Font_.Fonts_T,
                           fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                          letterSpacing: -0.2,
+                          fontSize: 11,
                           color: FitnessAppTheme.grey.withOpacity(0.5),
                         ),
                       ),
@@ -400,8 +320,45 @@ class DashboardSummaryView extends StatelessWidget {
     );
   }
 
+  Widget _miniStat(String label, String value, Color valueColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: FitnessAppTheme.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: FitnessAppTheme.grey.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: FitnessAppTheme.fontName,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: valueColor,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: Font_.Fonts_T,
+              fontSize: 11,
+              color: FitnessAppTheme.grey.withOpacity(0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _payButton(BuildContext context, bool isEN) {
     return Container(
+      height: 48,
       decoration: BoxDecoration(
         color: HexColor('#ff8385'),
         borderRadius: BorderRadius.circular(12),
@@ -429,16 +386,16 @@ class DashboardSummaryView extends StatelessWidget {
             );
           },
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(
                   Icons.play_arrow_rounded,
                   color: Colors.white,
                   size: 20,
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 2),
                 Text(
                   isEN ? 'Pay' : 'ชำระ',
                   style: const TextStyle(
