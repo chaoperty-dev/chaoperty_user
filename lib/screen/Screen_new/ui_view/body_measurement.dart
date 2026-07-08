@@ -12,6 +12,8 @@ class BodyMeasurementView extends StatelessWidget {
   final List<InvoiceModel>? invoiceModels;
   final double? totaltodays;
   final String? cuslangs;
+  final List<String>? totallist;
+  final List<String>? totallistPaid;
 
   BodyMeasurementView({
     Key? key,
@@ -20,6 +22,8 @@ class BodyMeasurementView extends StatelessWidget {
     this.totaltodays,
     this.invoiceModels,
     this.cuslangs,
+    this.totallist,
+    this.totallistPaid,
   }) : super(key: key);
 
   final List<String> month = [
@@ -83,13 +87,13 @@ class BodyMeasurementView extends StatelessWidget {
                                 left: 4, bottom: 8, top: 16),
                             child: Text(
                               cuslangs == 'EN'
-                                  ? 'Payment due'
-                                  : 'เกินกำหนดชำระ',
+                                  ? 'Total amount to be paid'
+                                  : 'ยอดที่ต้องชำระ',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                   fontFamily: FitnessAppTheme.fontName,
                                   fontWeight: FontWeight.w500,
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   letterSpacing: -0.1,
                                   color: FitnessAppTheme.darkText),
                             ),
@@ -116,7 +120,7 @@ class BodyMeasurementView extends StatelessWidget {
                                             fontFamily:
                                                 FitnessAppTheme.fontName,
                                             fontWeight: FontWeight.w600,
-                                            fontSize: 32,
+                                            fontSize: 25,
                                             color: nFormat.format(invoiceModels!
                                                                 .length ==
                                                             0
@@ -248,6 +252,7 @@ class BodyMeasurementView extends StatelessWidget {
                       child: Row(
                         children: <Widget>[
                           Expanded(
+                            flex: 2,
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,7 +260,9 @@ class BodyMeasurementView extends StatelessWidget {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    cuslangs == 'EN' ? 'Today' : 'วันนี้',
+                                    cuslangs == 'EN'
+                                        ? 'Pending/Verification'
+                                        : 'รอยืนยัน/ตรวจสอบ',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontFamily: FitnessAppTheme.fontName,
@@ -267,7 +274,7 @@ class BodyMeasurementView extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  '${nFormat.format(totaltodays!)}',
+                                  '${nFormat.format(totallistPaid!)}',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontFamily: FitnessAppTheme.fontName,
@@ -280,9 +287,7 @@ class BodyMeasurementView extends StatelessWidget {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    cuslangs == 'EN'
-                                        ? '${nFormat.format(invoiceModels!.length == 0 ? 0 : invoiceModels!.map((e) => (double.parse(e.amtall!) + double.parse(e.vatall!)) == 0 ? 0 : (double.parse(e.amtall!) + double.parse(e.vatall!))).reduce((a, b) => a + b))} BHT'
-                                        : '${nFormat.format(invoiceModels!.length == 0 ? 0 : invoiceModels!.map((e) => (double.parse(e.amtall!) + double.parse(e.vatall!)) == 0 ? 0 : (double.parse(e.amtall!) + double.parse(e.vatall!))).reduce((a, b) => a + b))} บาท',
+                                    '${nFormat.format(totallist!.fold<double>(0.0, (sum, s) => sum + (double.tryParse(s) ?? 0)))} BHT',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontFamily: FitnessAppTheme.fontName,
@@ -297,6 +302,7 @@ class BodyMeasurementView extends StatelessWidget {
                             ),
                           ),
                           Expanded(
+                            flex: 1,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.center,
@@ -354,6 +360,7 @@ class BodyMeasurementView extends StatelessWidget {
                             ),
                           ),
                           Expanded(
+                            flex: 1,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               crossAxisAlignment: CrossAxisAlignment.center,
