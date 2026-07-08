@@ -63,7 +63,7 @@ dependencies:
   image_picker: ^1.2.1
   file_picker: ^10.3.10
   # file_picker: ^8.0.0  # v2 embedding support
-  mysql1: ^0.20.0
+  # mysql1: ^0.20.0  # removed 2026-07-08: server-only, not used anywhere in lib/
   # date_time_picker: ^2.1.0
   printing: ^5.9.3
   syncfusion_flutter_xlsio: ^32.2.4
@@ -140,7 +140,7 @@ dependencies:
   universal_html: ^2.2.4
   im_stepper: ^1.0.0
   otp_timer_button: ^1.1.1
-  qr: ^3.0.1
+  # qr: ^3.0.1  # removed 2026-07-08: not imported anywhere, qr_flutter covers use case
   qr_flutter: ^4.1.0
   chaoperty_floating_loader: ^0.1.9
   floating_bottom_navigation_bar: ^1.5.2
@@ -194,22 +194,31 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
+  # Pruned 2026-07-08: removed unused TP1-TP4_1, card/, LogoBank/ roots,
+  # assets/images/ root (replaced with LogoBank/ subfolder only), images/
+  # root replaced with explicit files actually referenced by code.
   assets:
-    - images/
-    - images/TP1/
-    - images/TP2/
-    - images/TP3/
-    - images/TP4/
-    - images/TP4_1/
-    - images/LogoBank/
+    - images/Icon-chao.png
+    - images/LOGO.png
+    - images/thai_qr_payment.png
+    - images/thai_qr_payment_2.png
+    - images/icon_thaiqr.png
+    - assets/images/Icon-chao.png
+    - assets/images/LOGO.png
+    - assets/images/icon_thaiqr.png
+    - assets/images/thai_qr_payment.png
     - assets/images/LogoBank/
-    - images/card/
-    - assets/images/
+    - assets/images/New folder/
+    - assets/images/TP1/
+    - assets/images/TP2/
+    - assets/images/TP3/
+    - assets/images/TP4/
+    - assets/images/TP4_1/
+    - assets/images/card/
     - assets/design_course/
     - assets/fitness_app/
     - assets/hotel/
     - assets/introduction_animation/
-    - images/icon_thaiqr.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
@@ -222,40 +231,12 @@ flutter:
   # "family" key with the font family name, and a "fonts" key with a
   # list giving the asset and other descriptors for the font. For
   # example:
+  # Fonts pruned 2026-07-08: removed WorkSans, Roboto, ThaiFont, Pacifico,
+  # Bangers, DoHyeon, Righteous, Saysettha, Phetsarath, Loas, NotoSansLaos,
+  # NotoSerif, NotoSansLaoRegular, Sarabun* (only referenced by commented-out
+  # PDF code). Kept fonts actually used by Color.Fonts_T, fitness_app_theme,
+  # and rootBundle.load('fonts/THSarabunNew.ttf') in PDF generators.
   fonts:
-    - family: WorkSans
-      fonts:
-        - asset: assets/fonts/WorkSans-Regular.ttf
-        - asset: assets/fonts/WorkSans-Medium.ttf
-          weight: 500
-        - asset: assets/fonts/WorkSans-SemiBold.ttf
-          weight: 600
-        - asset: assets/fonts/WorkSans-Bold.ttf
-          weight: 700
-    - family: Roboto
-      fonts:
-        - asset: assets/fonts/Roboto-Bold.ttf
-        - asset: assets/fonts/Roboto-Regular.ttf
-        - asset: assets/fonts/Roboto-Medium.ttf
-          weight: 400
-
-    - family: ThaiFont
-      fonts:
-        - asset: fonts/Sarabun-Medium.ttf
-        - asset: fonts/Sarabun-Light.ttf
-        - asset: downloadFile/ใบเสนอราคาdownloadFile.pdf
-
-    - family: Pacifico
-      fonts:
-        - asset: fonts/Pacifico-Regular.ttf
-    #       - asset: fonts/Schyler-Italic.ttf
-    #         style: italic
-    - family: Bangers
-      fonts:
-        - asset: fonts/Bangers-Regular.ttf
-    #       - asset: fonts/TrajanPro_Bold.ttf
-    #         weight: 700
-
     - family: LINESeed1
       fonts:
         - asset: fonts/LINESeedSansTH_XBd.ttf
@@ -264,40 +245,8 @@ flutter:
       fonts:
         - asset: fonts/LINESeedSansTH_Rg.ttf
 
-    - family: DoHyeon
-      fonts:
-        - asset: fonts/DoHyeon-Regular.ttf
-
-    - family: Righteous
-      fonts:
-        - asset: fonts/Righteous-Regular.ttf
-
-    - family: Saysettha
-      fonts:
-        - asset: fonts/Saysettha-OT.ttf
-
-    - family: Phetsarath
-      fonts:
-        - asset: fonts/Phetsarath-OT.ttf
-
     - family: THSarabunNew
       fonts:
         - asset: fonts/THSarabunNew.ttf
-
-    - family: Loas
-      fonts:
-        - asset: fonts/SAYSETTA.TTF
-
-    - family: NotoSansLaos
-      fonts:
-        - asset: fonts/NotoSansLao.ttf
-
-    - family: NotoSerif
-      fonts:
-        - asset: fonts/NotoSerif.ttf
-
-    - family: NotoSansLaoRegular
-      fonts:
-        - asset: fonts/NotoSansLao-Regular.ttf
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages
