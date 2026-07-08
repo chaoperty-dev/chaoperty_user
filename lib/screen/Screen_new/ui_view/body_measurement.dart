@@ -141,38 +141,103 @@ class BodyMeasurementView extends StatelessWidget {
                                             left: 4, bottom: 3),
                                         child: Text(
                                           nFormat.format(_sumInvoices()),
-                                          textAlign: TextAlign.center,
+                                          textAlign: (_sumPaid() > 0.00)
+                                              ? TextAlign.start
+                                              : TextAlign.center,
                                           style: TextStyle(
                                             fontFamily:
                                                 FitnessAppTheme.fontName,
                                             fontWeight: FontWeight.w600,
-                                            fontSize: 25,
-                                            color: _sumInvoices() == 0.0
-                                                ? FitnessAppTheme.nearlyDarkBlue
-                                                : FitnessAppTheme.nearlyDarkRed,
+                                            fontSize:
+                                                (_sumPaid() > 0.00) ? 14 : 25,
+                                            color: (_sumPaid() > 0.00)
+                                                ? Colors.grey
+                                                : _sumInvoices() == 0.0
+                                                    ? FitnessAppTheme
+                                                        .nearlyDarkBlue
+                                                    : FitnessAppTheme
+                                                        .nearlyDarkRed,
+                                            decoration: (_sumPaid() > 0.00)
+                                                ? TextDecoration.lineThrough
+                                                : TextDecoration.none,
+                                            decorationColor: Colors.grey,
+                                            decorationThickness: 2,
                                           ),
                                         ),
                                       ),
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                            left: 8, bottom: 8),
-                                        child: Text(
-                                          cuslangs == 'EN' ? 'BHT' : 'บาท',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontFamily:
-                                                FitnessAppTheme.fontName,
-                                            fontWeight: FontWeight.w500,
-                                            fontSize: 18,
-                                            letterSpacing: -0.2,
-                                            color: _sumInvoices() == 0.0
-                                                ? FitnessAppTheme.nearlyDarkBlue
-                                                : FitnessAppTheme.nearlyDarkRed,
+                                      if (_sumPaid() == 0.00) ...[
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                              left: 8, bottom: 8),
+                                          child: Text(
+                                            cuslangs == 'EN' ? 'BHT' : 'บาท',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontFamily:
+                                                  FitnessAppTheme.fontName,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 18,
+                                              letterSpacing: -0.2,
+                                              color: _sumInvoices() == 0.0
+                                                  ? FitnessAppTheme
+                                                      .nearlyDarkBlue
+                                                  : FitnessAppTheme
+                                                      .nearlyDarkRed,
+                                            ),
                                           ),
                                         ),
-                                      ),
+                                      ]
                                     ],
                                   ),
+                                  if (_sumPaid() > 0) ...[
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: <Widget>[
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                              left: 4, bottom: 3),
+                                          child: Text(
+                                            nFormat.format(_sumOutstanding()),
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontFamily:
+                                                  FitnessAppTheme.fontName,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 20,
+                                              color: _sumInvoices() == 0.0
+                                                  ? FitnessAppTheme
+                                                      .nearlyDarkBlue
+                                                  : FitnessAppTheme
+                                                      .nearlyDarkRed,
+                                            ),
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                              left: 8, bottom: 8),
+                                          child: Text(
+                                            cuslangs == 'EN' ? 'BHT' : 'บาท',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontFamily:
+                                                  FitnessAppTheme.fontName,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 18,
+                                              letterSpacing: -0.2,
+                                              color: _sumInvoices() == 0.0
+                                                  ? FitnessAppTheme
+                                                      .nearlyDarkBlue
+                                                  : FitnessAppTheme
+                                                      .nearlyDarkRed,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                               Column(
@@ -272,7 +337,9 @@ class BodyMeasurementView extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  '${nFormat.format(_sumPaid())} ',
+                                  cuslangs == 'EN'
+                                      ? '${nFormat.format(_sumPaid())} '
+                                      : '${nFormat.format(_sumPaid())} ',
 
                                   // '${nFormat.format(totallistPaid!)}',
                                   textAlign: TextAlign.center,
@@ -287,7 +354,7 @@ class BodyMeasurementView extends StatelessWidget {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    '${nFormat.format(_sumOutstanding())} ',
+                                    cuslangs == 'EN' ? 'THB' : 'บาท',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontFamily: FitnessAppTheme.fontName,
@@ -298,6 +365,22 @@ class BodyMeasurementView extends StatelessWidget {
                                     ),
                                   ),
                                 ),
+                                // Padding(
+                                //   padding: const EdgeInsets.only(top: 6),
+                                //   child: Text(
+                                //     cuslangs == 'EN'
+                                //         ? '${nFormat.format(_sumPaid())}'
+                                //         : '${nFormat.format(_sumOutstanding())}THB',
+                                //     textAlign: TextAlign.center,
+                                //     style: TextStyle(
+                                //       fontFamily: FitnessAppTheme.fontName,
+                                //       fontWeight: FontWeight.w600,
+                                //       fontSize: 12,
+                                //       color:
+                                //           FitnessAppTheme.grey.withOpacity(0.5),
+                                //     ),
+                                //   ),
+                                // ),
                               ],
                             ),
                           ),
