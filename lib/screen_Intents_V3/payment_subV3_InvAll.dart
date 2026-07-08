@@ -2839,11 +2839,13 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                         height: qrSize + qrSize,
                                         color: Colors.white, // Safe placeholder
                                       )
-                                    : (payment_img!.isNotEmpty &&
+                                    : (payment_img != null &&
+                                            payment_img!.isNotEmpty &&
                                             payment_img != '' &&
                                             payment_img != 'null')
                                         ? Image.network(
-                                            payment_img!.isNotEmpty &&
+                                            payment_img != null &&
+                                                    payment_img!.isNotEmpty &&
                                                     payment_img != '' &&
                                                     payment_img != 'null'
                                                 ? '${MyConstant().domain_chao}/files/$foder/payment/$payment_img'
