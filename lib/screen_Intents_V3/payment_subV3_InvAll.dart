@@ -1541,7 +1541,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       this.activeQrSessionSoftExpire =
           now.add(const Duration(minutes: 15)).toIso8601String();
       this.qrDataNoIntens = (ptser == '7')
-          ? qr_payload.toString()
+          ? (qr_payload ?? '')
           : (ptser == '6')
               ? '|$bno\r$ref1\r$ref2\r${totalBills.replaceAll('.', '')}' // Bill Payment
               : (ptser == '5')
