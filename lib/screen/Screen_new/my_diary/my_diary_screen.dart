@@ -466,6 +466,10 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         cuslangs: cus_lang,
       ),
     );
+
+    listViews.add(
+      _buildQuickActionsRow(),
+    );
     listViews.add(
       TitleView(
         titleTxt: cus_lang == 'EN' ? 'Rental contract' : 'สัญญา',
@@ -826,6 +830,132 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// แถวเมนูลัด 4 ปุ่ม (ชำระ, บิล, สแกน, อื่นๆ)
+  Widget _buildQuickActionsRow() {
+    final isEN = cus_lang == 'EN';
+    final actions = [
+      _QuickAction(
+        icon: Icons.wallet_outlined,
+        label: isEN ? 'Pay' : 'ชำระ',
+        onTap: () async {
+          final preferences = await SharedPreferences.getInstance();
+          await preferences.setString('payby', 'PAY');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FitnessAppHomeScreen(pageroot: 'PAY'),
+            ),
+          );
+        },
+      ),
+      _QuickAction(
+        icon: Icons.receipt_long_outlined,
+        label: isEN ? 'Bill' : 'บิล',
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FitnessAppHomeScreen(pageroot: 'PAYMENT'),
+            ),
+          );
+        },
+      ),
+      _QuickAction(
+        icon: Icons.qr_code_scanner_outlined,
+        label: isEN ? 'Scan' : 'สแกน',
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FitnessAppHomeScreen(pageroot: 'SCAN'),
+            ),
+          );
+        },
+      ),
+      _QuickAction(
+        icon: Icons.grid_view_outlined,
+        label: isEN ? 'More' : 'อื่นๆ',
+        onTap: () {
+          // TODO: เปิดหน้าเมนูเพิ่มเติม
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(isEN ? 'Coming soon' : 'เร็วๆ นี้'),
+              duration: const Duration(seconds: 1),
+            ),
+          );
+        },
+      ),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+      child: Row(
+        children: actions.map((action) {
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: action.onTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: FitnessAppTheme.grey.withOpacity(0.1),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: FitnessAppTheme.grey.withOpacity(0.06),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: FitnessAppTheme.nearlyDarkBlue
+                                .withOpacity(0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            action.icon,
+                            size: 22,
+                            color: FitnessAppTheme.nearlyDarkBlue,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          action.label,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: FitnessAppTheme.darkerText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -1885,4 +2015,16 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       ],
     );
   }
+}
+
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 }
