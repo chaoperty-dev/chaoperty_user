@@ -258,11 +258,9 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e, stackTrace) {
       print('Error getting user info: $e');
       print('Stack trace: $stackTrace');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      // ✅ ห้ามเรียก ScaffoldMessenger.of(context) ใน async callback ก่อน build เสร็จ
+      _pendingLineErrorMessage = 'Error getting user info: $e';
+      if (mounted) setState(() {});
     }
   }
 
@@ -334,34 +332,42 @@ class _LoginScreenState extends State<LoginScreen> {
         signInThread();
       } else {
         // ถอด URL ออกมาแล้วแต่หา userWeb ไม่เจอ ให้โชว์เพื่อแก้บัค
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text("Debug: URL Parsing Failed"),
-            content: Text("URL: $url"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("OK"),
-              ),
-            ],
-          ),
-        );
+        // ✅ ห้ามเรียก showDialog ใน initState chain โดยตรง ต้องรอ build เสร็จ
+        // WidgetsBinding.instance.addPostFrameCallback((_) {
+        //   if (!mounted) return;
+        //   showDialog(
+        //     context: context,
+        //     builder: (context) => AlertDialog(
+        //       title: Text("Debug: URL Parsing Failed"),
+        //       content: Text("URL: $url"),
+        //       actions: [
+        //         TextButton(
+        //           onPressed: () => Navigator.pop(context),
+        //           child: Text("OK"),
+        //         ),
+        //       ],
+        //     ),
+        //   );
+        // });
       }
     } catch (e) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text("Debug: Line_IoginAuto Error"),
-          content: Text(e.toString()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("OK"),
-            ),
-          ],
-        ),
-      );
+      // ✅ ห้ามเรียก showDialog ใน initState chain โดยตรง ต้องรอ build เสร็จ
+      // WidgetsBinding.instance.addPostFrameCallback((_) {
+      //   if (!mounted) return;
+      //   showDialog(
+      //     context: context,
+      //     builder: (context) => AlertDialog(
+      //       title: Text("Debug: Line_IoginAuto Error"),
+      //       content: Text(e.toString()),
+      //       actions: [
+      //         TextButton(
+      //           onPressed: () => Navigator.pop(context),
+      //           child: Text("OK"),
+      //         ),
+      //       ],
+      //     ),
+      //   );
+      // });
     }
 
     return ser_Web;
@@ -1032,19 +1038,19 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text("Debug: API Error"),
-          content: Text(e.toString()),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("OK"),
-            ),
-          ],
-        ),
-      );
+      // showDialog(
+      //   context: context,
+      //   builder: (context) => AlertDialog(
+      //     title: Text("Debug: API Error"),
+      //     content: Text(e.toString()),
+      //     actions: [
+      //       TextButton(
+      //         onPressed: () => Navigator.pop(context),
+      //         child: Text("OK"),
+      //       ),
+      //     ],
+      //   ),
+      // );
     }
   }
 
