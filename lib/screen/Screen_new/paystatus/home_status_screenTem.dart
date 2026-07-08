@@ -827,7 +827,7 @@ class _StatusScreenState extends State<StatusScreen>
                                                   child: Image.network(
                                                     '${MyConstant().domain_chao}/files/$foder/slip/$Slip_history',
                                                     fit: BoxFit.fill,
-                                                    cacheWidth: 800,
+                                                    cacheWidth: 500,
                                                     errorBuilder: (context,
                                                         error, stackTrace) {
                                                       return Container(

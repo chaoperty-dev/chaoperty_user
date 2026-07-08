@@ -631,7 +631,7 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
                   child: Image.network(
                     imageUrl,
                     fit: BoxFit.contain,
-                    cacheWidth: 800,
+                    cacheWidth: 500,
                     loadingBuilder: (_, child, loadingProgress) {
                       if (loadingProgress == null) return child;
                       return Container(

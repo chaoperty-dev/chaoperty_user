@@ -4773,7 +4773,7 @@ class _PayBillscreenChoiceState extends State<PayBillscreenChoice> {
                                                                                     Image.network(
                                                                                       '${MyConstant().domain_chao}/files/$foder/payment/$payment_img',
                                                                                       height: MediaQuery.of(context).size.height * 0.3,
-                                                                                      cacheWidth: 800,
+                                                                                      cacheWidth: 500,
                                                                                     )
                                                                                   ])
                                                                                 ]))),
