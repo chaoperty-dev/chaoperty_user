@@ -145,28 +145,29 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
   }
 
   Widget bottomBar() {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.92), // Frosted glass effect
-            border: Border(
-                top: BorderSide(
-                    color: Colors.grey.withOpacity(0.3), width: 0.5)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                offset: const Offset(0, -2),
-                blurRadius: 10.0,
-              ),
-            ],
+    // Removed BackdropFilter(ImageFilter.blur) on 2026-07-08:
+    // its web fallback forces an offscreen render of the full bottom bar
+    // on every frame, which dominates scroll FPS. The translucent color
+    // below gives a near-identical look without the blur cost.
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.95), // Opaque-ish instead of blur
+        border: Border(
+            top: BorderSide(
+                color: Colors.grey.withOpacity(0.3), width: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            offset: const Offset(0, -2),
+            blurRadius: 10.0,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
                 padding: EdgeInsets.only(
                     top: 10,
                     bottom: 10 + MediaQuery.of(context).padding.bottom),
@@ -206,9 +207,7 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
               ),
             ],
           ),
-        ),
-      ),
-    );
+      );
   }
 
   Widget _buildBottomBarItem(int index, String iconPath, String label) {

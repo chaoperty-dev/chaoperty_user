@@ -180,7 +180,9 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                         }
                       },
                       child: Image.network(imgList[i].image.toString(),
-                          fit: BoxFit.cover, width: 1500.0),
+                          fit: BoxFit.cover,
+                          width: 1500.0,
+                          cacheWidth: 480),
                     ),
                   ],
                 )),
@@ -603,7 +605,6 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   }
 
   Future<bool> getData() async {
-    await Future<dynamic>.delayed(const Duration(milliseconds: 50));
     return true;
   }
 

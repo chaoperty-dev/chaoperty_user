@@ -844,6 +844,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                                     child: Image.network(
                                       'https://chaoperties.com/user/guide_user/img/img_payment.jpg',
                                       fit: BoxFit.contain,
+                                      cacheWidth: 480,
                                     ),
                                   ),
                                 ),

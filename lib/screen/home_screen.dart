@@ -179,7 +179,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                       },
                       child: Image.network(imgList[i].image.toString(),
-                          fit: BoxFit.cover, width: 1500.0),
+                          fit: BoxFit.cover,
+                          width: 1500.0,
+                          cacheWidth: 480),
                     ),
                   ],
                 )),
