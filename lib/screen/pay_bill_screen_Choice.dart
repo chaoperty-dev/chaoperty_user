@@ -33,6 +33,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_barcodes/barcodes.dart';
 import '../CRC_16_Prompay/generate_qrcode.dart';
@@ -4772,6 +4773,7 @@ class _PayBillscreenChoiceState extends State<PayBillscreenChoice> {
                                                                                     Image.network(
                                                                                       '${MyConstant().domain_chao}/files/$foder/payment/$payment_img',
                                                                                       height: MediaQuery.of(context).size.height * 0.3,
+                                                                                      cacheWidth: 800,
                                                                                     )
                                                                                   ])
                                                                                 ]))),
@@ -7123,6 +7125,7 @@ class _PayBillscreenChoiceState extends State<PayBillscreenChoice> {
                                       child: Image.network(
                                         '${MyConstant().domain_chaoV2}/gen_qr_img.php?ren=$cid_ren&${widget.get_qr_img}&extension=.png',
                                         fit: BoxFit.fill,
+                                        cacheWidth: 400,
                                         errorBuilder:
                                             (context, error, stackTrace) {
                                           return Container(

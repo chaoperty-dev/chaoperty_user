@@ -895,6 +895,7 @@ class MeterCheckScreenState extends State<MeterCheckScreen> {
                                                                                               : Image.network(
                                                                                                   // '${MyConstant().domain}/files/kad_taii/logo/${Img_logo_}',
                                                                                                   '${MyConstant().domain_chao}/files/$foder/Meter/${_TransModels[indextran].img}',
+                                                                                                  cacheWidth: 800,
                                                                                                   fit: BoxFit.cover,
                                                                                                 ),
                                                                                         ),

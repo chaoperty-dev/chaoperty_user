@@ -1891,7 +1891,8 @@ class _BillHistoryState extends State<BillHistory> {
                                                                       .center,
                                                               children: <Widget>[
                                                                 Image.network(
-                                                                    '${MyConstant().domain_chao}/files/$foder/slip/${Slip_history}')
+                                                                    '${MyConstant().domain_chao}/files/$foder/slip/${Slip_history}',
+                                                                    cacheWidth: 800)
                                                               ],
                                                             ),
                                                     ),

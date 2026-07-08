@@ -919,6 +919,7 @@ class _ServiceFeeList extends StatelessWidget {
                                   content: Image.network(
                                     '${MyConstant().domain_chao_img}/files/$folder/meters/${t.img}',
                                     fit: BoxFit.contain,
+                                    cacheWidth: 800,
                                     loadingBuilder:
                                         (context, child, loadingProgress) {
                                       if (loadingProgress == null) return child;

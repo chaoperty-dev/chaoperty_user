@@ -143,6 +143,7 @@ class _MarketCard extends StatelessWidget {
                       child: Image.network(
                         logoUrl,
                         fit: BoxFit.cover,
+                        cacheWidth: 200,
                         errorBuilder: (_, __, ___) => _avatarText(initChar),
                       ),
                     )

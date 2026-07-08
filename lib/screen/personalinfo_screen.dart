@@ -83,6 +83,38 @@ class PersonalInfoScreenState extends State<PersonalInfoScreen> {
   bool? isChecked = false;
   int count = 0;
   List<TransModel> _TransModels = [];
+
+  // Added 2026-07-08: dispose all controllers to prevent memory leak.
+  // Previously this State had no dispose() at all, so every visit
+  // leaked 23 TextEditingControllers + 1 ScrollController.
+  @override
+  void dispose() {
+    Form_bussshop.dispose();
+    Form_bussscontact.dispose();
+    Form_address.dispose();
+    Form_tel.dispose();
+    Form_email.dispose();
+    Form_tax.dispose();
+    Form_wnote.dispose();
+    rental_count_text.dispose();
+    Form_area.dispose();
+    Form_ln.dispose();
+    Form_sdate.dispose();
+    Form_ldate.dispose();
+    Form_period.dispose();
+    Form_rtname.dispose();
+    Form_docno.dispose();
+    Form_zn.dispose();
+    Form_aser.dispose();
+    Form_qty.dispose();
+    Form_cdate.dispose();
+    Form_nameshop.dispose();
+    Form_typeshop.dispose();
+    Form_User.dispose();
+    Form_UserPass.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
   List<QuotxSelectModel> quotxSelectModels = [];
   List<CustomerModel> customerModels = [];
   String? rtname,

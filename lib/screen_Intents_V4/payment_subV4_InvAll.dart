@@ -28,7 +28,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:flutter_timer_countdown/flutter_timer_countdown.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-
 import 'package:http_parser/http_parser.dart';
 // import 'package:image_downloader_web/image_downloader_web.dart';
 import 'package:gal/gal.dart';
@@ -261,6 +260,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   String? _slipImageName;
   String? intentsAttacheSlipNo; // Added
   late Stream<int> _timerStream;
+  // Added 2026-07-08: hold subscription so we can cancel on dispose.
+  StreamSubscription<int>? _timerSub;
   // ================= Helpers for Right Panel =================
 
   double _d(dynamic v) {
@@ -294,6 +295,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     _timerStream =
         Stream.periodic(const Duration(seconds: 1), (_) => secondsUntilExpire())
             .asBroadcastStream();
+    // Hold a listener so we can cancel it on dispose; previously
+    // the broadcast stream kept running 1Hz until app exit.
+    _timerSub = _timerStream.listen((_) {});
     if (widget.mainScreenAnimationController == null) {
       _usingLocalController = true;
       _localController = AnimationController(vsync: this, value: 1.0);
@@ -529,6 +533,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     if (_usingLocalController) {
       _localController.dispose();
     }
+    _timerSub?.cancel();
+    _qrUpdateTrigger.dispose();
     super.dispose();
   }
 

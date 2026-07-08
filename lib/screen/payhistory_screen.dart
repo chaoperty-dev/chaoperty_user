@@ -4252,7 +4252,8 @@ class _PayHistoryScreenState extends State<PayHistoryScreen> {
                                                                             .center,
                                                                     children: <Widget>[
                                                                       Image.network(
-                                                                          '${MyConstant().domain_chao}/files/$foder/slip/${Slip_history}')
+                                                                          '${MyConstant().domain_chao}/files/$foder/slip/${Slip_history}',
+                                                                          cacheWidth: 800)
                                                                     ],
                                                                   ),
                                                                   actions: <Widget>[

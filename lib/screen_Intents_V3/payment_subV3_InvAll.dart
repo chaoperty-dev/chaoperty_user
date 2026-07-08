@@ -261,6 +261,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   String? _slipImageName;
   String? intentsAttacheSlipNo; // Added
   late Stream<int> _timerStream;
+  // Added 2026-07-08: hold subscriptions so we can cancel on dispose.
+  // Previously _timerStream was passed straight to StreamBuilder and
+  // broadcast forever (1Hz) even after widget pop.
+  StreamSubscription<int>? _timerSub;
   String? qrDataNoIntens;
   // ================= Helpers for Right Panel =================
 
@@ -295,6 +299,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     _timerStream =
         Stream.periodic(const Duration(seconds: 1), (_) => secondsUntilExpire())
             .asBroadcastStream();
+    // Hold a listener so we can cancel it on dispose; previously
+    // the broadcast stream kept running 1Hz until app exit.
+    _timerSub = _timerStream.listen((_) {});
     if (widget.mainScreenAnimationController == null) {
       _usingLocalController = true;
       _localController = AnimationController(vsync: this, value: 1.0);
@@ -535,6 +542,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     if (_usingLocalController) {
       _localController.dispose();
     }
+    _timerSub?.cancel();
+    _qrUpdateTrigger.dispose();
     super.dispose();
   }
 
