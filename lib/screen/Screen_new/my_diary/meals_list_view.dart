@@ -45,7 +45,10 @@ class _MealsListViewState extends State<MealsListView>
     animationController = AnimationController(
         duration: const Duration(milliseconds: 2000), vsync: this);
     super.initState();
-    mealsListData = widget.teNantModel!;
+    mealsListData = widget.teNantModel ?? [];
+    if (animationController?.status == AnimationStatus.dismissed) {
+      animationController?.forward();
+    }
   }
 
   Future<bool> getData() async {
@@ -70,7 +73,7 @@ class _MealsListViewState extends State<MealsListView>
             transform: Matrix4.translationValues(
                 0.0, 30 * (1.0 - widget.mainScreenAnimation!.value), 0.0),
             child: Container(
-              height: 250,
+              height: 205,
               width: double.infinity,
               child: ScrollConfiguration(
                 behavior:
@@ -93,7 +96,6 @@ class _MealsListViewState extends State<MealsListView>
                                 parent: animationController!,
                                 curve: Interval((1 / count) * index, 1.0,
                                     curve: Curves.fastOutSlowIn)));
-                    animationController?.forward();
 
                     return MealsView(
                       mealsListData: mealsListData[index],
