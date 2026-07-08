@@ -43,6 +43,34 @@ class BodyMeasurementView extends StatelessWidget {
   ];
   final nFormat = NumberFormat("#,##0.00", "en_US");
   final DateTime _DateTimeNew = DateTime.now();
+
+  /// รวมยอด "ยอดค้างชำระ" (totallist) — ปลอดภัยเมื่อ list เป็น null/ว่าง
+  double _sumOutstanding() {
+    final list = totallist;
+    if (list == null || list.isEmpty) return 0.0;
+    return list.fold<double>(0.0, (sum, s) => sum + (double.tryParse(s) ?? 0));
+  }
+
+  /// รวมยอด "รอยืนยัน/ตรวจสอบ" (totallistPaid) — ปลอดภัยเมื่อ list เป็น null/ว่าง
+  double _sumPaid() {
+    final list = totallistPaid;
+    if (list == null || list.isEmpty) return 0.0;
+    return list.fold<double>(0.0, (sum, s) => sum + (double.tryParse(s) ?? 0));
+  }
+
+  /// รวมยอดบิลทั้งหมด (amtall + vatall) — ปลอดภัยเมื่อ list เป็น null/ว่าง/รายการผิดพลาด
+  double _sumInvoices() {
+    final list = invoiceModels;
+    if (list == null || list.isEmpty) return 0.0;
+    double total = 0.0;
+    for (final e in list) {
+      final amt = double.tryParse(e.amtall ?? '') ?? 0.0;
+      final vat = double.tryParse(e.vatall ?? '') ?? 0.0;
+      total += (amt + vat);
+    }
+    return total;
+  }
+
   @override
   Widget build(BuildContext context) {
     // print('invoiceModels >> ${invoiceModels!.length}');
@@ -112,30 +140,14 @@ class BodyMeasurementView extends StatelessWidget {
                                         padding: const EdgeInsets.only(
                                             left: 4, bottom: 3),
                                         child: Text(
-                                          invoiceModels!.length == 0
-                                              ? '0.00'
-                                              : '${nFormat.format(invoiceModels!.map((e) => (double.parse(e.amtall!) + double.parse(e.vatall!)) == 0 ? 0 : (double.parse(e.amtall!) + double.parse(e.vatall!))).reduce((a, b) => a + b))}',
+                                          nFormat.format(_sumInvoices()),
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                             fontFamily:
                                                 FitnessAppTheme.fontName,
                                             fontWeight: FontWeight.w600,
                                             fontSize: 25,
-                                            color: nFormat.format(invoiceModels!
-                                                                .length ==
-                                                            0
-                                                        ? 0
-                                                        : invoiceModels!
-                                                            .map((e) => (double.parse(e.amtall!) +
-                                                                        double.parse(e
-                                                                            .vatall!)) ==
-                                                                    0
-                                                                ? 0
-                                                                : (double.parse(e.amtall!) +
-                                                                    double.parse(
-                                                                        e.vatall!)))
-                                                            .reduce((a, b) => a + b)) ==
-                                                    '0.00'
+                                            color: _sumInvoices() == 0.0
                                                 ? FitnessAppTheme.nearlyDarkBlue
                                                 : FitnessAppTheme.nearlyDarkRed,
                                           ),
@@ -153,21 +165,7 @@ class BodyMeasurementView extends StatelessWidget {
                                             fontWeight: FontWeight.w500,
                                             fontSize: 18,
                                             letterSpacing: -0.2,
-                                            color: nFormat.format(invoiceModels!
-                                                                .length ==
-                                                            0
-                                                        ? 0
-                                                        : invoiceModels!
-                                                            .map((e) => (double.parse(e.amtall!) +
-                                                                        double.parse(e
-                                                                            .vatall!)) ==
-                                                                    0
-                                                                ? 0
-                                                                : (double.parse(e.amtall!) +
-                                                                    double.parse(
-                                                                        e.vatall!)))
-                                                            .reduce((a, b) => a + b)) ==
-                                                    '0.00'
+                                            color: _sumInvoices() == 0.0
                                                 ? FitnessAppTheme.nearlyDarkBlue
                                                 : FitnessAppTheme.nearlyDarkRed,
                                           ),
@@ -274,7 +272,9 @@ class BodyMeasurementView extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  '${nFormat.format(totallistPaid!)}',
+                                  '${nFormat.format(_sumPaid())} ',
+
+                                  // '${nFormat.format(totallistPaid!)}',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontFamily: FitnessAppTheme.fontName,
@@ -287,7 +287,7 @@ class BodyMeasurementView extends StatelessWidget {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 6),
                                   child: Text(
-                                    '${nFormat.format(totallist!.fold<double>(0.0, (sum, s) => sum + (double.tryParse(s) ?? 0)))} BHT',
+                                    '${nFormat.format(_sumOutstanding())} ',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontFamily: FitnessAppTheme.fontName,

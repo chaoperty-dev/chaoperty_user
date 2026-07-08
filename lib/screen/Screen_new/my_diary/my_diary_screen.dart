@@ -428,6 +428,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
 
   void addAllListData() {
     const int count = 9;
+    listViews.clear();
 
     // listViews.add(
     //   TitleView(
@@ -461,6 +462,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             curve:
                 Interval((1 / count) * 5, 1.0, curve: Curves.fastOutSlowIn))),
         animationController: widget.animationController!,
+        totallist: total_list,
+        totallistPaid: total_list_paid,
         totaltodays: totaltoday,
         invoiceModels: _InvoiceModels,
         cuslangs: cus_lang,
