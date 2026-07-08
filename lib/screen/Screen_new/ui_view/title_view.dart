@@ -8,6 +8,7 @@ class TitleView extends StatelessWidget {
   final String titleTxt;
   final String subTxt;
   final String imagePath;
+  final int? badgeCount;
   final AnimationController? animationController;
   final Animation<double>? animation;
 
@@ -16,6 +17,7 @@ class TitleView extends StatelessWidget {
       this.titleTxt = "",
       this.subTxt = "",
       this.imagePath = "",
+      this.badgeCount,
       this.animationController,
       this.animation})
       : super(key: key);
@@ -55,16 +57,41 @@ class TitleView extends StatelessWidget {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        titleTxt,
-                        textAlign: TextAlign.left,
-                        style: TextStyle(
-                          fontFamily: Font_.Fonts_T,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 17,
-                          letterSpacing: 0.3,
-                          color: FitnessAppTheme.darkerText,
-                        ),
+                      child: Row(
+                        children: [
+                          Text(
+                            titleTxt,
+                            textAlign: TextAlign.left,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 17,
+                              letterSpacing: 0.3,
+                              color: FitnessAppTheme.darkerText,
+                            ),
+                          ),
+                          if (badgeCount != null) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: FitnessAppTheme.nearlyDarkBlue
+                                    .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '$badgeCount',
+                                style: TextStyle(
+                                  fontFamily: Font_.Fonts_T,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                  color: FitnessAppTheme.nearlyDarkBlue,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     subTxt == 'X'
