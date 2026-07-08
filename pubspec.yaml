@@ -200,6 +200,7 @@ flutter:
   assets:
     - images/Icon-chao.png
     - images/LOGO.png
+    - images/chaoperty_dark.png
     - images/thai_qr_payment.png
     - images/thai_qr_payment_2.png
     - images/icon_thaiqr.png
