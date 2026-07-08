@@ -466,7 +466,6 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         cuslangs: cus_lang,
       ),
     );
-
     listViews.add(
       _buildQuickActionsRow(),
     );
