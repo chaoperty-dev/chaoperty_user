@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:auto_size_text/auto_size_text.dart';
-import 'package:chaoperty_user/screen/Screen_new/my_diary/water_view.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -25,9 +24,6 @@ import '../../market_service.dart';
 import '../fitness_app_home_screen.dart';
 import '../fitness_app_theme.dart';
 import '../ui_view/body_measurement.dart';
-import '../ui_view/dashboard_summary_view.dart';
-import '../ui_view/glass_view.dart';
-import '../ui_view/mediterranean_diet_view.dart';
 import '../ui_view/title_view.dart';
 import 'meals_list_view.dart';
 import 'package:http/http.dart' as http;
