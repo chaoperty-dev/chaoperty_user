@@ -77,6 +77,11 @@ class _TrainingPayCidSelectScreenState extends State<TrainingPayCidSelectScreen>
                       parent: widget.animationController!,
                       curve: Interval(0, 0.5, curve: Curves.fastOutSlowIn)));
               addAllListData();
+              // forward animation ครั้งเดียว ไม่ใช่ทุก SliverChildBuilderDelegate
+              if (widget.animationController?.status ==
+                  AnimationStatus.dismissed) {
+                widget.animationController?.forward();
+              }
               setState(() {});
 
               scrollController.addListener(() {
@@ -417,7 +422,6 @@ class _TrainingPayCidSelectScreenState extends State<TrainingPayCidSelectScreen>
                   SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (BuildContext context, int index) {
-                        widget.animationController?.forward();
                         return listViews[index];
                       },
                       childCount: listViews.length,

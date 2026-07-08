@@ -377,6 +377,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     // ✅ แสดง SnackBar จาก LINE error หลัง widget tree พร้อมแล้ว
     // (ห้ามเรียก ScaffoldMessenger.of(context) ใน initState)
+    // ✅ ใช้ guard ป้องกันการเรียกซ้ำใน frame เดียวกัน เพื่อหลีกเลี่ยง window.dart:99:12 loop
     if (_pendingLineErrorMessage != null) {
       final msg = _pendingLineErrorMessage!;
       _pendingLineErrorMessage = null;

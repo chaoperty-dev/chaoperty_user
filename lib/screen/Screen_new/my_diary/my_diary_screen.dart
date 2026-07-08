@@ -878,7 +878,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       ),
       _QuickAction(
         icon: Icons.receipt_long_outlined,
-        label: isEN ? 'Bill' : 'บิล',
+        label: isEN ? 'Bill' : 'ประวัติบิล',
         onTap: () {
           Navigator.push(
             context,
@@ -889,13 +889,13 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         },
       ),
       _QuickAction(
-        icon: Icons.qr_code_scanner_outlined,
-        label: isEN ? 'Scan' : 'สแกน',
+        icon: Icons.monitor_weight_rounded,
+        label: isEN ? 'Meter' : 'มิเตอร์',
         onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => FitnessAppHomeScreen(pageroot: 'SCAN'),
+              builder: (_) => FitnessAppHomeScreen(pageroot: 'MITER'),
             ),
           );
         },
@@ -904,13 +904,19 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         icon: Icons.grid_view_outlined,
         label: isEN ? 'More' : 'อื่นๆ',
         onTap: () {
-          // TODO: เปิดหน้าเมนูเพิ่มเติม
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(isEN ? 'Coming soon' : 'เร็วๆ นี้'),
-              duration: const Duration(seconds: 1),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FitnessAppHomeScreen(pageroot: 'INFO'),
             ),
           );
+          // // TODO: เปิดหน้าเมนูเพิ่มเติม
+          // ScaffoldMessenger.of(context).showSnackBar(
+          //   SnackBar(
+          //     content: Text(isEN ? 'Coming soon' : 'เร็วๆ นี้'),
+          //     duration: const Duration(seconds: 1),
+          //   ),
+          // );
         },
       ),
     ];
