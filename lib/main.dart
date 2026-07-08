@@ -25,11 +25,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_localizations/syncfusion_localizations.dart';
 
 import 'Constant/api_session.dart';
-import 'screen/Screen_new/fitness_app_home_screen.dart';
 import 'screen/loginscreen.dart';
 import 'screen/provider/homeprovider.dart';
 import 'screen/provider/payhisprovider.dart';

@@ -1,13 +1,9 @@
 import 'dart:typed_data';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
-// import 'package:htmltopdfwidgets/htmltopdfwidgets.dart';
 import 'package:image/image.dart' as img;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-// import 'package:pdf/widgets.dart' as pw;  // removed 2026-07-08: all usage commented out
-import 'dart:math' as math;
 
 import '../Constant/Myconstant.dart';
 

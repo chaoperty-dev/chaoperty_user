@@ -8,8 +8,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:group_radio_button/group_radio_button.dart' as grb;
 import 'package:intl/intl.dart';
-import 'package:pdf/pdf.dart';
-import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:http/http.dart' as http;
@@ -22,9 +20,7 @@ import '../Model/GetFinnancetrans_Model.dart';
 import '../Model/GetRenTal_Model.dart';
 import '../Model/trans_re_bill_history_model.dart';
 import '../Model/trans_re_bill_model.dart';
-import '../Responsive/responsive.dart';
 import '../color.dart';
-import 'package:pdf/widgets.dart' as pw;
 
 class BillHistory extends StatefulWidget {
   const BillHistory({super.key, this.animationController});
