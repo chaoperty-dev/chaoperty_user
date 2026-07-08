@@ -1131,6 +1131,26 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     return '$h:$m:$s';
   }
 
+  /// กล่อง loading ตอน PrettyQr ยังไม่พร้อม render (qrData ว่าง)
+  /// ป้องกัน 'Unexpected null value' จาก PrettyQr internal assertion
+  Widget _qrLoadingBox(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: size * 0.3,
+        height: size * 0.3,
+        child: const CircularProgressIndicator(strokeWidth: 2.5),
+      ),
+    );
+  }
+
   // Future<Null> QrGenRef(
   //     {String? QR_Ref1,
   //     String? QR_Ref2,
@@ -3098,33 +3118,37 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                           width: 150,
                                           height: 150,
                                           fit: BoxFit.contain)
-                                      : PrettyQr(
-                                          // typeNumber: 3,
-                                          image: Image.asset(
-                                            'images/icon_thaiqr.png',
-                                          ).image,
-                                          size: 150,
-                                          data: qrData,
-                                          errorCorrectLevel:
-                                              QrErrorCorrectLevel.M,
-                                          roundEdges: true,
-                                        )
+                                      : (qrData.isEmpty
+                                          ? _qrLoadingBox(150)
+                                          : PrettyQr(
+                                              // typeNumber: 3,
+                                              image: Image.asset(
+                                                'images/icon_thaiqr.png',
+                                              ).image,
+                                              size: 150,
+                                              data: qrData,
+                                              errorCorrectLevel:
+                                                  QrErrorCorrectLevel.M,
+                                              roundEdges: true,
+                                            ))
                                   : (payment_tser == '5' || payment_tser == '6')
                                       ? (_isExporting && _exportQrBytes != null)
                                           ? Image.memory(_exportQrBytes!,
                                               width: 100,
                                               height: 100,
                                               fit: BoxFit.contain)
-                                          : PrettyQr(
-                                              size: 100,
-                                              // size: qrSize,
-                                              data: qrData,
-                                              image: const AssetImage(
-                                                  'images/icon_thaiqr.png'),
-                                              errorCorrectLevel:
-                                                  QrErrorCorrectLevel.M,
-                                              roundEdges: true,
-                                            )
+                                          : (qrData.isEmpty
+                                              ? _qrLoadingBox(100)
+                                              : PrettyQr(
+                                                  size: 100,
+                                                  // size: qrSize,
+                                                  data: qrData,
+                                                  image: const AssetImage(
+                                                      'images/icon_thaiqr.png'),
+                                                  errorCorrectLevel:
+                                                      QrErrorCorrectLevel.M,
+                                                  roundEdges: true,
+                                                ))
                                       : Container(
                                           width: double.infinity,
                                           height: qrSize + qrSize,
