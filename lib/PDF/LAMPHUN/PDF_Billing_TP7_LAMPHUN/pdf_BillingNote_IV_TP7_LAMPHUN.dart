@@ -2,7 +2,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 import 'package:chaoperty_user/File_s.dart';
 import 'package:chaoperty_user/Man_PDF/Man_BillingNoteInvlice_PDF.dart';
 import 'package:chaoperty_user/PDF/ThaiBaht.dart';
-import 'package:chaoperty_user/color.dart';
+import 'package:chaoperty_user/PDF/pdf_constants.dart';
 import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
