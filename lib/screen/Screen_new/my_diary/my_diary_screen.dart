@@ -466,6 +466,22 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         cuslangs: cus_lang,
       ),
     );
+
+    listViews.add(
+      DashboardSummaryView(
+        animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+            parent: widget.animationController!,
+            curve:
+                Interval((1 / count) * 1, 1.0, curve: Curves.fastOutSlowIn))),
+        animationController: widget.animationController!,
+        teNantModel: teNantModels,
+        invoiceModels: _InvoiceModels,
+        totaltodays: totaltoday,
+        cuslangs: cus_lang,
+        open_set_date: open_set_date,
+      ),
+    );
+
     listViews.add(
       _buildQuickActionsRow(),
     );

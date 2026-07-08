@@ -1,4 +1,3 @@
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,8 +8,11 @@ import '../../../main.dart';
 import '../fitness_app_home_screen.dart';
 import '../fitness_app_theme.dart';
 
-/// การ์ดสรุป Dashboard รวมข้อมูลจาก MediterranesnDietView + BodyMeasurementView
-/// สไตล์ Enterprise Dashboard: ขาวเรียบ ตัวเลขชัด แยกส่วนชัดเจน
+/// การ์ดสรุป Dashboard รวม (สไตล์ screenshot ล่าสุด)
+/// - badge เกินกำหนดชำระ + ไอคอนเงินบาท
+/// - ยอดค้างชำระรวม
+/// - ปุ่มชำระค่าบริการเต็มความกว้าง
+/// - 2 การ์ดย่อย: วันนี้ + บิล
 class DashboardSummaryView extends StatelessWidget {
   final AnimationController? animationController;
   final Animation<double>? animation;
@@ -32,7 +34,6 @@ class DashboardSummaryView extends StatelessWidget {
   }) : super(key: key);
 
   final nFormat = NumberFormat("#,##0.00", "en_US");
-  final DateTime datex = DateTime.now();
 
   double get _totalOutstanding {
     if (invoiceModels == null || invoiceModels!.isEmpty) return 0.0;
@@ -61,155 +62,246 @@ class DashboardSummaryView extends StatelessWidget {
                 0.0, 30 * (1.0 - animation!.value), 0.0),
             child: Padding(
               padding: const EdgeInsets.only(
-                  left: 24, right: 24, top: 16, bottom: 18),
+                  left: 24, right: 24, top: 16, bottom: 8),
               child: Container(
                 decoration: BoxDecoration(
                   color: FitnessAppTheme.white,
-                  borderRadius: BorderRadius.circular(18.0),
+                  borderRadius: BorderRadius.circular(24.0),
                   boxShadow: <BoxShadow>[
                     BoxShadow(
-                        color: FitnessAppTheme.grey.withOpacity(0.12),
-                        offset: const Offset(0, 5),
-                        blurRadius: 14,
-                        spreadRadius: 1),
+                        color: FitnessAppTheme.grey.withOpacity(0.10),
+                        offset: const Offset(0, 6),
+                        blurRadius: 16,
+                        spreadRadius: 0),
                   ],
                   border: Border.all(
                     color: FitnessAppTheme.grey.withOpacity(0.08),
                     width: 1,
                   ),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18.0),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      // ── Header: total outstanding + datetime ──
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                        color: FitnessAppTheme.white,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: <Widget>[
-                                Text(
-                                  isEN ? 'Total Outstanding' : 'เกินกำหนดชำระ',
-                                  style: TextStyle(
-                                    fontFamily: 'LINESeed2',
-                                    fontSize: 14,
-                                    color:
-                                        FitnessAppTheme.grey.withOpacity(0.7),
+                      // ── Header row: badge + baht icon ──
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isDue
+                                  ? FitnessAppTheme.nearlyDarkRed
+                                      .withOpacity(0.08)
+                                  : FitnessAppTheme.nearlyDarkBlue
+                                      .withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: isDue
+                                        ? FitnessAppTheme.nearlyDarkRed
+                                        : FitnessAppTheme.nearlyDarkBlue,
+                                    shape: BoxShape.circle,
                                   ),
                                 ),
-                                Row(
-                                  children: <Widget>[
-                                    Icon(
-                                      Icons.access_time,
-                                      size: 13,
-                                      color:
-                                          FitnessAppTheme.grey.withOpacity(0.5),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      isEN
-                                          ? 'Today ${DateFormat('HH:mm').format(datex)}'
-                                          : 'วันนี้ ${DateFormat('HH:mm').format(datex)}',
-                                      style: TextStyle(
-                                        fontFamily: 'LINESeed2',
-                                        fontSize: 12,
-                                        color: FitnessAppTheme.grey
-                                            .withOpacity(0.5),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: <Widget>[
-                                AutoSizeText(
-                                  nFormat.format(total),
-                                  minFontSize: 24,
-                                  maxFontSize: 32,
-                                  maxLines: 1,
+                                const SizedBox(width: 6),
+                                Text(
+                                  isEN ? 'Payment due' : 'เกินกำหนดชำระ',
                                   style: TextStyle(
-                                    fontFamily: 'LINESeed2',
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 32,
+                                    fontFamily: FitnessAppTheme.fontName,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
                                     color: isDue
                                         ? FitnessAppTheme.nearlyDarkRed
                                         : FitnessAppTheme.nearlyDarkBlue,
                                   ),
                                 ),
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.only(left: 4, bottom: 6),
-                                  child: Text(
-                                    isEN ? 'BHT' : 'บาท',
-                                    style: TextStyle(
-                                      fontFamily: 'LINESeed2',
-                                      fontSize: 14,
-                                      color:
-                                          FitnessAppTheme.grey.withOpacity(0.6),
-                                    ),
-                                  ),
-                                ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              isEN
-                                  ? '${DateFormat.yMMMMd().format(datex)}'
-                                  : '${DateFormat('dd').format(datex)} ${month[int.parse(DateFormat('MM').format(datex))]} ${int.parse(DateFormat('yyyy').format(datex)) + 543}',
+                          ),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: FitnessAppTheme.nearlyDarkBlue
+                                  .withOpacity(0.08),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.payments_outlined,
+                              size: 18,
+                              color: FitnessAppTheme.nearlyDarkBlue,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // ── Total amount ──
+                      Text(
+                        isEN ? 'Total outstanding' : 'ยอดค้างชำระรวม',
+                        style: TextStyle(
+                          fontFamily: FitnessAppTheme.fontName,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                          color: FitnessAppTheme.grey.withOpacity(0.7),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: <Widget>[
+                          Text(
+                            nFormat.format(total),
+                            style: TextStyle(
+                              fontFamily: FitnessAppTheme.fontName,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 36,
+                              color: isDue
+                                  ? FitnessAppTheme.nearlyDarkRed
+                                  : FitnessAppTheme.nearlyDarkBlue,
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8, bottom: 6),
+                            child: Text(
+                              isEN ? 'BHT' : 'บาท',
                               style: TextStyle(
-                                fontFamily: 'LINESeed2',
-                                fontSize: 12,
-                                color: FitnessAppTheme.nearlyDarkBlue,
+                                fontFamily: FitnessAppTheme.fontName,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 16,
+                                color: isDue
+                                    ? FitnessAppTheme.nearlyDarkRed
+                                        .withOpacity(0.7)
+                                    : FitnessAppTheme.nearlyDarkBlue
+                                        .withOpacity(0.7),
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      // ── Divider ──
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                      const SizedBox(height: 16),
+                      // ── Pay button ──
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
                         child: Container(
-                          height: 1,
-                          color: FitnessAppTheme.background,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                FitnessAppTheme.nearlyDarkBlue,
+                                HexColor('#5271ff'),
+                              ],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: FitnessAppTheme.nearlyDarkBlue
+                                    .withOpacity(0.25),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(14),
+                              onTap: () async {
+                                final preferences =
+                                    await SharedPreferences.getInstance();
+                                await preferences.setString('payby', 'PAY');
+                                Navigator.pushAndRemoveUntil(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => FitnessAppHomeScreen(
+                                      pageroot: 'PAY',
+                                    ),
+                                  ),
+                                  (route) => false,
+                                );
+                              },
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      isEN ? 'Pay service' : 'ชำระค่าบริการ',
+                                      style: const TextStyle(
+                                        fontFamily: FitnessAppTheme.fontName,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    Container(
+                                      width: 28,
+                                      height: 28,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.arrow_forward_ios_rounded,
+                                        color: Colors.white,
+                                        size: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      // ── Bottom section: today + invoices + pay ──
-                      Padding(
-                        padding: const EdgeInsets.only(
-                            left: 20, right: 20, top: 16, bottom: 16),
-                        child: Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: _miniStat(
-                                isEN ? 'Today' : 'วันนี้',
-                                nFormat.format(today),
-                                FitnessAppTheme.nearlyDarkBlue,
-                                isEN ? 'BHT' : 'บาท',
-                              ),
+                      const SizedBox(height: 16),
+                      // ── Divider ──
+                      Container(
+                        height: 1,
+                        color: FitnessAppTheme.background,
+                      ),
+                      const SizedBox(height: 16),
+                      // ── 2 sub-cards: Today + Bills ──
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _subCard(
+                              icon: Icons.calendar_today_outlined,
+                              iconBgColor: FitnessAppTheme.nearlyDarkBlue
+                                  .withOpacity(0.08),
+                              iconColor: FitnessAppTheme.nearlyDarkBlue,
+                              label: isEN ? 'Today' : 'วันนี้',
+                              value: nFormat.format(today),
+                              subValue: isEN
+                                  ? '${nFormat.format(total)} BHT'
+                                  : '${nFormat.format(total)} บาท',
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _miniStat(
-                                isEN ? 'Invoices' : 'บิล',
-                                '$invoiceCount',
-                                FitnessAppTheme.darkText,
-                                isEN ? 'items' : 'รายการ',
-                              ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _subCard(
+                              icon: Icons.receipt_outlined,
+                              iconBgColor:
+                                  FitnessAppTheme.orange.withOpacity(0.12),
+                              iconColor: FitnessAppTheme.orange,
+                              label: isEN ? 'Bill' : 'บิล',
+                              value: '$invoiceCount',
+                              subValue:
+                                  isEN ? 'Billing slip' : 'รายการค้างชำระ',
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _payButton(context, isEN),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -222,121 +314,74 @@ class DashboardSummaryView extends StatelessWidget {
     );
   }
 
-  final List<String> month = [
-    "",
-    "มกราคม",
-    "กุมภาพันธ์",
-    "มีนาคม",
-    "เมษายน",
-    "พฤษภาคม",
-    "มิถุนายน",
-    "กรกฎาคม",
-    "สิงหาคม",
-    "กันยายน",
-    "ตุลาคม",
-    "พฤศจิกายน",
-    "ธันวาคม"
-  ];
-
-  Widget _miniStat(String label, String value, Color valueColor, String unit) {
+  Widget _subCard({
+    required IconData icon,
+    required Color iconBgColor,
+    required Color iconColor,
+    required String label,
+    required String value,
+    required String subValue,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: FitnessAppTheme.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: FitnessAppTheme.grey.withOpacity(0.1),
           width: 1,
         ),
       ),
       child: Column(
-        children: [
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: FitnessAppTheme.fontName,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: FitnessAppTheme.grey.withOpacity(0.7),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: iconBgColor,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  size: 14,
+                  color: iconColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Text(
             value,
             style: TextStyle(
               fontFamily: FitnessAppTheme.fontName,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: valueColor,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            unit,
-            style: TextStyle(
-              fontFamily: 'LINESeed2',
-              fontSize: 10,
-              color: FitnessAppTheme.grey.withOpacity(0.5),
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+              color: FitnessAppTheme.darkerText,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            label,
+            subValue,
             style: TextStyle(
-              fontFamily: 'LINESeed2',
+              fontFamily: FitnessAppTheme.fontName,
+              fontWeight: FontWeight.w500,
               fontSize: 11,
               color: FitnessAppTheme.grey.withOpacity(0.6),
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _payButton(BuildContext context, bool isEN) {
-    return Container(
-      height: 68,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [HexColor('#ff8385'), HexColor('#ff4f52')],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: HexColor('#ff8385').withOpacity(0.25),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () async {
-            final preferences = await SharedPreferences.getInstance();
-            await preferences.setString('payby', 'PAY');
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                builder: (_) => FitnessAppHomeScreen(pageroot: 'PAY'),
-              ),
-              (route) => false,
-            );
-          },
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.play_arrow_rounded,
-                color: Colors.white,
-                size: 24,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                isEN ? 'Pay Now' : 'ชำระค่าบริการ',
-                style: const TextStyle(
-                  fontFamily: 'LINESeed2',
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
