@@ -138,6 +138,10 @@ class _RepaeScreenState extends State<RepaeScreen>
         setState(() {
           isLoading = false;
         });
+        // forward animation ครั้งเดียวหลังโหลดข้อมูลเสร็จ
+        if (widget.animationController?.status == AnimationStatus.dismissed) {
+          widget.animationController?.forward();
+        }
       }
     }
   }
@@ -281,8 +285,6 @@ class _RepaeScreenState extends State<RepaeScreen>
         scrollDirection: Axis.horizontal,
         itemCount: teNantModels.length,
         itemBuilder: (context, index) {
-          // Animation logic here
-          widget.animationController?.forward();
           return _buildTenantCard(index);
         },
       ),

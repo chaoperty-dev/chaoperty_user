@@ -79,9 +79,16 @@ class _TrainingProfileScreenState extends State<TrainingProfileScreen>
     } finally {
       if (mounted) {
         Future.delayed(const Duration(seconds: 1), () {
-          setState(() {
-            isLoading = false;
-          });
+          if (mounted) {
+            setState(() {
+              isLoading = false;
+            });
+            // forward animation ครั้งเดียวหลังโหลดข้อมูลเสร็จ
+            if (widget.animationController?.status ==
+                AnimationStatus.dismissed) {
+              widget.animationController?.forward();
+            }
+          }
         });
       }
     }
@@ -283,7 +290,6 @@ class _TrainingProfileScreenState extends State<TrainingProfileScreen>
           return SliverList(
             delegate: SliverChildBuilderDelegate(
               (BuildContext context, int index) {
-                widget.animationController?.forward();
                 return Padding(
                   padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
                   child: listViews[index],

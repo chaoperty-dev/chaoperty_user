@@ -168,6 +168,11 @@ class _StatusScreenState extends State<StatusScreen>
                       parent: widget.animationController!,
                       curve: Interval(0, 0.5, curve: Curves.fastOutSlowIn)));
               addAllListData();
+              // forward animation ครั้งเดียว ไม่ใช่ทุก itemBuilder
+              if (widget.animationController?.status ==
+                  AnimationStatus.dismissed) {
+                widget.animationController?.forward();
+              }
 
               scrollController.addListener(() {
                 if (scrollController.offset >= 24) {
@@ -1439,7 +1444,6 @@ class _StatusScreenState extends State<StatusScreen>
             itemCount: listViews.length,
             scrollDirection: Axis.vertical,
             itemBuilder: (BuildContext context, int index) {
-              widget.animationController?.forward();
               return listViews[index];
             },
           );
