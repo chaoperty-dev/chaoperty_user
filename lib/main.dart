@@ -268,10 +268,6 @@ class _SplashAppState extends State<SplashApp> {
   }
 
   Future<void> _initializeApp() async {
-    // โหลดข้อมูลที่จำเป็นใน background
-    // จำลองการโหลด (เอาออกได้ถ้าไม่ต้องการ)
-    await Future.delayed(const Duration(milliseconds: 500));
-
     if (mounted) {
       setState(() {
         _isReady = true;

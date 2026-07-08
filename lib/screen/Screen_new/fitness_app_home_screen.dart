@@ -141,7 +141,6 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
   }
 
   Future<bool> getData() async {
-    await Future.delayed(const Duration(milliseconds: 200));
     return true;
   }
 
