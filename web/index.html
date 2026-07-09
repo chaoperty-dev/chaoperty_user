@@ -72,12 +72,9 @@
   <meta name="msapplication-TileColor" content="#4CAF50">
   <meta name="msapplication-navbutton-color" content="#4CAF50">
   
-  <!-- ===== Preload Critical Resources =====
-       Removed Google Fonts preconnect/prefetch on 2026-07-09:
-       iOS Lockdown Mode blocks cross-origin font requests, and
-       Google Fonts is the only first-party asset fetched from an
-       external CDN. The app's brand fonts (LINESeedSansTH family)
-       are already bundled via pubspec.yaml fonts: section. -->
+  <!-- ===== Preload Critical Resources ===== -->
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <link rel="preload" href="flutter.js" as="script">
   <link rel="preload" href="main.dart.js" as="script">
   <link rel="prefetch" href="/icons/Icon-192.png">
@@ -132,11 +129,10 @@
   <!-- This script adds the flutter initialization JS code -->
   <script src="flutter.js" defer></script>
 
-  <!-- PDF.js - served locally for iOS Lockdown Mode compatibility.
-       Previously loaded from cdnjs.cloudflare.com which Lockdown Mode blocks. -->
-  <script src="pdf.min.js"></script>
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.8.335/pdf.min.js"></script>
   <script type="text/javascript">
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "pdf.worker.min.js";
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.8.335/pdf.worker.min.js";
   </script>
 
   <!-- Security & Optimization (Production Only) -->
