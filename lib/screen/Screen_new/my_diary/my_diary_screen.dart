@@ -49,6 +49,10 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   // Transection (payment intents history) - read-only list
   List<TransectionIntent> _transectionIntents = [];
   bool _loadingTransection = false;
+  // Filters
+  String _transectionStatusFilter = 'all'; // all | pending | verification | paid | failed
+  DateTime? _transectionDateFrom;
+  DateTime? _transectionDateTo;
 
   List<ImageTextModel> imgList = [];
   List<String> textList = [];
@@ -481,6 +485,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   /// /api/v1/payment/intents/state. No tap action; this is a history
   /// view of recent payment attempts and their statuses.
   Widget _buildTransectionList() {
+    final filtered = _applyTransectionFilters(_transectionIntents);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Column(
@@ -498,16 +503,19 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
               ),
             ),
           ),
+          _buildTransectionFilters(),
           if (_loadingTransection)
             const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             )
-          else if (_transectionIntents.isEmpty)
+          else if (filtered.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
               child: Text(
-                cus_lang == 'EN' ? 'No payment history' : 'ไม่มีประวัติการชำระเงิน',
+                _transectionIntents.isEmpty
+                    ? (cus_lang == 'EN' ? 'No payment history' : 'ไม่มีประวัติการชำระเงิน')
+                    : (cus_lang == 'EN' ? 'No results for the selected filter' : 'ไม่พบรายการที่ตรงกับตัวกรอง'),
                 style: TextStyle(
                   fontFamily: FitnessAppTheme.fontName,
                   color: Colors.grey[600],
@@ -516,13 +524,206 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
               ),
             )
           else
-            ..._transectionIntents
+            ...filtered
                 .take(20)
-                .map((t) => _buildTransectionCard(t))
-                .toList(),
+                .map((t) => _buildTransectionCard(t)),
         ],
       ),
     );
+  }
+
+  /// Status + date range filter row.
+  Widget _buildTransectionFilters() {
+    final isEn = cus_lang == 'EN';
+    final filters = const <(String, String)>[
+      ('all', 'All'),
+      ('pending', 'Pending'),
+      ('verification', 'Verification'),
+      ('paid', 'Paid'),
+      ('failed', 'Failed/Expired'),
+    ];
+    final fromText = _transectionDateFrom == null
+        ? (isEn ? 'From' : 'จาก')
+        : DateFormat('yyyy-MM-dd').format(_transectionDateFrom!);
+    final toText = _transectionDateTo == null
+        ? (isEn ? 'To' : 'ถึง')
+        : DateFormat('yyyy-MM-dd').format(_transectionDateTo!);
+    final hasDateFilter =
+        _transectionDateFrom != null || _transectionDateTo != null;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Status chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final f in filters) ...[
+                  _buildStatusChip(f.$1, f.$2, isEn),
+                  const SizedBox(width: 6),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Date range row
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    side: BorderSide(
+                      color: _transectionDateFrom != null
+                          ? FitnessAppTheme.nearlyDarkBlue
+                          : Colors.grey[400]!,
+                    ),
+                    foregroundColor: _transectionDateFrom != null
+                        ? FitnessAppTheme.nearlyDarkBlue
+                        : Colors.grey[700],
+                  ),
+                  icon: const Icon(Icons.calendar_today, size: 14),
+                  label: Text(
+                    fromText,
+                    style: const TextStyle(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onPressed: () => _pickTransectionDate(true),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    side: BorderSide(
+                      color: _transectionDateTo != null
+                          ? FitnessAppTheme.nearlyDarkBlue
+                          : Colors.grey[400]!,
+                    ),
+                    foregroundColor: _transectionDateTo != null
+                        ? FitnessAppTheme.nearlyDarkBlue
+                        : Colors.grey[700],
+                  ),
+                  icon: const Icon(Icons.calendar_today, size: 14),
+                  label: Text(
+                    toText,
+                    style: const TextStyle(fontSize: 12),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onPressed: () => _pickTransectionDate(false),
+                ),
+              ),
+              if (hasDateFilter)
+                IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  tooltip: isEn ? 'Clear date filter' : 'ล้างตัวกรองวันที่',
+                  onPressed: () {
+                    setState(() {
+                      _transectionDateFrom = null;
+                      _transectionDateTo = null;
+                    });
+                  },
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String value, String label, bool isEn) {
+    final selected = _transectionStatusFilter == value;
+    final color = switch (value) {
+      'paid' => Colors.green[600]!,
+      'verification' => Colors.blue[600]!,
+      'pending' => Colors.orange[600]!,
+      'failed' => Colors.red[600]!,
+      _ => Colors.grey[700]!,
+    };
+    return ChoiceChip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      selected: selected,
+      selectedColor: color.withOpacity(0.18),
+      backgroundColor: Colors.grey[200],
+      side: BorderSide(color: selected ? color : Colors.transparent),
+      labelStyle: TextStyle(
+        color: selected ? color : Colors.grey[800],
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+      ),
+      onSelected: (_) {
+        setState(() => _transectionStatusFilter = value);
+      },
+    );
+  }
+
+  Future<void> _pickTransectionDate(bool isFrom) async {
+    final initial = isFrom
+        ? (_transectionDateFrom ?? DateTime.now())
+        : (_transectionDateTo ?? DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _transectionDateFrom = picked;
+      } else {
+        _transectionDateTo = picked;
+      }
+    });
+  }
+
+  /// Apply the status + date range filters client-side.
+  List<TransectionIntent> _applyTransectionFilters(
+      List<TransectionIntent> source) {
+    Iterable<TransectionIntent> result = source;
+    final status = _transectionStatusFilter;
+    if (status != 'all') {
+      result = result.where((t) {
+        if (status == 'failed') {
+          return t.systemStatus == 'expired' ||
+              t.systemStatus == 'failed' ||
+              t.systemStatus == 'cancelled';
+        }
+        return t.systemStatus == status;
+      });
+    }
+    if (_transectionDateFrom != null) {
+      final from = DateTime(_transectionDateFrom!.year,
+          _transectionDateFrom!.month, _transectionDateFrom!.day);
+      result = result.where((t) {
+        final d = _parseIsoDate(t.createdAt);
+        return d != null && !d.isBefore(from);
+      });
+    }
+    if (_transectionDateTo != null) {
+      // inclusive end-of-day
+      final to = DateTime(_transectionDateTo!.year,
+          _transectionDateTo!.month, _transectionDateTo!.day, 23, 59, 59);
+      result = result.where((t) {
+        final d = _parseIsoDate(t.createdAt);
+        return d != null && !d.isAfter(to);
+      });
+    }
+    final filtered = result.toList();
+    filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return filtered;
+  }
+
+  /// Best-effort ISO-8601 parser; returns null for unparseable strings.
+  DateTime? _parseIsoDate(String s) {
+    if (s.isEmpty) return null;
+    try {
+      return DateTime.parse(s).toLocal();
+    } catch (_) {
+      return null;
+    }
   }
 
   Widget _buildTransectionCard(TransectionIntent t) {
