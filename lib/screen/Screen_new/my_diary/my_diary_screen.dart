@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../Constant/Myconstant.dart';
+import '../../../Constant/api_session.dart';
 import '../../../Model/GetInvoice_Model.dart';
 import '../../../Model/GetTeNant_Model.dart';
 import '../../../Model/GetTranBill_model.dart';
@@ -44,6 +45,10 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   List<TransBillModel> _TransBillModels = [];
   List<InvoiceModel> _InvoiceModels = [];
   int open_set_date = 30;
+
+  // Transection (payment intents history) - read-only list
+  List<TransectionIntent> _transectionIntents = [];
+  bool _loadingTransection = false;
 
   List<ImageTextModel> imgList = [];
   List<String> textList = [];
@@ -83,6 +88,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                   CurvedAnimation(
                       parent: widget.animationController!,
                       curve: Interval(0, 0.5, curve: Curves.fastOutSlowIn)));
+              loadTransectionIntents();
               addAllListData();
               // forward animation ครั้งเดียว ไม่ใช่ทุก itemBuilder
               if (widget.animationController?.status ==
@@ -429,6 +435,207 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     if (mounted) setState(() {});
   }
 
+  /// Load payment intent history from /api/v1/payment/intents/state.
+  /// Read-only list; failures are silent so they don't block the diary UI.
+  Future<void> loadTransectionIntents() async {
+    if (_loadingTransection) return;
+    _loadingTransection = true;
+    try {
+      final token = ApiSession.bearerToken;
+      final customerNo = custno_ ?? '';
+      final propertyNo = renTal_user ?? '';
+      if (customerNo.isEmpty) return;
+      final url = Uri.parse(
+        'https://pay-stg-api.chaoperties.com/api/v1/payment/intents/state'
+        '?customer_no=$customerNo&property_no=$propertyNo',
+      );
+      final response = await http.get(url, headers: {
+        'Accept': 'application/json',
+        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+      });
+      if (response.statusCode != 200) {
+        debugPrint('transection HTTP ${response.statusCode}');
+        return;
+      }
+      final body = json.decode(response.body);
+      final data = body is Map && body['data'] is List
+          ? body['data'] as List
+          : <dynamic>[];
+      final list = data
+          .whereType<Map<String, dynamic>>()
+          .map(TransectionIntent.fromJson)
+          .toList();
+      if (mounted) {
+        setState(() {
+          _transectionIntents = list;
+        });
+      }
+    } catch (e) {
+      debugPrint('transection error: $e');
+    } finally {
+      _loadingTransection = false;
+    }
+  }
+
+  /// Read-only list of payment intents fetched from
+  /// /api/v1/payment/intents/state. No tap action; this is a history
+  /// view of recent payment attempts and their statuses.
+  Widget _buildTransectionList() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Text(
+              cus_lang == 'EN' ? 'Payment History' : 'ประวัติการชำระเงิน',
+              style: TextStyle(
+                fontFamily: FitnessAppTheme.fontName,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: FitnessAppTheme.nearlyDarkBlue,
+              ),
+            ),
+          ),
+          if (_loadingTransection)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (_transectionIntents.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+              child: Text(
+                cus_lang == 'EN' ? 'No payment history' : 'ไม่มีประวัติการชำระเงิน',
+                style: TextStyle(
+                  fontFamily: FitnessAppTheme.fontName,
+                  color: Colors.grey[600],
+                  fontSize: 14,
+                ),
+              ),
+            )
+          else
+            ..._transectionIntents
+                .take(20)
+                .map((t) => _buildTransectionCard(t))
+                .toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransectionCard(TransectionIntent t) {
+    Color statusColor;
+    switch (t.systemStatus) {
+      case 'paid':
+        statusColor = Colors.green[600]!;
+        break;
+      case 'verification':
+        statusColor = Colors.blue[600]!;
+        break;
+      case 'pending':
+        statusColor = Colors.orange[600]!;
+        break;
+      case 'expired':
+      case 'failed':
+      case 'cancelled':
+        statusColor = Colors.red[600]!;
+        break;
+      default:
+        statusColor = Colors.grey[600]!;
+    }
+    final dateText = t.createdAt.length >= 10 ? t.createdAt.substring(0, 10) : t.createdAt;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    t.paymentIntentNo,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: Colors.black54,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor, width: 0.5),
+                  ),
+                  child: Text(
+                    t.status,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${cus_lang == 'EN' ? 'Total' : 'ยอดรวม'} ${t.total} ${cus_lang == 'EN' ? 'THB' : 'บาท'}',
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  dateText,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            if (t.accountName.isNotEmpty || t.accountNumber.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${t.accountName}${t.accountNumber.isNotEmpty ? ' • ${t.accountNumber}' : ''}',
+                style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            if (t.attacheExists && t.attacheSlipNo != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.receipt_outlined, size: 14, color: Colors.grey[700]),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      t.attacheSlipNo!,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 10,
+                        color: Colors.black54,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   void addAllListData() {
     const int count = 9;
     listViews.clear();
@@ -519,7 +726,10 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         open_set_date: open_set_date,
       ),
     );
-
+    // ✅ ตาราง Transection https://pay-stg-api.chaoperties.com/api/v1/payment/intents/state
+    listViews.add(
+      _buildTransectionList(),
+    );
     // ✅ ตารางสรุปยอดต่อสัญญา (เลขสัญญา / ยอดรอตรวจสอบ / ยอดค้างชำระ)
     listViews.add(
       _buildContractSummaryTable(),
@@ -2039,6 +2249,70 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
           },
         )
       ],
+    );
+  }
+}
+
+/// Transection (payment intent) read-only model for /payment/intents/state.
+class TransectionIntent {
+  final String uuid;
+  final String paymentIntentNo;
+  final String payedType;
+  final String customerNo;
+  final String propertyNo;
+  final String status;
+  final String systemStatus;
+  final String amount;
+  final String lateFee;
+  final String total;
+  final String channel;
+  final String softExpireAt;
+  final String createdAt;
+  final String? attacheSlipNo;
+  final bool attacheExists;
+  final String accountName;
+  final String accountNumber;
+
+  TransectionIntent({
+    required this.uuid,
+    required this.paymentIntentNo,
+    required this.payedType,
+    required this.customerNo,
+    required this.propertyNo,
+    required this.status,
+    required this.systemStatus,
+    required this.amount,
+    required this.lateFee,
+    required this.total,
+    required this.channel,
+    required this.softExpireAt,
+    required this.createdAt,
+    required this.attacheSlipNo,
+    required this.attacheExists,
+    required this.accountName,
+    required this.accountNumber,
+  });
+
+  factory TransectionIntent.fromJson(Map<String, dynamic> json) {
+    final recv = json['receiving_account'] as Map<String, dynamic>?;
+    return TransectionIntent(
+      uuid: json['uuid']?.toString() ?? '',
+      paymentIntentNo: json['payment_intent_no']?.toString() ?? '',
+      payedType: json['payed_type']?.toString() ?? '',
+      customerNo: json['customer_no']?.toString() ?? '',
+      propertyNo: json['property_no']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      systemStatus: json['system_status']?.toString() ?? '',
+      amount: json['amount']?.toString() ?? '0',
+      lateFee: json['late_fee']?.toString() ?? '0',
+      total: json['total']?.toString() ?? '0',
+      channel: json['channel']?.toString() ?? '',
+      softExpireAt: json['soft_expire_at']?.toString() ?? '',
+      createdAt: json['created_at']?.toString() ?? '',
+      attacheSlipNo: json['attache_slip_no']?.toString(),
+      attacheExists: json['attache_exists'] == true,
+      accountName: recv?['account_name_th']?.toString() ?? '',
+      accountNumber: recv?['account_number']?.toString() ?? '',
     );
   }
 }
