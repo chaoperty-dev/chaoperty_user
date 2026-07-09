@@ -66,14 +66,8 @@
   }
   </script>
   
-  <!-- ===== Mobile & App Meta =====
-       Switched from "canvaskit" to "html" on 2026-07-09: iOS Lockdown
-       Mode disables JIT and constrains WebAssembly streaming, so
-       canvaskit.wasm either fails to load or hangs in init, leaving
-       the page blank. The HTML renderer uses Canvas 2D + plain JS
-       and works under Lockdown Mode (slightly slower animations,
-       but app fully usable). -->
-  <meta name="flutter-renderer" content="html">
+  <!-- ===== Mobile & App Meta ===== -->
+  <meta name="flutter-renderer" content="canvaskit">
   <meta name="theme-color" content="#4CAF50">
   <meta name="msapplication-TileColor" content="#4CAF50">
   <meta name="msapplication-navbutton-color" content="#4CAF50">
