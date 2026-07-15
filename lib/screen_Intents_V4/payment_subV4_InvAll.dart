@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui';
+import 'package:chaoperty_user/CRC_16_Prompay/generate_Ewallet_qrcode.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsContractx_Fine_Model.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsInv_history_Model.dart';
@@ -1452,9 +1453,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
             : (ptser == '5')
                 ? generateQRCode(
                     promptPayID: qrBno, amount: amtVal) // PromptPay
-                : (ptser == '2')
-                    ? '${payimg}'
-                    : '';
+                : (ptser == '11')
+                    ? generateEwalletQRCode(
+                        promptPayID: qrBno, amount: amtVal) // PromptPay
+                    : (ptser == '2')
+                        ? '${payimg}'
+                        : '';
 
     // Store qrData for use in _QRBox and save QR
     qrDataNoIntens = qrData;
@@ -2673,7 +2677,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                           ),
                         ] else if (payment_tser == '7' ||
                             payment_tser == '6' ||
-                            payment_tser == '5') ...[
+                            payment_tser == '5' ||
+                            payment_tser == '11') ...[
                           // Image.asset(
                           //   'images/thai_qr_payment.png',
                           //   width: double.infinity,
@@ -2879,7 +2884,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                               QrErrorCorrectLevel.M,
                                           roundEdges: true,
                                         )
-                                  : (payment_tser == '5' || payment_tser == '6')
+                                  : (payment_tser == '5' ||
+                                          payment_tser == '6' ||
+                                          payment_tser == '11')
                                       ? (_isExporting && _exportQrBytes != null)
                                           ? Image.memory(_exportQrBytes!,
                                               width: 100,
@@ -4872,50 +4879,50 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                 ),
                                 const SizedBox(height: 24),
                                 // Primary: แนบหลักฐาน
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 48,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      gradient: const LinearGradient(
-                                          colors: [
-                                            Colors.indigo,
-                                            Color(0xFF283593)
-                                          ],
-                                          begin: Alignment.centerLeft,
-                                          end: Alignment.centerRight),
-                                      borderRadius: BorderRadius.circular(14),
-                                      boxShadow: [
-                                        BoxShadow(
-                                            color: Colors.indigo
-                                                .withValues(alpha: 0.35),
-                                            blurRadius: 10,
-                                            offset: const Offset(0, 4))
-                                      ],
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(14),
-                                        onTap: () async {
-                                          Navigator.of(ctx, rootNavigator: true)
-                                              .pop();
-                                        },
-                                        child: Center(
-                                            child: Text(
-                                                isEN
-                                                    ? 'Attach Proof'
-                                                    : 'แนบหลักฐาน',
-                                                style: const TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 15,
-                                                    fontWeight:
-                                                        FontWeight.bold))),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
+                                // SizedBox(
+                                //   width: double.infinity,
+                                //   height: 48,
+                                //   child: Container(
+                                //     decoration: BoxDecoration(
+                                //       gradient: const LinearGradient(
+                                //           colors: [
+                                //             Colors.indigo,
+                                //             Color(0xFF283593)
+                                //           ],
+                                //           begin: Alignment.centerLeft,
+                                //           end: Alignment.centerRight),
+                                //       borderRadius: BorderRadius.circular(14),
+                                //       boxShadow: [
+                                //         BoxShadow(
+                                //             color: Colors.indigo
+                                //                 .withValues(alpha: 0.35),
+                                //             blurRadius: 10,
+                                //             offset: const Offset(0, 4))
+                                //       ],
+                                //     ),
+                                //     child: Material(
+                                //       color: Colors.transparent,
+                                //       child: InkWell(
+                                //         borderRadius: BorderRadius.circular(14),
+                                //         onTap: () async {
+                                //           Navigator.of(ctx, rootNavigator: true)
+                                //               .pop();
+                                //         },
+                                //         child: Center(
+                                //             child: Text(
+                                //                 isEN
+                                //                     ? 'Attach Proof'
+                                //                     : 'แนบหลักฐาน',
+                                //                 style: const TextStyle(
+                                //                     color: Colors.white,
+                                //                     fontSize: 15,
+                                //                     fontWeight:
+                                //                         FontWeight.bold))),
+                                //       ),
+                                //     ),
+                                //   ),
+                                // ),
+                                // const SizedBox(height: 10),
                                 // Secondary: ชำระภายหลัง
                                 SizedBox(
                                   width: double.infinity,

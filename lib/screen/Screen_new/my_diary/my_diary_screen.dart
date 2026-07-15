@@ -1,8 +1,9 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:ui';
 
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
@@ -50,9 +51,15 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   List<TransectionIntent> _transectionIntents = [];
   bool _loadingTransection = false;
   // Filters
-  String _transectionStatusFilter = 'all'; // all | pending | verification | paid | failed
+  String _transectionStatusFilter =
+      'all'; // all | pending | verification | paid | failed
   DateTime? _transectionDateFrom;
   DateTime? _transectionDateTo;
+
+  /// Index ของ slot ที่เก็บ Transection list ใน listViews
+  /// ใช้เพื่อให้ itemBuilder เรียก _buildTransectionList() ใหม่ทุก build
+  /// เพื่อให้ข้อมูลที่โหลดเสร็จแล้วถูกแสดง (ไม่ snapshot ค้างตอน addAllListData)
+  int _transectionSlotIndex = -1;
 
   List<ImageTextModel> imgList = [];
   List<String> textList = [];
@@ -190,9 +197,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                         }
                       },
                       child: Image.network(imgList[i].image.toString(),
-                          fit: BoxFit.cover,
-                          width: 1500.0,
-                          cacheWidth: 480),
+                          fit: BoxFit.cover, width: 1500.0, cacheWidth: 480),
                     ),
                   ],
                 )),
@@ -442,105 +447,532 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   /// Load payment intent history from /api/v1/payment/intents/state.
   /// Read-only list; failures are silent so they don't block the diary UI.
   Future<void> loadTransectionIntents() async {
+    // กันเรียกซ้อน (เช่น rebuild จาก filter/refresh ติด ๆ กัน)
     if (_loadingTransection) return;
+
+    // ต้องมี customer_no จึงจะ query ได้ — ถ้ายังโหลด profile ไม่เสร็จให้ข้ามไป
+    final customerNo = custno_ ?? '';
+    if (customerNo.isEmpty) {
+      debugPrint('loadTransectionIntents: customerNo is empty, skipping');
+      return;
+    }
+    final propertyNo = renTal_user ?? '';
+
     _loadingTransection = true;
+    // แสดง spinner ทันที กรณี reload (เช่น pull-to-refresh / เปลี่ยน filter)
+    if (mounted) setState(() {});
+
     try {
-      final token = ApiSession.bearerToken;
-      final customerNo = custno_ ?? '';
-      final propertyNo = renTal_user ?? '';
-      if (customerNo.isEmpty) return;
-      final url = Uri.parse(
-        'https://pay-stg-api.chaoperties.com/api/v1/payment/intents/state'
-        '?customer_no=$customerNo&property_no=$propertyNo',
+      final response = await postPaymentIntentsState(
+        cusno: customerNo,
+        propertyno: propertyNo,
+      ).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          debugPrint('loadTransectionIntents: request timed out');
+          return null;
+        },
       );
-      final response = await http.get(url, headers: {
-        'Accept': 'application/json',
-        if (token.isNotEmpty) 'Authorization': 'Bearer $token',
-      });
-      if (response.statusCode != 200) {
-        debugPrint('transection HTTP ${response.statusCode}');
+
+      // กรณี network error / DNS fail / TLS error จาก helper → response == null
+      if (response == null) {
+        debugPrint('loadTransectionIntents: response is null (network error)');
         return;
       }
-      final body = json.decode(response.body);
-      final data = body is Map && body['data'] is List
-          ? body['data'] as List
-          : <dynamic>[];
+      // กรณี HTTP 4xx/5xx → log + ออก ไม่พยายาม parse
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint(
+          'loadTransectionIntents: HTTP ${response.statusCode} ${response.body}',
+        );
+        return;
+      }
+
+      // กัน body ไม่ใช่ JSON (เช่น HTML error page) ไม่ให้ throw ปนกับ network error
+      final dynamic decoded;
+      try {
+        decoded = json.decode(response.body);
+      } catch (e) {
+        debugPrint('loadTransectionIntents: invalid JSON body: $e');
+        return;
+      }
+
+      final data = decoded is Map && decoded['data'] is List
+          ? decoded['data'] as List
+          : const <dynamic>[];
       final list = data
           .whereType<Map<String, dynamic>>()
           .map(TransectionIntent.fromJson)
           .toList();
+
       if (mounted) {
         setState(() {
           _transectionIntents = list;
         });
       }
-    } catch (e) {
-      debugPrint('transection error: $e');
+    } catch (e, stack) {
+      debugPrint('loadTransectionIntents error: $e');
+      debugPrint('$stack');
     } finally {
       _loadingTransection = false;
+      // ปิด spinner เสมอเมื่อโหลดจบ (ทั้งสำเร็จ/ล้มเหลว) กันวง spinner ค้าง
+      if (mounted) setState(() {});
     }
   }
 
-  /// Read-only list of payment intents fetched from
-  /// /api/v1/payment/intents/state. No tap action; this is a history
-  /// view of recent payment attempts and their statuses.
+  /// ✅ UI แบบเดียวกับ _buildContractStatusTable():
+  /// การ์ดขาวมี shadow + header + filter + table rows alternating + total row
   Widget _buildTransectionList() {
     final filtered = _applyTransectionFilters(_transectionIntents);
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            child: Text(
-              cus_lang == 'EN' ? 'Payment History' : 'ประวัติการชำระเงิน',
-              style: TextStyle(
-                fontFamily: FitnessAppTheme.fontName,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: FitnessAppTheme.nearlyDarkBlue,
-              ),
-            ),
+    final isEN = cus_lang == 'EN';
+    final nFormat = NumberFormat("#,##0.00", "en_US");
+
+    // คำนวณยอดรวมจากรายการที่ผ่าน filter (แสดง max 50 รายการ)
+    // หมายเหตุ: ใช้ spread ใน Column แทน ListView.builder เพื่อหลีกเลี่ยง
+    // "Assertion failed: window.dart:99:12" จาก nested scrollable
+    // (ListView.builder ซ้อน ListView.builder)
+    const int maxVisible = 50;
+    final visible = filtered.take(maxVisible).toList();
+    double totalAmount = 0.0;
+    for (final t in visible) {
+      totalAmount += double.tryParse(t.total) ?? 0.0;
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: FitnessAppTheme.grey.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+            spreadRadius: 1,
           ),
-          _buildTransectionFilters(),
-          if (_loadingTransection)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-            )
-          else if (filtered.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-              child: Text(
-                _transectionIntents.isEmpty
-                    ? (cus_lang == 'EN' ? 'No payment history' : 'ไม่มีประวัติการชำระเงิน')
-                    : (cus_lang == 'EN' ? 'No results for the selected filter' : 'ไม่พบรายการที่ตรงกับตัวกรอง'),
-                style: TextStyle(
-                  fontFamily: FitnessAppTheme.fontName,
-                  color: Colors.grey[600],
-                  fontSize: 14,
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ===== Header =====
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+              decoration: BoxDecoration(
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+                border: Border(
+                  bottom: BorderSide(
+                    color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.1),
+                    width: 1,
+                  ),
                 ),
               ),
-            )
-          else
-            ...filtered
-                .take(20)
-                .map((t) => _buildTransectionCard(t)),
-        ],
+              child: Row(
+                children: [
+                  Icon(Icons.receipt_long_outlined,
+                      size: 18, color: FitnessAppTheme.nearlyDarkBlue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      isEN ? 'Payment History' : 'ประวัติการชำระเงิน',
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: FitnessAppTheme.nearlyDarkBlue,
+                      ),
+                    ),
+                  ),
+                  if (!_loadingTransection && _transectionIntents.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: FitnessAppTheme.nearlyDarkBlue,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${_transectionIntents.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: Font_.Fonts_T,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // ===== Filter section =====
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+                ),
+              ),
+              child: _buildTransectionFilters(),
+            ),
+
+            // ===== Body (loading / empty / table) =====
+            if (_loadingTransection)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (filtered.isEmpty)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.inbox_outlined,
+                          size: 42, color: Colors.grey.shade400),
+                      const SizedBox(height: 8),
+                      Text(
+                        _transectionIntents.isEmpty
+                            ? (isEN
+                                ? 'No payment history'
+                                : 'ไม่มีประวัติการชำระเงิน')
+                            : (isEN
+                                ? 'No results for the selected filter'
+                                : 'ไม่พบรายการที่ตรงกับตัวกรอง'),
+                        style: TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ===== Table Header =====
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      border: Border(
+                        bottom:
+                            BorderSide(color: Colors.grey.shade200, width: 1),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            isEN ? 'Payment No.' : 'เลขที่',
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            isEN ? 'Status' : 'สถานะ',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            isEN ? 'Amount' : 'ยอดรวม',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            isEN ? 'Date' : 'วันที่',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // ===== Table Rows (max 50 rows - ใช้ Column + spread เพื่อหลีกเลี่ยง nested scrollable) =====
+                  ...visible.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final t = entry.value;
+                    final statusColor = _statusColor(t.systemStatus);
+                    final dateText = t.createdAt.length >= 10
+                        ? t.createdAt.substring(0, 10)
+                        : t.createdAt;
+                    final hasMeta = t.accountName.isNotEmpty ||
+                        t.accountNumber.isNotEmpty ||
+                        (t.attacheExists && t.attacheSlipNo != null);
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: i.isEven ? Colors.white : Colors.grey.shade50,
+                        border: Border(
+                          bottom:
+                              BorderSide(color: Colors.grey.shade100, width: 1),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Text(
+                              t.paymentIntentNo,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Container(
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: statusColor.withOpacity(0.4),
+                                      width: 0.5),
+                                ),
+                                child: Text(
+                                  t.status.isNotEmpty
+                                      ? t.status
+                                      : (isEN
+                                          ? _statusLabelEN(t.systemStatus)
+                                          : _statusShortLabelTH(
+                                              t.systemStatus)),
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: statusColor,
+                                    fontFamily: Font_.Fonts_T,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              nFormat.format(double.tryParse(t.total) ?? 0),
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontFamily: Font_.Fonts_T,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: FitnessAppTheme.darkerText,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              dateText,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontFamily: Font_.Fonts_T,
+                                fontSize: 11,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  // ===== Total Row =====
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            isEN ? 'Total' : 'รวม',
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: FitnessAppTheme.nearlyDarkBlue,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            '${visible.length} ${isEN ? 'items' : 'รายการ'}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            nFormat.format(totalAmount),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: FitnessAppTheme.nearlyDarkBlue,
+                            ),
+                          ),
+                        ),
+                        const Expanded(flex: 2, child: SizedBox()),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  /// Status + date range filter row.
+  /// สีของ badge ตาม system_status
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'paid':
+        return Colors.green[600]!;
+      case 'verification':
+        return Colors.blue[600]!;
+      case 'pending':
+        return Colors.orange[600]!;
+      case 'expired':
+      case 'failed':
+      case 'cancelled':
+        return Colors.red[600]!;
+      default:
+        return Colors.grey[600]!;
+    }
+  }
+
+  String _statusLabelEN(String status) {
+    switch (status) {
+      case 'paid':
+        return 'Paid';
+      case 'verification':
+        return 'Verifying';
+      case 'pending':
+        return 'Pending';
+      case 'expired':
+        return 'Expired';
+      case 'failed':
+        return 'Failed';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status;
+    }
+  }
+
+  String _statusLabelTH(String status) {
+    switch (status) {
+      case 'paid':
+        return 'ชำระแล้ว';
+      case 'verification':
+        return 'รอตรวจ';
+      case 'pending':
+        return 'รอชำระ';
+      case 'expired':
+        return 'หมดอายุ';
+      case 'failed':
+        return 'ล้มเหลว';
+      case 'cancelled':
+        return 'ยกเลิก';
+      default:
+        return status;
+    }
+  }
+
+  // สำหรับ badge ใน table (ใช้คำสั้นเพื่อไม่ wrap)
+  String _statusShortLabelTH(String status) {
+    switch (status) {
+      case 'paid':
+        return 'จ่ายแล้ว';
+      case 'verification':
+        return 'รอตรวจ';
+      case 'pending':
+        return 'รอจ่าย';
+      case 'expired':
+        return 'หมดอายุ';
+      case 'failed':
+        return 'ล้มเหลว';
+      case 'cancelled':
+        return 'ยกเลิก';
+      default:
+        return status;
+    }
+  }
+
+  /// Filter row ใหม่: ใช้ Dropdown สำหรับสถานะ (ลดรก ประหยัดพื้นที่)
   Widget _buildTransectionFilters() {
     final isEn = cus_lang == 'EN';
-    final filters = const <(String, String)>[
-      ('all', 'All'),
-      ('pending', 'Pending'),
-      ('verification', 'Verification'),
-      ('paid', 'Paid'),
-      ('failed', 'Failed/Expired'),
+    final filters = const <(String, String, Color)>[
+      ('all', 'All', Color(0xFF616161)),
+      ('pending', 'Pending', Color(0xFFFB8C00)),
+      ('verification', 'Verification', Color(0xFF1E88E5)),
+      ('paid', 'Paid', Color(0xFF43A047)),
+      ('failed', 'Failed/Expired', Color(0xFFE53935)),
     ];
     final fromText = _transectionDateFrom == null
         ? (isEn ? 'From' : 'จาก')
@@ -550,85 +982,145 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         : DateFormat('yyyy-MM-dd').format(_transectionDateTo!);
     final hasDateFilter =
         _transectionDateFrom != null || _transectionDateTo != null;
+
+    // หาสีของ dropdown ปัจจุบัน
+    Color selectedColor = filters
+        .firstWhere((f) => f.$1 == _transectionStatusFilter,
+            orElse: () => ('all', 'All', const Color(0xFF616161)))
+        .$3;
+
+    // ✅ รวม Status Dropdown + Date pickers ไว้ใน Row เดียวกัน (ประหยัดพื้นที่)
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Status chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (final f in filters) ...[
-                  _buildStatusChip(f.$1, f.$2, isEn),
-                  const SizedBox(width: 6),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 6),
-          // Date range row
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    side: BorderSide(
-                      color: _transectionDateFrom != null
-                          ? FitnessAppTheme.nearlyDarkBlue
-                          : Colors.grey[400]!,
-                    ),
-                    foregroundColor: _transectionDateFrom != null
-                        ? FitnessAppTheme.nearlyDarkBlue
-                        : Colors.grey[700],
-                  ),
-                  icon: const Icon(Icons.calendar_today, size: 14),
-                  label: Text(
-                    fromText,
-                    style: const TextStyle(fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onPressed: () => _pickTransectionDate(true),
+          // ===== Status Dropdown (flex 2) =====
+          Expanded(
+            flex: 2,
+            child: Container(
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: selectedColor.withOpacity(0.4),
+                  width: 0.8,
                 ),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    side: BorderSide(
-                      color: _transectionDateTo != null
-                          ? FitnessAppTheme.nearlyDarkBlue
-                          : Colors.grey[400]!,
-                    ),
-                    foregroundColor: _transectionDateTo != null
-                        ? FitnessAppTheme.nearlyDarkBlue
-                        : Colors.grey[700],
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _transectionStatusFilter,
+                  isExpanded: true,
+                  icon: Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 18, color: selectedColor),
+                  style: TextStyle(
+                    fontFamily: Font_.Fonts_T,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: FitnessAppTheme.darkerText,
                   ),
-                  icon: const Icon(Icons.calendar_today, size: 14),
-                  label: Text(
-                    toText,
-                    style: const TextStyle(fontSize: 12),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onPressed: () => _pickTransectionDate(false),
-                ),
-              ),
-              if (hasDateFilter)
-                IconButton(
-                  icon: const Icon(Icons.clear, size: 18),
-                  tooltip: isEn ? 'Clear date filter' : 'ล้างตัวกรองวันที่',
-                  onPressed: () {
-                    setState(() {
-                      _transectionDateFrom = null;
-                      _transectionDateTo = null;
-                    });
+                  items: filters.map((f) {
+                    return DropdownMenuItem<String>(
+                      value: f.$1,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: f.$3,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              f.$2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _transectionStatusFilter = value);
+                    }
                   },
                 ),
-            ],
+              ),
+            ),
           ),
+          const SizedBox(width: 8),
+          // ===== Date Range Picker (flex 3) =====
+          Expanded(
+            flex: 3,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                side: BorderSide(
+                  color: hasDateFilter
+                      ? FitnessAppTheme.nearlyDarkBlue.withOpacity(0.4)
+                      : Colors.grey.shade300,
+                  width: 0.8,
+                ),
+                foregroundColor: hasDateFilter
+                    ? FitnessAppTheme.nearlyDarkBlue
+                    : Colors.grey.shade700,
+                backgroundColor: hasDateFilter
+                    ? FitnessAppTheme.nearlyDarkBlue.withOpacity(0.04)
+                    : Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                minimumSize: const Size(0, 34),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.event_outlined,
+                    size: 14,
+                    color: hasDateFilter
+                        ? FitnessAppTheme.nearlyDarkBlue
+                        : Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      hasDateFilter
+                          ? '$fromText → $toText'
+                          : (isEn ? 'Select date range' : 'เลือกช่วงวันที่'),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                ],
+              ),
+              onPressed: _pickTransectionDateRange,
+            ),
+          ),
+          if (hasDateFilter)
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              icon: const Icon(Icons.clear, size: 16),
+              tooltip: isEn ? 'Clear date filter' : 'ล้างตัวกรองวันที่',
+              onPressed: () {
+                setState(() {
+                  _transectionDateFrom = null;
+                  _transectionDateTo = null;
+                });
+              },
+            ),
         ],
       ),
     );
@@ -659,23 +1151,25 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     );
   }
 
-  Future<void> _pickTransectionDate(bool isFrom) async {
-    final initial = isFrom
-        ? (_transectionDateFrom ?? DateTime.now())
-        : (_transectionDateTo ?? DateTime.now());
-    final picked = await showDatePicker(
+  /// เปิด date range picker เลือกทั้ง from และ to ในหน้าต่างเดียว (1 ครั้ง)
+  Future<void> _pickTransectionDateRange() async {
+    final today = DateTime.now();
+    final initial = _transectionDateFrom != null && _transectionDateTo != null
+        ? DateTimeRange(start: _transectionDateFrom!, end: _transectionDateTo!)
+        : DateTimeRange(
+            start: today.subtract(const Duration(days: 30)), end: today);
+    final picked = await showDateRangePicker(
       context: context,
-      initialDate: initial,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: today.add(const Duration(days: 365)),
+      initialDateRange: initial,
     );
     if (picked == null) return;
     setState(() {
-      if (isFrom) {
-        _transectionDateFrom = picked;
-      } else {
-        _transectionDateTo = picked;
-      }
+      _transectionDateFrom =
+          DateTime(picked.start.year, picked.start.month, picked.start.day);
+      _transectionDateTo = DateTime(
+          picked.end.year, picked.end.month, picked.end.day, 23, 59, 59);
     });
   }
 
@@ -704,8 +1198,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     }
     if (_transectionDateTo != null) {
       // inclusive end-of-day
-      final to = DateTime(_transectionDateTo!.year,
-          _transectionDateTo!.month, _transectionDateTo!.day, 23, 59, 59);
+      final to = DateTime(_transectionDateTo!.year, _transectionDateTo!.month,
+          _transectionDateTo!.day, 23, 59, 59);
       result = result.where((t) {
         final d = _parseIsoDate(t.createdAt);
         return d != null && !d.isAfter(to);
@@ -746,7 +1240,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       default:
         statusColor = Colors.grey[600]!;
     }
-    final dateText = t.createdAt.length >= 10 ? t.createdAt.substring(0, 10) : t.createdAt;
+    final dateText =
+        t.createdAt.length >= 10 ? t.createdAt.substring(0, 10) : t.createdAt;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
@@ -772,7 +1267,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: statusColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(12),
@@ -795,7 +1291,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
               children: [
                 Text(
                   '${cus_lang == 'EN' ? 'Total' : 'ยอดรวม'} ${t.total} ${cus_lang == 'EN' ? 'THB' : 'บาท'}',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600),
                 ),
                 Text(
                   dateText,
@@ -815,7 +1312,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
               const SizedBox(height: 4),
               Row(
                 children: [
-                  Icon(Icons.receipt_outlined, size: 14, color: Colors.grey[700]),
+                  Icon(Icons.receipt_outlined,
+                      size: 14, color: Colors.grey[700]),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -928,9 +1426,11 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       ),
     );
     // ✅ ตาราง Transection https://pay-stg-api.chaoperties.com/api/v1/payment/intents/state
-    listViews.add(
-      _buildTransectionList(),
-    );
+    // ⚠️ ใช้ placeholder + slot index แทนการเรียก _buildTransectionList() ตรงๆ
+    // เพื่อให้ itemBuilder ใน getMainListViewUI() เรียก _buildTransectionList() ใหม่ทุกครั้ง
+    // ไม่อย่างนั้น widget จะถูก snapshot ตอน addAllListData() และไม่แสดงข้อมูลหลัง load เสร็จ
+    _transectionSlotIndex = listViews.length;
+    listViews.add(const SizedBox.shrink());
     // ✅ ตารางสรุปยอดต่อสัญญา (เลขสัญญา / ยอดรอตรวจสอบ / ยอดค้างชำระ)
     listViews.add(
       _buildContractSummaryTable(),
@@ -1948,6 +2448,12 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             itemCount: listViews.length,
             scrollDirection: Axis.vertical,
             itemBuilder: (BuildContext context, int index) {
+              // ✅ Slot พิเศษ: เรียก _buildTransectionList() ใหม่ทุกครั้ง
+              // เพื่อให้ข้อมูลที่ load เสร็จแล้วมาแสดงทันที (ไม่ snapshot)
+              // เพราะ _transectionIntents ถูกอัปเดตผ่าน setState ใน loadTransectionIntents()
+              if (index == _transectionSlotIndex) {
+                return _buildTransectionList();
+              }
               return listViews[index];
             },
           );

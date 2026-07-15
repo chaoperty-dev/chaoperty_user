@@ -119,6 +119,8 @@ class MyHeadersIntents2 {
 // }
 
 class MyconfigIntents {
-  var domainIntents = 'https://pay-stg-api.chaoperties.com/api';
+  var domainIntents = 'https://pay-api.chaoperties.com/api';
+
+  // 'https://pay-stg-api.chaoperties.com/api';
   // var domainIntents = 'http://192.168.1.89:3004/api';
 }

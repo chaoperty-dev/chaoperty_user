@@ -250,7 +250,7 @@ class _BodyContent extends StatelessWidget {
                                 ),
                                 Padding(
                                   padding:
-                                      const EdgeInsets.only(left: 8, bottom: 8),
+                                      const EdgeInsets.only(left: 4, bottom: 3),
                                   child: Text(
                                     cuslangs == 'EN' ? 'BHT' : 'บาท',
                                     textAlign: TextAlign.center,
