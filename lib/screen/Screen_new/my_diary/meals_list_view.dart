@@ -73,7 +73,9 @@ class _MealsListViewState extends State<MealsListView>
             transform: Matrix4.translationValues(
                 0.0, 30 * (1.0 - widget.mainScreenAnimation!.value), 0.0),
             child: Container(
-              height: 205,
+              // ✅ FIX: เพิ่ม height 205 → 240 ให้ container parent
+              // สอดคล้องกับ card height ใหม่ (เดิม 206 → 240)
+              height: 240,
               width: double.infinity,
               child: ScrollConfiguration(
                 behavior:
@@ -163,21 +165,29 @@ class MealsView extends StatelessWidget {
         ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 11, color: FitnessAppTheme.grey.withOpacity(0.7)),
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Icon(icon,
+                size: 11, color: FitnessAppTheme.grey.withOpacity(0.7)),
+          ),
           const SizedBox(width: 4),
-          // ✅ FIX: Expanded บังคับ max width ให้ AutoSizeText
-          // เพื่อให้ ellipsis ทำงาน ไม่ overflow ออกขอบ card
+          // ✅ FIX: Expanded บังคับ max width ให้ AutoSizeText + maxLines:2
+          // อนุญาตให้ wrap ได้ 2 บรรทัด เพื่อให้เห็นข้อความเต็ม
+          // (ก่อนหน้านี้ maxLines:1 + ellipsis ทำให้อ่านไม่ออก)
           Expanded(
             child: AutoSizeText(
               label,
-              minFontSize: 6,
+              minFontSize: 8,
               maxFontSize: 11,
-              maxLines: 1,
+              maxLines: 2,
+              softWrap: true,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: FitnessAppTheme.fontName,
                 fontWeight: FontWeight.w600,
+                height: 1.2,
                 color: FitnessAppTheme.grey.withOpacity(0.85),
               ),
             ),
@@ -231,7 +241,10 @@ class MealsView extends StatelessWidget {
                 100 * (1.0 - animation!.value), 0.0, 0.0),
             child: SizedBox(
               width: 140,
-              height: 206,
+              // ✅ FIX: เพิ่ม height 206 → 240 รองรับ chip ที่ wrap 2 lines
+              // (ป้องกัน "BOTTOM OVERFLOWED BY 14-15 PIXELS" ที่เกิดจาก
+              //  chip _infoChip() มี wrap 2 บรรทัด ทำให้ content height เกิน)
+              height: 240,
               child: Stack(
                 children: <Widget>[
                   Padding(
