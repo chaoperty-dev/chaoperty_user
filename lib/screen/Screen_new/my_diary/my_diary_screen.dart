@@ -555,6 +555,10 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         borderRadius: BorderRadius.circular(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          // ✅ FIX: mainAxisSize.min ป้องกัน Column ขยายเต็ม unbounded height
+          // จาก ListView.builder item ที่ทำให้เกิด window.dart:99:12 assertion
+          // ใน Flutter Web (item มี bounded width แต่ unbounded height)
+          mainAxisSize: MainAxisSize.min,
           children: [
             // ===== Header =====
             Container(
@@ -575,14 +579,36 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                       size: 18, color: FitnessAppTheme.nearlyDarkBlue),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
-                      isEN ? 'Payment History' : 'ประวัติการชำระเงิน',
-                      style: TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: FitnessAppTheme.nearlyDarkBlue,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isEN
+                              ? 'Payment Verification/Confirmation History'
+                              : 'ประวัติรอยืนยัน/ตรวจสอบการชำระ',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: FitnessAppTheme.nearlyDarkBlue,
+                          ),
+                        ),
+                        Text(
+                          isEN
+                              ? '#note: The displayed amount may include fines.'
+                              : '#หมายเหตุ:ยอดที่แสดงอาจเป็นยอดที่รวมค่าปรับแล้ว',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 10,
+                            // fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   if (!_loadingTransection && _transectionIntents.isNotEmpty)
@@ -659,6 +685,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             else
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                // ✅ FIX: mainAxisSize.min เพื่อให้ Column ขนาดเท่าลูกๆ พอดี
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   // ===== Table Header =====
                   Container(
@@ -766,36 +794,34 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                           ),
                           Expanded(
                             flex: 2,
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Container(
-                                margin:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: statusColor.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                      color: statusColor.withOpacity(0.4),
-                                      width: 0.5),
-                                ),
-                                child: Text(
-                                  t.status.isNotEmpty
-                                      ? t.status
-                                      : (isEN
-                                          ? _statusLabelEN(t.systemStatus)
-                                          : _statusShortLabelTH(
-                                              t.systemStatus)),
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: statusColor,
-                                    fontFamily: Font_.Fonts_T,
-                                  ),
+                            // ✅ FIX: ลบ FittedBox ออก — Text ใช้ maxLines/ellipsis จัดการ overflow ได้
+                            // FittedBox + loose constraints จาก Column (unbounded height)
+                            // ใน ListView.builder item เป็นสาเหตุของ window.dart:99:12 assertion
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: statusColor.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: statusColor.withOpacity(0.4),
+                                    width: 0.5),
+                              ),
+                              child: Text(
+                                t.status.isNotEmpty
+                                    ? t.status
+                                    : (isEN
+                                        ? _statusLabelEN(t.systemStatus)
+                                        : _statusShortLabelTH(t.systemStatus)),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: statusColor,
+                                  fontFamily: Font_.Fonts_T,
                                 ),
                               ),
                             ),
@@ -1572,13 +1598,35 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                   Icon(Icons.table_chart_outlined,
                       size: 18, color: FitnessAppTheme.nearlyDarkBlue),
                   const SizedBox(width: 10),
-                  Text(
-                    isEN ? 'Contract Payment Summary' : 'สรุปยอดชำระต่อสัญญา',
-                    style: TextStyle(
-                      fontFamily: Font_.Fonts_T,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: FitnessAppTheme.nearlyDarkBlue,
+                  SizedBox(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isEN
+                              ? 'Contract Payment Summary'
+                              : 'สรุปยอดชำระต่อสัญญา',
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: FitnessAppTheme.nearlyDarkBlue,
+                          ),
+                        ),
+                        Text(
+                          isEN
+                              ? '#note:The displayed amount does not include fines'
+                              : '#หมายเหตุ:ยอดที่แสดงเป็นยอดที่ยังไม่รวมค่าปรับ',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 10,
+                            // fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
