@@ -149,6 +149,10 @@ class MealsView extends StatelessWidget {
   // แบดจ์ข้อมูล (โซน/พื้นที่/ประเภท) แบบมีไอคอน ดูเรียบร้อยขึ้น
   Widget _infoChip(IconData icon, String label) {
     return Container(
+      // ✅ FIX: width:double.infinity ทำให้ chip ขยายเต็มความกว้างของ Column parent
+      // เพื่อจำกัด max width ของ Expanded (AutoSizeText) ป้องกัน
+      // "RenderFlex overflowed by N pixels on the right"
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
       decoration: BoxDecoration(
         color: FitnessAppTheme.background,
@@ -159,20 +163,23 @@ class MealsView extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 11, color: FitnessAppTheme.grey.withOpacity(0.7)),
           const SizedBox(width: 4),
-          AutoSizeText(
-            label,
-            minFontSize: 6,
-            maxFontSize: 11,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: FitnessAppTheme.fontName,
-              fontWeight: FontWeight.w600,
-              color: FitnessAppTheme.grey.withOpacity(0.85),
+          // ✅ FIX: Expanded บังคับ max width ให้ AutoSizeText
+          // เพื่อให้ ellipsis ทำงาน ไม่ overflow ออกขอบ card
+          Expanded(
+            child: AutoSizeText(
+              label,
+              minFontSize: 6,
+              maxFontSize: 11,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontFamily: FitnessAppTheme.fontName,
+                fontWeight: FontWeight.w600,
+                color: FitnessAppTheme.grey.withOpacity(0.85),
+              ),
             ),
           ),
         ],
