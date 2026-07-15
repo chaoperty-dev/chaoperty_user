@@ -121,6 +121,73 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
         }),
         child: Scaffold(
           backgroundColor: Colors.transparent,
+          // ✅ FIX: เพิ่ม AppBar พร้อมปุ่มย้อนกลับ
+          // แสดงเฉพาะเมื่อ widget.pageroot != null (เช้า sub-page
+          // ผ่าน quick action: PAY/PAYMENT/MITER/INFO/etc.)
+          // เพื่อให้ผู้ใช้กดปุ่ม "ประวัติบิล" หรือ "มิเตอร์" แล้วย้อนกลับได้
+          appBar: (widget.pageroot != null && widget.pageroot != 'null')
+              ? AppBar(
+                  backgroundColor: Colors.white,
+                  elevation: 0.5,
+                  shadowColor: Colors.grey.withOpacity(0.2),
+                  leadingWidth: 56,
+                  leading: Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: () {
+                          if (Navigator.canPop(context)) {
+                            Navigator.pop(context);
+                          }
+                        },
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: FitnessAppTheme.nearlyWhite,
+                            shape: BoxShape.circle,
+                            boxShadow: <BoxShadow>[
+                              BoxShadow(
+                                color: FitnessAppTheme.grey.withOpacity(0.3),
+                                offset: const Offset(1.5, 1.5),
+                                blurRadius: 6.0,
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            Icons.arrow_back_ios_new,
+                            size: 18,
+                            color: FitnessAppTheme.darkerText,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    widget.pageroot == 'PAYMENT'
+                        ? (cus_lang == 'EN'
+                            ? 'Payment Receipt / Verification'
+                            : 'ประวัติรอยืนยัน/ตรวจสอบการชำระ')
+                        : widget.pageroot == 'MITER'
+                            ? (cus_lang == 'EN' ? 'Meter' : 'มิเตอร์')
+                            : widget.pageroot == 'PAY'
+                                ? (cus_lang == 'EN' ? 'Pay' : 'ชำระ')
+                                : widget.pageroot == 'INFO'
+                                    ? (cus_lang == 'EN' ? 'More' : 'อื่นๆ')
+                                    : '',
+                    style: TextStyle(
+                      fontFamily: FitnessAppTheme.fontName,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      color: FitnessAppTheme.darkerText,
+                    ),
+                  ),
+                  centerTitle: true,
+                )
+              : null,
           body: FutureBuilder<bool>(
             future: getData(),
             builder: (context, snapshot) {
@@ -154,8 +221,7 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.95), // Opaque-ish instead of blur
         border: Border(
-            top: BorderSide(
-                color: Colors.grey.withOpacity(0.3), width: 0.5)),
+            top: BorderSide(color: Colors.grey.withOpacity(0.3), width: 0.5)),
         boxShadow: [
           BoxShadow(
             color: Colors.grey.withOpacity(0.1),
@@ -168,46 +234,45 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-                padding: EdgeInsets.only(
-                    top: 10,
-                    bottom: 10 + MediaQuery.of(context).padding.bottom),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildBottomBarItem(
-                      0,
-                      _currentIndex == 0
-                          ? 'assets/fitness_app/tab_1s.png'
-                          : 'assets/fitness_app/tab_1.png',
-                      cus_lang == 'EN' ? 'Home' : 'หน้าหลัก',
-                    ),
-                    _buildBottomBarItem(
-                      1,
-                      _currentIndex == 1
-                          ? 'assets/fitness_app/tab_2s.png'
-                          : 'assets/fitness_app/tab_2.png',
-                      cus_lang == 'EN' ? 'Payment' : 'การชำระ',
-                    ),
-                    _buildBottomBarItem(
-                      2,
-                      _currentIndex == 2
-                          ? 'assets/fitness_app/tab_1sx.png'
-                          : 'assets/fitness_app/tab_1x.png',
-                      cus_lang == 'EN' ? 'Other' : 'อื่นๆ',
-                    ),
-                    _buildBottomBarItem(
-                      3,
-                      _currentIndex == 3
-                          ? 'assets/fitness_app/tab_3s.png'
-                          : 'assets/fitness_app/tab_3.png',
-                      cus_lang == 'EN' ? 'Settings' : 'ตั้งค่า',
-                    ),
-                  ],
+            padding: EdgeInsets.only(
+                top: 10, bottom: 10 + MediaQuery.of(context).padding.bottom),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildBottomBarItem(
+                  0,
+                  _currentIndex == 0
+                      ? 'assets/fitness_app/tab_1s.png'
+                      : 'assets/fitness_app/tab_1.png',
+                  cus_lang == 'EN' ? 'Home' : 'หน้าหลัก',
                 ),
-              ),
-            ],
+                _buildBottomBarItem(
+                  1,
+                  _currentIndex == 1
+                      ? 'assets/fitness_app/tab_2s.png'
+                      : 'assets/fitness_app/tab_2.png',
+                  cus_lang == 'EN' ? 'Payment' : 'การชำระ',
+                ),
+                _buildBottomBarItem(
+                  2,
+                  _currentIndex == 2
+                      ? 'assets/fitness_app/tab_1sx.png'
+                      : 'assets/fitness_app/tab_1x.png',
+                  cus_lang == 'EN' ? 'Other' : 'อื่นๆ',
+                ),
+                _buildBottomBarItem(
+                  3,
+                  _currentIndex == 3
+                      ? 'assets/fitness_app/tab_3s.png'
+                      : 'assets/fitness_app/tab_3.png',
+                  cus_lang == 'EN' ? 'Settings' : 'ตั้งค่า',
+                ),
+              ],
+            ),
           ),
-      );
+        ],
+      ),
+    );
   }
 
   Widget _buildBottomBarItem(int index, String iconPath, String label) {
