@@ -729,9 +729,9 @@ class _InvioceScreenState extends State<InvioceScreen>
                                     : 'ใบแจ้งหนี้/ใบวางบิล',
                                 style: TextStyle(
                                   fontFamily: FitnessAppTheme.fontName,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 22 + 6 - 6 * topBarOpacity,
-                                  letterSpacing: 1.2,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 22,
+                                  letterSpacing: 0.4,
                                   color: FitnessAppTheme.darkerText,
                                 ),
                               ),
@@ -771,9 +771,9 @@ class _SectionTitle extends StatelessWidget {
       child: Text(
         title,
         style: const TextStyle(
-          fontFamily: FitnessAppTheme.fontName,
-          fontWeight: FontWeight.w700,
-          fontSize: 18,
+          fontFamily: Font_.Fonts_T,
+          fontWeight: FontWeight.bold,
+          fontSize: 15,
           color: Colors.black87,
         ),
       ),

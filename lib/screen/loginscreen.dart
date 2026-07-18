@@ -134,6 +134,8 @@ class _LoginScreenState extends State<LoginScreen> {
       html.window.removeEventListener('message', _messageHandler);
       _messageHandler = null;
     }
+    userController.dispose();
+    passwordController.dispose();
     super.dispose();
   }
 
@@ -389,669 +391,593 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
 
+    final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
     return Scaffold(
-      backgroundColor: FitnessAppTheme.background,
-      body: Stack(
-        children: [
-          // Background design elements (optional, can be simple color)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: MediaQuery.of(context).size.height * 0.4,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white,
-                    const Color.fromARGB(255, 228, 229, 243), // Lighter tint
-                    const Color.fromARGB(255, 193, 195, 224), // Original Color
-                    const Color.fromARGB(255, 215, 217, 238), // Soft transition
-                    Colors.white,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(40),
-                  bottomRight: Radius.circular(40),
-                ),
-              ),
-            ),
+      // เพิ่มบรรทัดนี้เข้าไป เพื่อปิดการดันหน้าจอของ Flutter
+      resizeToAvoidBottomInset: false,
+      backgroundColor: Colors.white, // สีพื้นหลังหลัก
+      // ใช้ Container ครอบทั้งหน้าจอเพื่อทำพื้นหลัง Gradient
+      body: Container(
+        height: double.infinity,
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color.fromARGB(255, 193, 195, 224), // สีเข้มด้านบน
+              Color.fromARGB(255, 228, 229, 243), // สีอ่อนตรงกลาง
+              Colors.white, // ตัดเป็นสีขาวด้านล่าง
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            stops: [0.0, 0.35, 0.5], // ควบคุมให้สีสิ้นสุดที่ประมาณครึ่งจอ
           ),
-
-          // Privacy Policy Button (Top Right)
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            right: 16,
-            child: InkWell(
-              onTap: () async {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => Privacy_Policy(
-                          Url:
-                              'https://chaoperties.com/chao_api/Awaitdownload/Privacy_Policy.pdf',
-                          title: ' เช่าเพอร์ตี้ Privacy Policy')),
-                );
-              },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.privacy_tip_outlined,
-                      color: Colors.black,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Privacy Policy',
-                      style: TextStyle(
-                        fontFamily: FitnessAppTheme.fontName,
-                        fontSize: 12,
-                        color: Colors.black,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Main Login Card
-          Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 500),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Card(
-                  elevation: 8,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(24),
+        ),
+        child: SafeArea(
+          // เปลี่ยนจาก Center มาใช้ LayoutBuilder
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: ConstrainedBox(
+                  // บังคับให้พื้นที่ Scroll มีความสูงขั้นต่ำเท่ากับหน้าจอที่เหลืออยู่
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight,
                   ),
-                  color: Colors.white,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                        vertical: 32, horizontal: 24),
-                    child: Form(
-                      key: formkey,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Logo
-                          SizedBox(
-                            height: 100,
-                            child: Image.asset("images/chaoperty_dark.png",
-                                fit: BoxFit.contain),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Title
-                          Text(
-                            'Tenant ',
-                            style: TextStyle(
-                              fontFamily: Font_.Fonts_T,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 24,
-                              color: FitnessAppTheme.darkText,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'สําหรับผู้เช่า ',
-                            style: TextStyle(
-                              fontFamily: Font_.Fonts_T,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 24,
-                              color: FitnessAppTheme.darkText,
-                            ),
-                          ),
-                          // Text(
-                          //   'Member User',
-                          //   style: TextStyle(
-                          //     fontFamily: Font_.Fonts_T,
-                          //     fontSize: 14,
-                          //     color: FitnessAppTheme.lightText,
-                          //   ),
-                          // ),
-                          const SizedBox(height: 32),
-
-                          // Username Field
-                          TextFormField(
-                            style: const TextStyle(
-                              fontFamily: Font_.Fonts_T,
-                            ),
-                            controller: userController,
-                            validator: (str) {
-                              if (str!.isEmpty) {
-                                return "กรุณากรอก Username";
-                              }
-                              return null;
+                        horizontal: 24.0, vertical: 20.0),
+                    child: Column(
+                      // จัดให้อยู่ตรงกลางเมื่อมีพื้นที่เหลือ (ไม่มีคีย์บอร์ด)
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // --- ส่วนที่ 1: ปุ่ม Privacy Policy ---
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: InkWell(
+                            onTap: () async {
+                              // Navigator.push(
+                              //   context,
+                              //   MaterialPageRoute(
+                              //       builder: (context) => Privacy_Policy(
+                              //           Url: 'https://chaoperties.com/chao_api/Awaitdownload/Privacy_Policy.pdf',
+                              //           title: ' เช่าเพอร์ตี้ Privacy Policy')),
+                              // );
                             },
-                            decoration: InputDecoration(
-                              prefixIcon: Icon(Icons.person,
-                                  color: FitnessAppTheme.grey),
-                              hintText: "username",
-                              hintStyle: TextStyle(
-                                color: FitnessAppTheme.grey.withOpacity(0.5),
-                                fontFamily: Font_.Fonts_T,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(20),
                               ),
-                              filled: true,
-                              fillColor:
-                                  FitnessAppTheme.notWhite.withOpacity(0.4),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 16, horizontal: 16),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide.none,
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(
-                                    color: FitnessAppTheme.nearlyDarkBlue,
-                                    width: 1),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Password Field
-                          TextFormField(
-                            style: const TextStyle(
-                              fontFamily: Font_.Fonts_T,
-                            ),
-                            controller: passwordController,
-                            obscureText: _obscureText,
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'กรุณากรอก Password!!';
-                              }
-                              return null;
-                            },
-                            onFieldSubmitted: (value) {
-                              if (formkey.currentState!.validate()) {
-                                signInThread();
-                              }
-                            },
-                            decoration: InputDecoration(
-                              prefixIcon:
-                                  Icon(Icons.lock, color: FitnessAppTheme.grey),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscureText
-                                      ? Icons.visibility_off
-                                      : Icons.visibility,
-                                  color: FitnessAppTheme.grey,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _obscureText = !_obscureText;
-                                  });
-                                },
-                              ),
-                              hintText: "password",
-                              hintStyle: TextStyle(
-                                color: FitnessAppTheme.grey.withOpacity(0.5),
-                                fontFamily: Font_.Fonts_T,
-                              ),
-                              filled: true,
-                              fillColor:
-                                  FitnessAppTheme.notWhite.withOpacity(0.4),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 16, horizontal: 16),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide.none,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide.none,
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(
-                                    color: FitnessAppTheme.nearlyDarkBlue,
-                                    width: 1),
-                              ),
-                            ),
-                          ),
-
-                          // Forgot Password
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton(
-                              onPressed: () {
-                                showDialog(
-                                    context: context,
-                                    builder: (BuildContext context) {
-                                      return AlertDialog(
-                                        titlePadding: EdgeInsets.zero,
-                                        shape: RoundedRectangleBorder(
-                                            borderRadius:
-                                                BorderRadius.circular(20)),
-                                        clipBehavior: Clip.hardEdge,
-                                        title: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 10.0,
-                                                vertical: 12.0),
-                                            color:
-                                                FitnessAppTheme.nearlyDarkBlue,
-                                            child: Center(
-                                              child: Text(
-                                                "โปรดติดต่อเจ้าหน้าที่",
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontFamily: Font_.Fonts_T,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 18,
-                                                ),
-                                              ),
-                                            )),
-                                        content: Container(
-                                          constraints: const BoxConstraints(
-                                              maxWidth: 400),
-                                          padding: const EdgeInsets.all(20),
-                                          child: Text(
-                                            "กรุณาติดต่อเจ้าหน้าที่ดูแลโครงการ\nเพื่อขอทำการรีเซ็ตรหัสผ่าน",
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontFamily: Font_.Fonts_T,
-                                              fontSize: 16,
-                                            ),
-                                          ),
-                                        ),
-                                        actions: <Widget>[
-                                          Center(
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(
-                                                  bottom: 16),
-                                              child: ElevatedButton(
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor:
-                                                      FitnessAppTheme
-                                                          .nearlyDarkRed,
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            30),
-                                                  ),
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 32,
-                                                      vertical: 10),
-                                                ),
-                                                onPressed: () => Navigator.pop(
-                                                    context, 'OK'),
-                                                child: const Text(
-                                                  'ปิด',
-                                                  style: TextStyle(
-                                                    fontFamily: Font_.Fonts_T,
-                                                    color: Colors.white,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    });
-                              },
-                              child: Text(
-                                "ลืมรหัสผ่าน ?",
-                                style: TextStyle(
-                                  color: FitnessAppTheme.grey,
-                                  fontFamily: Font_.Fonts_T,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Login Button
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  FitnessAppTheme.nearlyDarkBlue,
-                                  const Color(0xFF4F46E5),
-                                ],
-                                begin: Alignment.centerLeft,
-                                end: Alignment.centerRight,
-                              ),
-                              borderRadius: BorderRadius.circular(15),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: FitnessAppTheme.nearlyDarkBlue
-                                      .withOpacity(0.3),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 6),
-                                ),
-                              ],
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(4.0),
-                              child: ElevatedButton(
-                                  onPressed: () async {
-                                    print('button pressed');
-                                    final valid =
-                                        formkey.currentState!.validate();
-                                    print('validate: $valid');
-                                    if (valid) {
-                                      signInThread();
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.transparent,
-                                    shadowColor: Colors.transparent,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(30),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.privacy_tip_outlined,
+                                    color: Colors.black,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Privacy Policy',
+                                    style: TextStyle(
+                                      fontFamily: FitnessAppTheme.fontName,
+                                      fontSize: 12,
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  child: const Text(
-                                    "เข้าสู่ระบบ",
-                                    style: TextStyle(
-                                        fontFamily: Font_.Fonts_T,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 20,
-                                        color: Colors.white),
-                                  )),
+                                ],
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 16),
+                        ),
 
-                          // LINE Login Button (Official OAuth)
-                          // Container(
-                          //   width: double.infinity,
-                          //   decoration: BoxDecoration(
-                          //     // color: const Color(0xFF06C755), // LINE Green
-                          //     borderRadius: BorderRadius.circular(30),
-                          //     // boxShadow: [
-                          //     //   BoxShadow(
-                          //     //     color:
-                          //     //         const Color(0xFF06C755).withOpacity(0.3),
-                          //     //     blurRadius: 12,
-                          //     //     offset: const Offset(0, 6),
-                          //     //   ),
-                          //     // ],
-                          //   ),
-                          //   child: ElevatedButton.icon(
-                          //     onPressed: () {
-                          //       // LINE Official OAuth Login
-                          //       _lineLoginOAuth();
-                          //     },
-                          //     icon: ClipRRect(
-                          //       borderRadius: BorderRadius.circular(4),
-                          //       child: Image.asset(
-                          //         'images/line_company_thailand_logo.webp',
-                          //         width: 20,
-                          //         height: 20,
-                          //       ),
-                          //     ),
-                          //     label: const Text(
-                          //       "เข้าสู่ระบบด้วย LINE",
-                          //       style: TextStyle(
-                          //         fontFamily: Font_.Fonts_T,
-                          //         fontWeight: FontWeight.bold,
-                          //         fontSize: 14,
-                          //         color: Colors.grey,
-                          //       ),
-                          //     ),
-                          //     style: ElevatedButton.styleFrom(
-                          //       backgroundColor: Colors.transparent,
-                          //       shadowColor: Colors.transparent,
-                          //       shape: RoundedRectangleBorder(
-                          //         borderRadius: BorderRadius.circular(30),
-                          //       ),
-                          //       padding:
-                          //           const EdgeInsets.symmetric(vertical: 16),
-                          //     ),
-                          //   ),
-                          // ),
-                        ],
-                      ),
+                        const SizedBox(height: 32),
+
+                        // --- ส่วนที่ 2: การ์ด Login หลัก ---
+                        Container(
+                          constraints: const BoxConstraints(maxWidth: 450),
+                          child: Card(
+                            elevation: 10,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            color: Colors.white,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 32, horizontal: 24),
+                              child: Form(
+                                key: formkey,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // โลโก้
+                                    SizedBox(
+                                      height: 90,
+                                      child: Image.asset(
+                                          "images/chaoperty_dark.png",
+                                          fit: BoxFit.contain),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // Title
+                                    Text(
+                                      'Tenant',
+                                      style: TextStyle(
+                                        fontFamily: Font_.Fonts_T,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 26,
+                                        color: FitnessAppTheme.nearlyDarkBlue,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'สําหรับผู้เช่า',
+                                      style: TextStyle(
+                                        fontFamily: Font_.Fonts_T,
+                                        fontSize: 16,
+                                        color: FitnessAppTheme.grey,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 32),
+
+                                    // Username Field
+                                    TextFormField(
+                                      style: const TextStyle(
+                                          fontFamily: Font_.Fonts_T),
+                                      controller: userController,
+                                      autovalidateMode:
+                                          AutovalidateMode.onUserInteraction,
+                                      textInputAction: TextInputAction.next,
+                                      validator: (str) =>
+                                          (str == null || str.isEmpty)
+                                              ? "กรุณากรอก Username"
+                                              : null,
+                                      decoration: InputDecoration(
+                                        prefixIcon: Icon(Icons.person_outline,
+                                            color:
+                                                FitnessAppTheme.nearlyDarkBlue),
+                                        hintText: "username",
+                                        hintStyle: TextStyle(
+                                          color: FitnessAppTheme.grey
+                                              .withOpacity(0.5),
+                                          fontFamily: Font_.Fonts_T,
+                                        ),
+                                        filled: true,
+                                        fillColor: FitnessAppTheme.notWhite
+                                            .withOpacity(0.5),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                vertical: 18, horizontal: 20),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(15),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(15),
+                                          borderSide: BorderSide(
+                                              color: FitnessAppTheme
+                                                  .nearlyDarkBlue,
+                                              width: 1.5),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // Password Field
+                                    TextFormField(
+                                      style: const TextStyle(
+                                          fontFamily: Font_.Fonts_T),
+                                      controller: passwordController,
+                                      obscureText: _obscureText,
+                                      autovalidateMode:
+                                          AutovalidateMode.onUserInteraction,
+                                      textInputAction: TextInputAction.done,
+                                      validator: (value) =>
+                                          (value == null || value.isEmpty)
+                                              ? 'กรุณากรอก Password!!'
+                                              : null,
+                                      onFieldSubmitted: (value) {
+                                        if (formkey.currentState!.validate()) {
+                                          FocusScope.of(context).unfocus();
+                                          signInThread();
+                                        }
+                                      },
+                                      decoration: InputDecoration(
+                                        prefixIcon: Icon(Icons.lock_outline,
+                                            color:
+                                                FitnessAppTheme.nearlyDarkBlue),
+                                        suffixIcon: IconButton(
+                                          icon: Icon(
+                                            _obscureText
+                                                ? Icons.visibility_off
+                                                : Icons.visibility,
+                                            color: FitnessAppTheme.grey,
+                                          ),
+                                          onPressed: () {
+                                            setState(() {
+                                              _obscureText = !_obscureText;
+                                            });
+                                          },
+                                        ),
+                                        hintText: "password",
+                                        hintStyle: TextStyle(
+                                          color: FitnessAppTheme.grey
+                                              .withOpacity(0.5),
+                                          fontFamily: Font_.Fonts_T,
+                                        ),
+                                        filled: true,
+                                        fillColor: FitnessAppTheme.notWhite
+                                            .withOpacity(0.5),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                vertical: 18, horizontal: 20),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(15),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(15),
+                                          borderSide: BorderSide(
+                                              color: FitnessAppTheme
+                                                  .nearlyDarkBlue,
+                                              width: 1.5),
+                                        ),
+                                      ),
+                                    ),
+
+                                    // Forgot Password
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: () {
+                                          showDialog(
+                                            context: context,
+                                            builder: (BuildContext context) {
+                                              return AlertDialog(
+                                                titlePadding: EdgeInsets.zero,
+                                                shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            20)),
+                                                clipBehavior: Clip.hardEdge,
+                                                title: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      vertical: 16.0),
+                                                  color: FitnessAppTheme
+                                                      .nearlyDarkBlue,
+                                                  child: const Center(
+                                                    child: Text(
+                                                      "โปรดติดต่อเจ้าหน้าที่",
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontFamily:
+                                                            Font_.Fonts_T,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 18,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                content: const Text(
+                                                  "กรุณาติดต่อเจ้าหน้าที่ดูแลโครงการ\nเพื่อขอทำการรีเซ็ตรหัสผ่าน",
+                                                  textAlign: TextAlign.center,
+                                                  style: TextStyle(
+                                                      fontFamily: Font_.Fonts_T,
+                                                      fontSize: 16,
+                                                      height: 1.5),
+                                                ),
+                                                actionsAlignment:
+                                                    MainAxisAlignment.center,
+                                                actions: [
+                                                  ElevatedButton(
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      backgroundColor:
+                                                          FitnessAppTheme
+                                                              .nearlyDarkRed,
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          30)),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 40,
+                                                          vertical: 12),
+                                                    ),
+                                                    onPressed: () =>
+                                                        Navigator.pop(context),
+                                                    child: const Text(
+                                                      'ปิด',
+                                                      style: TextStyle(
+                                                          fontFamily:
+                                                              Font_.Fonts_T,
+                                                          color: Colors.white,
+                                                          fontWeight:
+                                                              FontWeight.bold),
+                                                    ),
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          );
+                                        },
+                                        child: Text(
+                                          "ลืมรหัสผ่าน ?",
+                                          style: TextStyle(
+                                            color: FitnessAppTheme.grey,
+                                            fontFamily: Font_.Fonts_T,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // Login Button
+                                    Container(
+                                      width: double.infinity,
+                                      height: 55,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(15),
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            FitnessAppTheme.nearlyDarkBlue,
+                                            const Color(0xFF4F46E5),
+                                          ],
+                                          begin: Alignment.centerLeft,
+                                          end: Alignment.centerRight,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: FitnessAppTheme
+                                                .nearlyDarkBlue
+                                                .withOpacity(0.4),
+                                            blurRadius: 15,
+                                            offset: const Offset(0, 5),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.transparent,
+                                          shadowColor: Colors.transparent,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(15),
+                                          ),
+                                        ),
+                                        onPressed: () {
+                                          FocusScope.of(context).unfocus();
+                                          if (formkey.currentState!
+                                              .validate()) {
+                                            signInThread();
+                                          }
+                                        },
+                                        child: const Text(
+                                          "เข้าสู่ระบบ",
+                                          style: TextStyle(
+                                            fontFamily: Font_.Fonts_T,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 40),
+
+                        // --- ส่วนที่ 3: Footer ---
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.copyright,
+                              color: FitnessAppTheme.grey,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                '2023-2026 Dzentric Co.,Ltd. All Rights Reserved',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    color: FitnessAppTheme.grey,
+                                    fontWeight: FontWeight.w500,
+                                    fontFamily: Font_.Fonts_T,
+                                    fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
-
-          // Footer
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              color: Colors.white.withOpacity(0.9),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.copyright,
-                    color: FitnessAppTheme.grey,
-                    size: 14,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        '2023-2026 Dzentric Co.,Ltd. All Rights Reserved',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: FitnessAppTheme.grey,
-                            fontWeight: FontWeight.w500,
-                            fontFamily: Font_.Fonts_T,
-                            fontSize: 12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  signInThread() async {
+  Future<void> signInThread() async {
     if (!mounted) return;
-    print('=== signInThread ===');
-    var user = userController.text.toString();
-    var id_token = (ser_Web == 1 || ser_Web == 2) ? user_id : '';
+    debugPrint('=== signInThread ===');
+    final user = userController.text.trim();
+    final idToken = (ser_Web == 1 || ser_Web == 2) ? user_id : '';
 
-    // ตรวจสอบว่าเป็น LINE OAuth Login (ser_Web == 2) หรือไม่
-    bool isLineOAuth = ser_Web == 2;
-
-    String password = isLineOAuth
+    final bool isLineOAuth = ser_Web == 2;
+    final rawPassword = passwordController.text;
+    final hashedPassword = md5.convert(utf8.encode(rawPassword)).toString();
+    final String password = isLineOAuth
         ? '' // LINE OAuth ไม่ต้องใช้ password
-        : (ser_Web == 1
-            ? passwordController.text.toString()
-            : md5.convert(utf8.encode(passwordController.text)).toString());
+        : (ser_Web == 1 ? rawPassword : hashedPassword);
 
-    String url = '${MyConstant().domain}/GC_user_loginV2.php';
+    final url = '${MyConstant().domain}/GC_user_loginV2.php';
 
-    print('URL: $url');
-    print('Username: $user');
-    print('isLineOAuth: $isLineOAuth');
-    print('ser_Web: $ser_Web');
-    print('id_token: $id_token');
-    print('line_rser: $line_rser');
+    debugPrint('URL: $url');
+    debugPrint('Username: $user');
+    debugPrint('isLineOAuth: $isLineOAuth');
+    debugPrint('ser_Web: $ser_Web');
+    debugPrint('id_token: $idToken');
+    debugPrint('line_rser: $line_rser');
 
     try {
-      print('Sending request to backend...');
-      var response = await http.post(
+      debugPrint('Sending request to backend...');
+      final response = await http.post(
         Uri.parse(url),
         headers: {'Content-Type': 'application/json; charset=utf-8'},
         body: json.encode({
           'isAdd': 'true',
           'username': user,
           'password': password,
-          'idtoken': id_token,
+          'idtoken': idToken,
           'line_rser': line_rser,
           'is_line_oauth': isLineOAuth ? '1' : '0',
         }),
       );
 
-      print(json.encode({
+      debugPrint(json.encode({
         'isAdd': 'true',
         'username': user,
         'password': password,
-        'idtoken': id_token,
+        'idtoken': idToken,
         'line_rser': line_rser,
         'is_line_oauth': isLineOAuth ? '1' : '0',
       }));
-      print('Response status: ${response.statusCode}');
-      print('Response body: ${response.body}');
+      debugPrint('Response status: ${response.statusCode}');
+      debugPrint('Response body: ${response.body}');
 
-      var decoded = json.decode(response.body);
-      print('Decoded JSON: $decoded');
+      final decoded = json.decode(response.body);
+      debugPrint('Decoded JSON: $decoded');
 
-      var result;
-      if (decoded is List) {
-        result = decoded;
-      } else if (decoded is Map && decoded['status'] == true) {
-        result = decoded['data'];
-      }
-      print('Result data: $result');
+      final result = decoded is List
+          ? decoded
+          : (decoded is Map && decoded['status'] == true
+              ? decoded['data']
+              : null);
+      debugPrint('Result data: $result');
 
       if (result != null && result is List) {
-        print('Found user data, processing...');
+        debugPrint('Found user data, processing...');
 
-        // Parse all results
-        final List<c_regis_Model> allModels = result
+        final allModels = result
             .map<c_regis_Model>((map) => c_regis_Model.fromJson(map))
             .toList();
 
-        // For LINE / auto-login all rows are valid; for normal login check password once
-        List<c_regis_Model> validModels;
+        late final List<c_regis_Model> validModels;
         if (isLineOAuth || ser_Web == 1) {
-          // <--- เพิ่ม ser_Web == 1
           validModels = allModels;
         } else {
-          // All rows belong to the same user — check password against first row
           final firstPasswd =
-              allModels.isNotEmpty ? allModels.first.passwd ?? '' : '';
-          if (password.trim() == firstPasswd.trim()) {
+              allModels.isNotEmpty ? allModels.first.passwd?.trim() ?? '' : '';
+          final rawPasswordTrim = rawPassword.trim();
+          final hashedPasswordTrim = hashedPassword.trim();
+
+          if (firstPasswd.isNotEmpty &&
+              (firstPasswd == rawPasswordTrim ||
+                  firstPasswd == hashedPasswordTrim)) {
             validModels = allModels;
           } else {
-            validModels = [];
+            passwordController.clear();
+            if (!mounted) return;
+            await showDialog<void>(
+              context: context,
+              barrierDismissible: false,
+              builder: (BuildContext context) {
+                return AlertDialog(
+                  surfaceTintColor: Colors.white,
+                  backgroundColor: Colors.white,
+                  title: Container(
+                    constraints: const BoxConstraints(maxWidth: 400),
+                    child: const Text(
+                      'Username & password ผิดพลาด กรุณาลองใหม่!',
+                      style: TextStyle(fontFamily: Font_.Fonts_T),
+                    ),
+                  ),
+                  actions: <Widget>[
+                    TextButton(
+                      child: const Text('ปิด'),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                );
+              },
+            );
+            return;
           }
         }
 
-        if (validModels.isEmpty) {
-          setState(() => passwordController.clear());
-          if (!mounted) return;
-          showDialog<void>(
-            context: context,
-            barrierDismissible: false,
-            builder: (BuildContext context) {
-              return AlertDialog(
-                surfaceTintColor: Colors.white,
-                backgroundColor: Colors.white,
-                title: Container(
-                  constraints: const BoxConstraints(maxWidth: 400),
-                  child: const Text(
-                    'Username & password ผิดพลาด กรุณาลองใหม่!',
-                    style: TextStyle(fontFamily: Font_.Fonts_T),
-                  ),
-                ),
-                actions: <Widget>[
-                  TextButton(
-                    child: const Text('ปิด'),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              );
-            },
-          );
+        await SessionService.clearAll(providers: <ChangeNotifier>[
+          context.read<WaitPayListProvider>(),
+          context.read<PayFormProvider>(),
+          context.read<PayHisProvider>(),
+        ]);
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('UsernameUSer', user);
+        await prefs.setString('pass_word', password);
+        debugPrint(
+            '✅ Saved credentials to SharedPreferences: ${user.toString()}');
+
+        if (!mounted) return;
+
+        if (validModels.length == 1) {
+          final m = validModels.first;
+          debugPrint('Single market login: ${m.custno}');
+          routeToService(FitnessAppHomeScreen(custno_s: m.custno), m);
         } else {
-          // ✅ ก่อน login user ใหม่: ล้างข้อมูล user เก่าทั้งหมด
-          // (กัน provider state, AppMarkets, ApiSession ค้างจาก user ก่อนหน้า)
-          await SessionService.clearAll(providers: <ChangeNotifier>[
-            context.read<WaitPayListProvider>(),
-            context.read<PayFormProvider>(),
-            context.read<PayHisProvider>(),
-          ]);
-
-          // ✅ เซฟ credentials ทันที (ก่อนเลือกตลาด)
-          // เพื่อให้ AuthGate ตอน refresh อ่านเจอ
-          // (ไม่ต้องรอให้เลือกตลาด)
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('UsernameUSer', userController.text.toString());
-          await prefs.setString('pass_word', password);
+          AppMarkets.markets = validModels;
           debugPrint(
-              '✅ Saved credentials to SharedPreferences: ${userController.text.toString()}');
-
-          if (validModels.length == 1) {
-            // Single market — proceed directly
-            final m = validModels.first;
-            print('Single market login: ${m.custno}');
-            if (!mounted) return;
-            routeToService(FitnessAppHomeScreen(custno_s: m.custno), m);
-          } else {
-            // Multiple markets — save list then let user pick
-            AppMarkets.markets = validModels;
-            print(
-                'Multiple markets (${validModels.length}) — showing selection');
-            if (!mounted) return;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => MarketSelectScreen(
-                  markets: validModels,
-                  onSelect: (selected) =>
-                      MarketService.applyMarket(context, selected),
-                ),
+              'Multiple markets (${validModels.length}) — showing selection');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => MarketSelectScreen(
+                markets: validModels,
+                onSelect: (selected) =>
+                    MarketService.applyMarket(context, selected),
               ),
-            );
-          }
+            ),
+          );
         }
       } else {
-        // แจ้งเตือนเมื่อไม่พบผู้ใช้หรือเข้าสู่ระบบไม่สำเร็จ
-        showDialog(
+        await showDialog<void>(
           context: context,
           builder: (context) => AlertDialog(
-            title: Text("ไม่สามารถเข้าสู่ระบบได้"),
-            content: Text("ตรวจสอบ Username และ Password อีกครั้ง"),
+            title: const Text("ไม่สามารถเข้าสู่ระบบได้"),
+            content: const Text("ตรวจสอบ Username และ Password อีกครั้ง"),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: Text("OK"),
+                child: const Text("OK"),
               ),
             ],
           ),
         );
       }
     } catch (e) {
-      // showDialog(
-      //   context: context,
-      //   builder: (context) => AlertDialog(
-      //     title: Text("Debug: API Error"),
-      //     content: Text(e.toString()),
-      //     actions: [
-      //       TextButton(
-      //         onPressed: () => Navigator.pop(context),
-      //         child: Text("OK"),
-      //       ),
-      //     ],
-      //   ),
-      // );
+      debugPrint('signInThread error: $e');
     }
   }
 
@@ -1106,9 +1032,6 @@ class _LoginScreenState extends State<LoginScreen> {
           preferences.setString('fid', cregisModel.fid ?? ''),
         ]);
 
-        // Get customer JWT token for payment API
-        await _getAndStoreCustomerToken(cusno, rser);
-
         setState(() {
           ser_Web = 0;
         });
@@ -1140,11 +1063,16 @@ class _LoginScreenState extends State<LoginScreen> {
               'pay_encoded64', cregisModel.payEncoded64 ?? ''),
           preferences.setString('fid', cregisModel.fid ?? ''),
         ]);
-
-        // Get customer JWT token for payment API
-        await _getAndStoreCustomerToken(cusno, rser);
       }
     }
+
+    if (cregisModel.payToken != null && cregisModel.payToken!.isNotEmpty) {
+      // Get customer JWT token for payment API only when pay token exists
+      await _getAndStoreCustomerToken(cusno, rser);
+    } else {
+      debugPrint('Skipping customer JWT token fetch: payToken missing');
+    }
+
     if (!mounted) return;
     MaterialPageRoute route = MaterialPageRoute(
       builder: (context) => myWidget,

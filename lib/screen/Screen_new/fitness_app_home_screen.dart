@@ -14,6 +14,7 @@ import '../pay_bill_screen_Choice.dart';
 import '../pay_screen.dart';
 import '../personalinfo_screen.dart';
 import '../status_screen.dart';
+import '../../color.dart';
 // import 'bottom_navigation_view/bottom_bar_view.dart';
 import 'fitness_app_theme.dart';
 import 'invoice/home_Invoice_screen.dart';
@@ -121,73 +122,6 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
         }),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          // ✅ FIX: เพิ่ม AppBar พร้อมปุ่มย้อนกลับ
-          // แสดงเฉพาะเมื่อ widget.pageroot != null (เช้า sub-page
-          // ผ่าน quick action: PAY/PAYMENT/MITER/INFO/etc.)
-          // เพื่อให้ผู้ใช้กดปุ่ม "ประวัติบิล" หรือ "มิเตอร์" แล้วย้อนกลับได้
-          appBar: (widget.pageroot != null && widget.pageroot != 'null')
-              ? AppBar(
-                  backgroundColor: Colors.white,
-                  elevation: 0.5,
-                  shadowColor: Colors.grey.withOpacity(0.2),
-                  leadingWidth: 56,
-                  leading: Padding(
-                    padding: const EdgeInsets.only(left: 12),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(24),
-                        onTap: () {
-                          if (Navigator.canPop(context)) {
-                            Navigator.pop(context);
-                          }
-                        },
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: FitnessAppTheme.nearlyWhite,
-                            shape: BoxShape.circle,
-                            boxShadow: <BoxShadow>[
-                              BoxShadow(
-                                color: FitnessAppTheme.grey.withOpacity(0.3),
-                                offset: const Offset(1.5, 1.5),
-                                blurRadius: 6.0,
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.arrow_back_ios_new,
-                            size: 18,
-                            color: FitnessAppTheme.darkerText,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  title: Text(
-                    widget.pageroot == 'PAYMENT'
-                        ? (cus_lang == 'EN'
-                            ? 'Payment Receipt / Verification'
-                            : 'ประวัติรอยืนยัน/ตรวจสอบการชำระ')
-                        : widget.pageroot == 'MITER'
-                            ? (cus_lang == 'EN' ? 'Meter' : 'มิเตอร์')
-                            : widget.pageroot == 'PAY'
-                                ? (cus_lang == 'EN' ? 'Pay' : 'ชำระ')
-                                : widget.pageroot == 'INFO'
-                                    ? (cus_lang == 'EN' ? 'More' : 'อื่นๆ')
-                                    : '',
-                    style: TextStyle(
-                      fontFamily: FitnessAppTheme.fontName,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      color: FitnessAppTheme.darkerText,
-                    ),
-                  ),
-                  centerTitle: true,
-                )
-              : null,
           body: FutureBuilder<bool>(
             future: getData(),
             builder: (context, snapshot) {
@@ -293,16 +227,16 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
           children: [
             Image.asset(
               iconPath,
-              width: 22,
-              height: 22,
+              width: 24,
+              height: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                fontFamily: FitnessAppTheme.fontName,
-                fontWeight: FontWeight.w600,
-                fontSize: 10,
+                fontFamily: Font_.Fonts_T,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
                 color: _currentIndex == index
                     ? FitnessAppTheme.nearlyDarkBlue
                     : FitnessAppTheme.grey,

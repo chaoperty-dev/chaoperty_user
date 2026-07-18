@@ -16,6 +16,7 @@ import '../../../Model/GetTeNant_rental_Model.dart';
 import '../../../PDF/PDF_Agreement/pdf_RentalInforma.dart';
 
 import '../../../main.dart';
+import '../../../color.dart';
 import '../../model/electricity_history_model.dart';
 import '../fitness_app_home_screen.dart';
 import '../fitness_app_theme.dart';
@@ -876,7 +877,9 @@ class _Section extends StatelessWidget {
             children: [
               Text(title,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 16)),
+                      fontFamily: Font_.Fonts_T,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15)),
               const SizedBox(height: 10),
               child,
             ],

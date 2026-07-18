@@ -520,6 +520,14 @@ Future<String?> getCustomerToken({
   required String customerNo,
   required String propertyNo,
 }) async {
+  // ✅ ห้ามยิง API เส้นนี้ถ้า _hasIntentsAuth ไม่เท่ากับ true
+  // เพื่อป้องกัน browser เด้ง popup Basic Auth (Sign in)
+  if (MyHeadersIntents.hasIntentsAuth != true) {
+    debugPrint(
+        '🚫 getCustomerToken: _hasIntentsAuth != true → skip API to pay-api.chaoperties.com');
+    return null;
+  }
+
   try {
     final url = Uri.parse(
       '${MyconfigIntents().domainIntents}/v1/payment/customer-token',
@@ -534,6 +542,7 @@ Future<String?> getCustomerToken({
     if (payEncoded64.isEmpty) {
       debugPrint(
           '❌ pay_encoded64 not found / null in SharedPreferences — user may not have payment credentials set in DB');
+      MyHeadersIntents.hasIntentsAuth = false;
       return null;
     }
 

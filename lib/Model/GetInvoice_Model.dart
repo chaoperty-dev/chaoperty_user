@@ -65,8 +65,8 @@ class InvoiceModel {
   String? status;
   int? pos;
   String? total;
+  String? inv_list;
 
-  
   InvoiceModel({
     this.ser,
     this.daterec,
@@ -131,7 +131,8 @@ class InvoiceModel {
     this.pvatall,
     this.status,
     this.pos,
-      this.total,
+    this.total,
+    this.inv_list,
   });
 
   InvoiceModel.fromJson(Map<String, dynamic> json) {
@@ -199,7 +200,8 @@ class InvoiceModel {
     pvatall = json['pvatall'];
     status = json['status'];
     pos = json['pos'];
-        total = json['total'];
+    total = json['total'];
+    inv_list = json['inv_list'];
   }
 
   Map<String, dynamic> toJson() {
@@ -269,7 +271,8 @@ class InvoiceModel {
     data['pvatall'] = this.pvatall;
     data['status'] = this.status;
     data['pos'] = this.pos;
-        data['total'] = this.total;
+    data['total'] = this.total;
+    data['inv_list'] = this.inv_list;
 
     return data;
   }

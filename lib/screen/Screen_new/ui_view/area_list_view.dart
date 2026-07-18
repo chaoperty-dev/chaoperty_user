@@ -298,9 +298,9 @@ class _AreaCardState extends State<AreaCard> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontFamily: FitnessAppTheme.fontName,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
                           height: 1.25,
                           color: FitnessAppTheme.nearlyDarkBlue,
                         ),

@@ -334,7 +334,9 @@ class _MitterScreenState extends State<MitterScreen>
                         child: Text(
                           isEN ? 'Tenants' : 'ผู้เช่า',
                           style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 16),
+                              fontFamily: Font_.Fonts_T,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15),
                         ),
                       ),
                       Container(
@@ -735,7 +737,9 @@ class _Section extends StatelessWidget {
                 children: [
                   Text(title,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 16)),
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
                   const SizedBox(height: 10),
                   child,
                 ],

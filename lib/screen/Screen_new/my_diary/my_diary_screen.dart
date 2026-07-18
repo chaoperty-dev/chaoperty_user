@@ -2,6 +2,7 @@
 import 'dart:ui';
 
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:flutter/material.dart';
@@ -88,6 +89,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       cus_password,
       cus_lintid,
       cus_lang;
+  bool? _hasIntentsAuth;
   @override
   void initState() {
     super.initState();
@@ -133,8 +135,14 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                 }
               });
             }));
-
+    _loadIntentsAuth();
     // red_Trans_bill();
+  }
+
+  Future<void> _loadIntentsAuth() async {
+    final ok = await MyHeadersIntents.checkauthpaymentintents();
+    if (!mounted) return;
+    setState(() => _hasIntentsAuth = ok);
   }
 
   Future<Null> checkPreferance() async {
@@ -1364,7 +1372,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   void addAllListData() {
     const int count = 9;
     listViews.clear();
-
+    final bool useV4 = _hasIntentsAuth == true;
     // listViews.add(
     //   TitleView(
     //     titleTxt: cus_lang == 'EN' ? 'Infomation User' : 'ข้อมูลผู้ใช้',
@@ -1435,27 +1443,53 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         animationController: widget.animationController!,
       ),
     );
+    if (teNantModels.length > 0) {
+      listViews.add(
+        MealsListView(
+          mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
+              CurvedAnimation(
+                  parent: widget.animationController!,
+                  curve: Interval((1 / count) * 3, 1.0,
+                      curve: Curves.fastOutSlowIn))),
+          mainScreenAnimationController: widget.animationController,
+          teNantModel: teNantModels,
+          totallist: total_list,
+          totallistPaid: total_list_paid,
+          cuslangs: cus_lang,
+          open_set_date: open_set_date,
+        ),
+      );
+    } else {
+      listViews.add(Center(
+        child: SizedBox(
+          height: 100,
+          child: Center(
+            child: Text(
+              cus_lang == 'EN'
+                  ? 'Sorry, no relevant contract found.'
+                  : 'ขออภัยไม่พบสัญญาที่เกี่ยวข้อง',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: FitnessAppTheme.fontName,
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                letterSpacing: 0.0,
+                color: FitnessAppTheme.grey.withOpacity(0.5),
+              ),
+            ),
+          ),
+        ),
+      ));
+    }
 
-    listViews.add(
-      MealsListView(
-        mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
-            CurvedAnimation(
-                parent: widget.animationController!,
-                curve: Interval((1 / count) * 3, 1.0,
-                    curve: Curves.fastOutSlowIn))),
-        mainScreenAnimationController: widget.animationController,
-        teNantModel: teNantModels,
-        totallist: total_list,
-        totallistPaid: total_list_paid,
-        cuslangs: cus_lang,
-        open_set_date: open_set_date,
-      ),
-    );
     // ✅ ตาราง Transection https://pay-stg-api.chaoperties.com/api/v1/payment/intents/state
     // ⚠️ ใช้ placeholder + slot index แทนการเรียก _buildTransectionList() ตรงๆ
     // เพื่อให้ itemBuilder ใน getMainListViewUI() เรียก _buildTransectionList() ใหม่ทุกครั้ง
     // ไม่อย่างนั้น widget จะถูก snapshot ตอน addAllListData() และไม่แสดงข้อมูลหลัง load เสร็จ
-    _transectionSlotIndex = listViews.length;
+    if (useV4) {
+      _transectionSlotIndex = listViews.length;
+    }
+
     listViews.add(const SizedBox.shrink());
     // ✅ ตารางสรุปยอดต่อสัญญา (เลขสัญญา / ยอดรอตรวจสอบ / ยอดค้างชำระ)
     listViews.add(
@@ -1834,7 +1868,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       ),
       _QuickAction(
         icon: Icons.receipt_long_outlined,
-        label: isEN ? 'Bill' : 'ประวัติบิล',
+        label: isEN ? 'Payment History' : 'ประวัติชำระ',
         onTap: () {
           Navigator.push(
             context,
@@ -2552,6 +2586,36 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                             Expanded(
                               child: Row(
                                 children: [
+                                  // ✅ FIX: ปุ่มย้อนกลับ — แสดงเฉพาะเมื่อ
+                                  // Navigator สามารถ pop กลับได้ (ใช้เมื่อ screen นี้ถูก push
+                                  // เป็น sub-page ไม่ใช่ root)
+                                  // if (Navigator.canPop(context))
+                                  //   Padding(
+                                  //     padding: const EdgeInsets.only(right: 4),
+                                  //     child: InkWell(
+                                  //       borderRadius: BorderRadius.circular(20),
+                                  //       onTap: () => Navigator.pop(context),
+                                  //       child: Container(
+                                  //         padding: const EdgeInsets.all(8),
+                                  //         decoration: BoxDecoration(
+                                  //           color: FitnessAppTheme.nearlyWhite,
+                                  //           shape: BoxShape.circle,
+                                  //           boxShadow: <BoxShadow>[
+                                  //             BoxShadow(
+                                  //               color: FitnessAppTheme.grey
+                                  //                   .withOpacity(0.4),
+                                  //               offset: const Offset(2.0, 2.0),
+                                  //               blurRadius: 8.0,
+                                  //             ),
+                                  //           ],
+                                  //         ),
+                                  //         child: Icon(Icons.arrow_back_ios_new,
+                                  //             size: 18,
+                                  //             color:
+                                  //                 FitnessAppTheme.darkerText),
+                                  //       ),
+                                  //     ),
+                                  //   ),
                                   Padding(
                                     padding: const EdgeInsets.all(8.0),
                                     child: Container(
@@ -2601,9 +2665,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             fontFamily: Font_.Fonts_T,
-                                            fontSize:
-                                                12 + 6 - 6 * topBarOpacity,
-                                            letterSpacing: 1.2,
+                                            fontSize: 12,
+                                            letterSpacing: 1.0,
                                             color: FitnessAppTheme.grey,
                                           ),
                                         ),
@@ -2617,9 +2680,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                                           style: TextStyle(
                                             fontFamily: Font_.Fonts_T,
                                             fontWeight: FontWeight.w700,
-                                            fontSize:
-                                                16 + 6 - 6 * topBarOpacity,
-                                            letterSpacing: 1.2,
+                                            fontSize: 16,
+                                            letterSpacing: 0.4,
                                             color: FitnessAppTheme.darkerText,
                                           ),
                                         ),

@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 import 'dart:convert';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
 import 'package:chaoperty_user/screen_Intents_V3/payment_subV3_InvAll.dart';
 import 'package:chaoperty_user/video_player_helper.dart';
@@ -200,6 +201,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
   double _cachedTotalAll = 0;
   double _cachedTotalDiscount = 0;
   String? renTal_user, renTal_name, Value_cid, custno_, cus_ser;
+  bool? _hasIntentsAuth;
   ////--------------------->
   ////----------- แท็บสีตามสถานะสัญญา (ถ้าต้องการ)
   Color tagColor(String? st) {
@@ -223,6 +225,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
       _showCidSearch = true;
       _cidSearchTouched = true;
     }
+    _loadIntentsAuth();
     red_Invoice();
     // red_Invoice().then((value) => Check_genref_pay());
     Check_time();
@@ -257,6 +260,12 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     _timer?.cancel();
     _cidSearchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadIntentsAuth() async {
+    final ok = await MyHeadersIntents.checkauthpaymentintents();
+    if (!mounted) return;
+    setState(() => _hasIntentsAuth = ok);
   }
 
   ////--------------------->
@@ -1216,8 +1225,8 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                   isEN ? 'Summary' : 'สรุปภาพรวม',
                   style: const TextStyle(
                     fontFamily: Font_.Fonts_T,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
                   ),
                 ),
                 const Spacer(),
@@ -1453,8 +1462,8 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                           fontFamily: Font_.Fonts_T,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15.5)),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
                 ),
                 const SizedBox(width: 4),
                 // chip(widget.cuslang == 'EN' ? 'Bills' : 'ใบแจ้งหนี้',
@@ -1576,54 +1585,15 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                         style: TextStyle(
                           color: Colors.indigo.shade700,
                           fontFamily: Font_.Fonts_T,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
                           decoration: TextDecoration.underline,
                           decorationColor: Colors.indigo.shade700,
                         ),
                       ),
                       onTap: () async {
-                        if (serPayweb.toString() == '1') {
-                          List<String>? selectedDocNos;
-                          if (bills.length > 1) {
-                            selectedDocNos = await _showBillSelectionDialog(
-                                bills.toList(growable: false));
-                            if (selectedDocNos == null) {
-                              return; // User cancelled
-                            }
-                          } else {
-                            selectedDocNos = bills
-                                .map((b) => b.docno ?? '')
-                                .where((d) => d.isNotEmpty)
-                                .toList();
-                          }
-
-                          setState(() {
-                            tap_pay = 1;
-                          });
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => paymentSubV4InvAll(
-                                mainScreenAnimation:
-                                    Tween<double>(begin: 0.0, end: 1.0).animate(
-                                        CurvedAnimation(
-                                            parent: widget
-                                                .mainScreenAnimationController!,
-                                            curve: Interval(
-                                                (1 / count) * 5, 1.0,
-                                                curve: Curves.fastOutSlowIn))),
-                                mainScreenAnimationController:
-                                    widget.mainScreenAnimationController!,
-                                teNantModel: widget.teNantModel,
-                                cuslang: widget.cuslang,
-                                serPayment: payser.toString(),
-                                serptPayment: payptser.toString(),
-                                selectedDocNos: selectedDocNos,
-                              ),
-                            ),
-                          );
-                        } else {
+                        // 1. Guard Clause: Check if payment is unavailable first and exit early.
+                        if (serPayweb.toString() != '1') {
                           PanaraInfoDialog.showAnimatedGrow(
                             context,
                             title: widget.cuslang == 'EN' ? "Sorry" : "ขออภัย",
@@ -1633,14 +1603,193 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                             buttonText: widget.cuslang == 'EN'
                                 ? "Acknowledge"
                                 : "รับทราบ",
-                            onTapDismiss: () async {
+                            onTapDismiss: () {
                               Navigator.of(context, rootNavigator: true).pop();
                             },
                             panaraDialogType: PanaraDialogType.warning,
                             barrierDismissible: false,
                           );
+                          return; // Stop execution here
                         }
+
+                        // 2. Handle Document Selection
+                        List<String>? selectedDocNos;
+                        if (bills.length > 1) {
+                          selectedDocNos = await _showBillSelectionDialog(
+                              bills.toList(growable: false));
+                          if (selectedDocNos == null) {
+                            return; // User cancelled
+                          }
+                        } else {
+                          selectedDocNos = bills
+                              .map((b) => b.docno ?? '')
+                              .where((d) => d.isNotEmpty)
+                              .toList();
+                        }
+
+                        // 3. Update State
+                        setState(() {
+                          tap_pay = 1;
+                        });
+
+                        // 4. Navigate to the appropriate screen based on intent authorization
+                        final bool useV4 = _hasIntentsAuth == true;
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) {
+                              // Shared animation logic
+                              final animation =
+                                  Tween<double>(begin: 0.0, end: 1.0).animate(
+                                CurvedAnimation(
+                                  parent: widget.mainScreenAnimationController!,
+                                  curve: Interval(
+                                    (1 / count) * 5,
+                                    1.0,
+                                    curve: Curves.fastOutSlowIn,
+                                  ),
+                                ),
+                              );
+
+                              if (useV4) {
+                                return paymentSubV4InvAll(
+                                  mainScreenAnimation: animation,
+                                  mainScreenAnimationController:
+                                      widget.mainScreenAnimationController!,
+                                  teNantModel: widget.teNantModel,
+                                  cuslang: widget.cuslang,
+                                  serPayment: payser.toString(),
+                                  serptPayment: payptser.toString(),
+                                  selectedDocNos: selectedDocNos,
+                                );
+                              } else {
+                                return paymentSubV3InvAll(
+                                  mainScreenAnimation: animation,
+                                  mainScreenAnimationController:
+                                      widget.mainScreenAnimationController!,
+                                  teNantModel: widget.teNantModel,
+                                  cuslang: widget.cuslang,
+                                  serPayment: payser.toString(),
+                                  serptPayment: payptser.toString(),
+                                  selectedDocNos: selectedDocNos,
+                                );
+                              }
+                            },
+                          ),
+                        );
                       },
+                      // onTap: () async {
+                      //   if (serPayweb.toString() == '1') {
+                      //     List<String>? selectedDocNos;
+                      //     if (bills.length > 1) {
+                      //       selectedDocNos = await _showBillSelectionDialog(
+                      //           bills.toList(growable: false));
+                      //       if (selectedDocNos == null) {
+                      //         return; // User cancelled
+                      //       }
+                      //     } else {
+                      //       selectedDocNos = bills
+                      //           .map((b) => b.docno ?? '')
+                      //           .where((d) => d.isNotEmpty)
+                      //           .toList();
+                      //     }
+
+                      //     setState(() {
+                      //       tap_pay = 1;
+                      //     });
+
+                      //     _hasIntentsAuth == null
+                      //         ? Navigator.push(
+                      //             context,
+                      //             MaterialPageRoute(
+                      //               builder: (context) => paymentSubV3InvAll(
+                      //                 mainScreenAnimation: Tween<double>(
+                      //                         begin: 0.0, end: 1.0)
+                      //                     .animate(CurvedAnimation(
+                      //                         parent: widget
+                      //                             .mainScreenAnimationController!,
+                      //                         curve: Interval(
+                      //                             (1 / count) * 5, 1.0,
+                      //                             curve:
+                      //                                 Curves.fastOutSlowIn))),
+                      //                 mainScreenAnimationController:
+                      //                     widget.mainScreenAnimationController!,
+                      //                 teNantModel: widget.teNantModel,
+                      //                 cuslang: widget.cuslang,
+                      //                 serPayment: payser.toString(),
+                      //                 serptPayment: payptser.toString(),
+                      //                 selectedDocNos: selectedDocNos,
+                      //               ),
+                      //             ),
+                      //           )
+                      //         : _hasIntentsAuth!
+                      //             ? Navigator.push(
+                      //                 context,
+                      //                 MaterialPageRoute(
+                      //                   builder: (context) =>
+                      //                       paymentSubV4InvAll(
+                      //                     mainScreenAnimation: Tween<double>(
+                      //                             begin: 0.0, end: 1.0)
+                      //                         .animate(CurvedAnimation(
+                      //                             parent: widget
+                      //                                 .mainScreenAnimationController!,
+                      //                             curve: Interval(
+                      //                                 (1 / count) * 5, 1.0,
+                      //                                 curve: Curves
+                      //                                     .fastOutSlowIn))),
+                      //                     mainScreenAnimationController: widget
+                      //                         .mainScreenAnimationController!,
+                      //                     teNantModel: widget.teNantModel,
+                      //                     cuslang: widget.cuslang,
+                      //                     serPayment: payser.toString(),
+                      //                     serptPayment: payptser.toString(),
+                      //                     selectedDocNos: selectedDocNos,
+                      //                   ),
+                      //                 ),
+                      //               )
+                      //             : Navigator.push(
+                      //                 context,
+                      //                 MaterialPageRoute(
+                      //                   builder: (context) =>
+                      //                       paymentSubV3InvAll(
+                      //                     mainScreenAnimation: Tween<double>(
+                      //                             begin: 0.0, end: 1.0)
+                      //                         .animate(CurvedAnimation(
+                      //                             parent: widget
+                      //                                 .mainScreenAnimationController!,
+                      //                             curve: Interval(
+                      //                                 (1 / count) * 5, 1.0,
+                      //                                 curve: Curves
+                      //                                     .fastOutSlowIn))),
+                      //                     mainScreenAnimationController: widget
+                      //                         .mainScreenAnimationController!,
+                      //                     teNantModel: widget.teNantModel,
+                      //                     cuslang: widget.cuslang,
+                      //                     serPayment: payser.toString(),
+                      //                     serptPayment: payptser.toString(),
+                      //                     selectedDocNos: selectedDocNos,
+                      //                   ),
+                      //                 ),
+                      //               );
+                      //   } else {
+                      //     PanaraInfoDialog.showAnimatedGrow(
+                      //       context,
+                      //       title: widget.cuslang == 'EN' ? "Sorry" : "ขออภัย",
+                      //       message: widget.cuslang == 'EN'
+                      //           ? "The payment is not available at this time. Please contact the system administrator."
+                      //           : "ไม่สามารถชำระเงินได้ขณะนี้ระบบปิดการชำระเงินชั่วคราว กรุณาติดต่อฝ่ายบริการลูกค้า",
+                      //       buttonText: widget.cuslang == 'EN'
+                      //           ? "Acknowledge"
+                      //           : "รับทราบ",
+                      //       onTapDismiss: () async {
+                      //         Navigator.of(context, rootNavigator: true).pop();
+                      //       },
+                      //       panaraDialogType: PanaraDialogType.warning,
+                      //       barrierDismissible: false,
+                      //     );
+                      //   }
+                      // },
                     ),
                     // IconButton(
                     //   icon: const Icon(

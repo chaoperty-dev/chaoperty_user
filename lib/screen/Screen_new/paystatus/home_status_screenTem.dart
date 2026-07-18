@@ -305,7 +305,10 @@ class _StatusScreenState extends State<StatusScreen>
             bill_default = billDefaultx;
             bill_tser = billTserx;
             tem_page_ser = renTalModel.tem_page!.trim();
+
+
             renTalModels.add(renTalModel);
+            
             if (billDefaultx == 'P') {
               bills_name_ = 'บิลธรรมดา';
             } else {

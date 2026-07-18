@@ -1,3 +1,4 @@
+import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -87,7 +88,7 @@ class BodyMeasurementView extends StatelessWidget {
 /// เนื้อหาจริงของ BodyMeasurementView — ไม่ subscribe animation ใดๆ
 /// ป้องกัน window.dart:99 infinite rebuild loop ที่เกิดจาก
 /// AnimatedBuilder ภายในที่ rebuild ตัวเองตลอดเวลา
-class _BodyContent extends StatelessWidget {
+class _BodyContent extends StatefulWidget {
   final String? cuslangs;
   final double sumInvoices;
   final double sumOutstanding;
@@ -103,6 +104,11 @@ class _BodyContent extends StatelessWidget {
     required this.invoiceCount,
   }) : super(key: key);
 
+  @override
+  State<_BodyContent> createState() => _BodyContentState();
+}
+
+class _BodyContentState extends State<_BodyContent> {
   static final _nFormat = NumberFormat("#,##0.00", "en_US");
   static const _month = [
     "",
@@ -120,11 +126,25 @@ class _BodyContent extends StatelessWidget {
     "ธันวาคม",
   ];
   static final _now = DateTime.now();
+  bool? _hasIntentsAuth;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadIntentsAuth();
+  }
+
+  Future<void> _loadIntentsAuth() async {
+    final ok = await MyHeadersIntents.checkauthpaymentintents();
+    if (!mounted) return;
+    setState(() => _hasIntentsAuth = ok);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isPaidPositive = sumPaid > 0.00;
-    final isInvoiceZero = sumInvoices == 0.0;
+    final isPaidPositive = widget.sumPaid > 0.00;
+    final isInvoiceZero = widget.sumInvoices == 0.0;
+    final cuslangs = widget.cuslangs;
 
     return Padding(
       padding: const EdgeInsets.only(left: 24, right: 24, top: 16, bottom: 18),
@@ -155,7 +175,7 @@ class _BodyContent extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 8, top: 16),
+                    padding: const EdgeInsets.only(left: 4, bottom: 2, top: 5),
                     child: Text(
                       cuslangs == 'EN'
                           ? 'Total amount to be paid'
@@ -166,7 +186,7 @@ class _BodyContent extends StatelessWidget {
                         fontWeight: FontWeight.w500,
                         fontSize: 14,
                         letterSpacing: -0.1,
-                        color: FitnessAppTheme.darkText,
+                        color: Colors.blue,
                       ),
                     ),
                   ),
@@ -185,7 +205,7 @@ class _BodyContent extends StatelessWidget {
                                 padding:
                                     const EdgeInsets.only(left: 4, bottom: 3),
                                 child: Text(
-                                  _nFormat.format(sumInvoices),
+                                  _nFormat.format(widget.sumInvoices),
                                   textAlign: isPaidPositive
                                       ? TextAlign.start
                                       : TextAlign.center,
@@ -236,7 +256,7 @@ class _BodyContent extends StatelessWidget {
                                   padding:
                                       const EdgeInsets.only(left: 4, bottom: 3),
                                   child: Text(
-                                    _nFormat.format(sumOutstanding),
+                                    _nFormat.format(widget.sumOutstanding),
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontFamily: FitnessAppTheme.fontName,
@@ -325,6 +345,27 @@ class _BodyContent extends StatelessWidget {
                 ],
               ),
             ),
+            Align(
+              alignment: AlignmentGeometry.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 24, bottom: 2, top: 2),
+                child: Text(
+                  cuslangs == 'EN'
+                      ? '#Note:The displayed amount excludes any applicable fines.'
+                      : '#หมายเหตุ:ยอดที่แสดงเป็นยอดไม่รวมค่าปรับกรณีที่มีค่าปรับเกิดขึ้น',
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontFamily: FitnessAppTheme.fontName,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 10,
+                    letterSpacing: -0.1,
+                    color: FitnessAppTheme.darkText,
+                  ),
+                ),
+              ),
+            ),
             // ─── Divider ───
             Padding(
               padding:
@@ -344,54 +385,54 @@ class _BodyContent extends StatelessWidget {
               child: Row(
                 children: <Widget>[
                   // ─ Pending/Verification ─
-                  Expanded(
-                    flex: 2,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            cuslangs == 'EN'
-                                ? 'Pending/Verification'
-                                : 'รอยืนยัน/ตรวจสอบ',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontFamily: FitnessAppTheme.fontName,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                              color: FitnessAppTheme.grey.withOpacity(0.5),
+                  if (_hasIntentsAuth == true)
+                    Expanded(
+                        flex: 2,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                cuslangs == 'EN'
+                                    ? 'Pending/Verification'
+                                    : 'รอยืนยัน/ตรวจสอบ',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: FitnessAppTheme.fontName,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                  color: FitnessAppTheme.grey.withOpacity(0.5),
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        Text(
-                          _nFormat.format(sumPaid),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontFamily: FitnessAppTheme.fontName,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 16,
-                            letterSpacing: -0.2,
-                            color: FitnessAppTheme.nearlyDarkBlue,
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.only(top: 6),
-                          child: Text(
-                            cuslangs == 'EN' ? 'THB' : 'บาท',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontFamily: FitnessAppTheme.fontName,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                              color: FitnessAppTheme.grey.withOpacity(0.5),
+                            Text(
+                              _nFormat.format(widget.sumPaid),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontFamily: FitnessAppTheme.fontName,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 16,
+                                letterSpacing: -0.2,
+                                color: FitnessAppTheme.nearlyDarkBlue,
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                cuslangs == 'EN' ? 'THB' : 'บาท',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: FitnessAppTheme.fontName,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12,
+                                  color: FitnessAppTheme.grey.withOpacity(0.5),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )),
                   // ─ Invoice count ─
                   Expanded(
                     flex: 1,
@@ -413,7 +454,7 @@ class _BodyContent extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          '$invoiceCount',
+                          '${widget.invoiceCount}',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontFamily: FitnessAppTheme.fontName,

@@ -565,7 +565,7 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
                   Row(children: [
                     Container(
                       width: 4,
-                      height: 22,
+                      height: 18,
                       margin: const EdgeInsets.only(right: 10),
                       decoration: BoxDecoration(
                         color: Colors.purple,
@@ -575,8 +575,9 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
                     Text(
                       isEN ? 'Payment Evidence' : 'หลักฐานการชำระเงิน',
                       style: const TextStyle(
-                        fontSize: 17,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
+                        fontFamily: Font_.Fonts_T,
                         color: Colors.purple,
                       ),
                     ),
@@ -690,7 +691,7 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
 
     final res = await http.get(Uri.parse(url));
     final result = json.decode(res.body);
-
+    // print(url);
     if (mounted) {
       setState(() {
         if (result == null || result['data'] == null) {
@@ -849,6 +850,8 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
           child: Center(
             child: Text(
               text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: active ? Colors.white : Colors.black,
                 fontFamily: Font_.Fonts_T,
@@ -868,7 +871,8 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
       child: Row(
         children: [
           _tabButton(
-            text: (cusLang == 'EN') ? 'Waiting list' : 'รายการรอตรวจสอบ',
+            text:
+                (cusLang == 'EN') ? 'Payments-Pending' : 'การรับชำระ-รอตรวจสอบ',
             active: currentTab == InvoiceTab.paid,
             radius: const BorderRadius.only(
               topLeft: Radius.circular(8),
@@ -894,7 +898,9 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
           ),
           const SizedBox(width: 5),
           _tabButton(
-            text: (cusLang == 'EN') ? 'Payment items' : 'รายการรับชำระ',
+            text: (cusLang == 'EN')
+                ? 'Payment-Verified'
+                : 'การรับชำระ-ตรวจสอบแล้ว',
             active: currentTab == InvoiceTab.unpaid,
             radius: const BorderRadius.only(
               topRight: Radius.circular(8),
@@ -962,9 +968,9 @@ class _SectionTitle extends StatelessWidget {
       child: Text(
         title,
         style: const TextStyle(
-          fontFamily: FitnessAppTheme.fontName,
-          fontWeight: FontWeight.w700,
-          fontSize: 18,
+          fontFamily: Font_.Fonts_T,
+          fontWeight: FontWeight.bold,
+          fontSize: 15,
           color: Colors.black87,
         ),
       ),
@@ -1140,40 +1146,50 @@ class InvoiceCard extends StatelessWidget {
                         //     ),
                         //   ),
                         // ]),
-                        Row(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.calendar_today,
-                              size: 14, color: Colors.black54),
-                          const SizedBox(width: 6),
-                          Text(
-                            dueStr,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontFamily: Font_.Fonts_T,
-                              fontSize: 12.5,
-                            ),
-                          ),
-                        ]),
-                        if (model.bno != '' && model.bno != null)
-                          Row(mainAxisSize: MainAxisSize.min, children: [
-                            const Icon(Icons.account_balance,
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_today,
                                 size: 14, color: Colors.black54),
                             const SizedBox(width: 6),
-                            Text(
-                              (model.ptname.toString() == 'เงินสด' ||
-                                      model.bno.toString() == 'เงินสด')
-                                  ? isEN
-                                      ? 'cash'
-                                      : model.bno ?? '-'
-                                  : model.bno ?? '-',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontFamily: Font_.Fonts_T,
-                                fontSize: 12.5,
+                            Flexible(
+                              child: Text(
+                                dueStr,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontFamily: Font_.Fonts_T,
+                                  fontSize: 12.5,
+                                ),
                               ),
                             ),
-                          ]),
+                          ],
+                        ),
+                        if (model.bno != '' && model.bno != null)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.account_balance,
+                                  size: 14, color: Colors.black54),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  (model.ptname.toString() == 'เงินสด' ||
+                                          model.bno.toString() == 'เงินสด')
+                                      ? isEN
+                                          ? 'cash'
+                                          : model.bno ?? '-'
+                                      : model.bno ?? '-',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontFamily: Font_.Fonts_T,
+                                    fontSize: 12.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         // ตัวอย่าง chip ขวา (จะโชว์อะไรก็เปลี่ยนได้)ฃ
                         (model.status.toString() == '1')
                             ? chip(isEN ? 'Pending' : 'รอตรวจสอบ',
@@ -1190,6 +1206,13 @@ class InvoiceCard extends StatelessWidget {
                       onViewSlip: onViewSlip,
                       onUploadSlipAgain: onUploadSlipAgain,
                     ),
+                    if (model.inv_list != null && model.inv_list != '') ...[
+                      const SizedBox(height: 6),
+                      _InvListItem(
+                        text: model.inv_list ?? '-',
+                        isEN: isEN,
+                      ),
+                    ]
                   ],
                 ),
               ),
@@ -1221,7 +1244,7 @@ class _HeaderBar extends SliverPersistentHeaderDelegate {
         decoration: BoxDecoration(
           color: FitnessAppTheme.white.withOpacity(opacity),
           borderRadius: const BorderRadius.only(
-            bottomLeft: Radius.circular(32.0),
+            bottomLeft: Radius.circular(0.0),
           ),
           boxShadow: <BoxShadow>[
             BoxShadow(
@@ -1284,6 +1307,98 @@ class _HeaderBar extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _HeaderBar oldDelegate) =>
       oldDelegate.opacity != opacity || oldDelegate.title != title;
+}
+
+/// ✅ Widget แสดง inv_list แบบย่อ/ขยายได้
+class _InvListItem extends StatefulWidget {
+  const _InvListItem({required this.text, required this.isEN});
+  final String text;
+  final bool isEN;
+
+  @override
+  State<_InvListItem> createState() => _InvListItemState();
+}
+
+class _InvListItemState extends State<_InvListItem> {
+  bool _isExpanded = false;
+
+  // คำนวณว่าข้อความยาวพอที่จะต้องย่อหรือไม่ (มากกว่า ~ 35 ตัวอักษร)
+  bool get _isLongText => widget.text.length > 35;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.isEN ? 'ref to : ' : 'อ้างอิงถึง : ',
+              style: const TextStyle(
+                fontFamily: Font_.Fonts_T,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                alignment: Alignment.topLeft,
+                child: Text(
+                  widget.text,
+                  maxLines: _isExpanded ? null : 1,
+                  overflow: _isExpanded
+                      ? TextOverflow.visible
+                      : TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: Font_.Fonts_T,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        // แสดงปุ่มย่อ/ขยาย เมื่อข้อความยาวพอ
+        if (_isLongText)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, left: 70),
+            child: InkWell(
+              onTap: () => setState(() => _isExpanded = !_isExpanded),
+              borderRadius: BorderRadius.circular(4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _isExpanded
+                        ? (widget.isEN ? 'Collapse' : 'ย่อ')
+                        : (widget.isEN ? 'Expand' : 'ขยาย'),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.blue,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: Font_.Fonts_T,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    _isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 14,
+                    color: Colors.blue,
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// ✅ แถบสถานะไฟล์สลิปด้านล่างของแต่ละการ์ด
@@ -1382,9 +1497,6 @@ class _SlipStatusBarState extends State<_SlipStatusBar> {
     final isEN = widget.isEN;
     final status = widget.model.status.toString();
 
-    // แสดงเฉพาะรายการที่รอตรวจสอบ (status=1)
-    if (status != '1') return const SizedBox.shrink();
-
     // กำลังตรวจสอบ
     if (_status == 0) {
       return Container(
@@ -1417,7 +1529,7 @@ class _SlipStatusBarState extends State<_SlipStatusBar> {
       );
     }
 
-    // ไม่มีชื่อไฟล์ใน DB
+    // ไม่มีชื่อไฟล์ใน DB (แสดงสถานะอย่างเดียว ไม่ให้อัปโหลดใหม่)
     if (_status == 2) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1442,35 +1554,12 @@ class _SlipStatusBarState extends State<_SlipStatusBar> {
                 ),
               ),
             ),
-            if (widget.onUploadSlipAgain != null)
-              InkWell(
-                onTap: () => widget.onUploadSlipAgain!(widget.model),
-                borderRadius: BorderRadius.circular(999),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(.1),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.blue.withOpacity(.3)),
-                  ),
-                  child: Text(
-                    isEN ? 'Upload' : 'อัปโหลด',
-                    style: TextStyle(
-                      fontFamily: Font_.Fonts_T,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.blue,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       );
     }
 
-    // มีชื่อไฟล์แต่ไฟล์หายจาก server
+    // มีชื่อไฟล์แต่ไฟล์หายจาก server (อนุญาตให้อัปโหลดใหม่ได้)
     if (_status == 3) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1524,7 +1613,7 @@ class _SlipStatusBarState extends State<_SlipStatusBar> {
       );
     }
 
-    // มีไฟล์สลิปปกติ
+    // มีไฟล์สลิปปกติ (เหลือเฉพาะปุ่ม "ดู" ไม่ให้อัปใหม่)
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -1566,30 +1655,6 @@ class _SlipStatusBarState extends State<_SlipStatusBar> {
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     color: Colors.purple,
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(width: 6),
-          if (widget.onUploadSlipAgain != null)
-            InkWell(
-              onTap: () => widget.onUploadSlipAgain!(widget.model),
-              borderRadius: BorderRadius.circular(999),
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(.1),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: Colors.blue.withOpacity(.3)),
-                ),
-                child: Text(
-                  isEN ? 'Re-upload' : 'อัปใหม่',
-                  style: TextStyle(
-                    fontFamily: Font_.Fonts_T,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.blue,
                   ),
                 ),
               ),

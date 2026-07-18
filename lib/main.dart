@@ -20,6 +20,7 @@
 
 //----------------------------------------------------->
 //
+import 'dart:async';
 import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -38,36 +39,78 @@ import 'security/watermark_widget.dart';
 // ==== ตัวแปรเก็บ URL เริ่มต้น (แก้ปัญหา Router ลบ Hash) ====
 String initialAppUrl = '';
 
-void main() async {
-  // เก็บเวลาเริ่มต้นเพื่อวัดประสิทธิภาพ
-  final stopwatch = Stopwatch()..start();
+void main() {
+  // ===== ปิด debugPrint และ print ทั้งหมดเมื่อ kEnableDebugPrint = true =====
+  // ต้องครอบตั้งแต่ WidgetsFlutterBinding.ensureInitialized() ด้านใน Zone
+  // มิฉะนั้น callback ของ Flutter (เช่น onPressed -> signInThread) จะรันใน
+  // Zone.root และพ้นจากการดักจับ print
+  runZonedGuarded(
+    () async {
+      // เก็บเวลาเริ่มต้นเพื่อวัดประสิทธิภาพ
+      final stopwatch = Stopwatch()..start();
 
-  WidgetsFlutterBinding.ensureInitialized();
+      WidgetsFlutterBinding.ensureInitialized();
 
-  // สำคัญมาก: เก็บ URL ไว้ตั้งแต่เปิดแอป ก่อนที่ Flutter Router จะลบมันทิ้ง!
-  initialAppUrl = Uri.base.toString();
-  try {
-    initialAppUrl = Uri.decodeFull(html.window.location.href);
-  } catch (e) {}
+      // สำคัญมาก: เก็บ URL ไว้ตั้งแต่เปิดแอป ก่อนที่ Flutter Router จะลบมันทิ้ง!
+      initialAppUrl = Uri.base.toString();
+      try {
+        initialAppUrl = Uri.decodeFull(html.window.location.href);
+      } catch (e) {}
 
-  // Initialize ApiSession to load saved tokens from SharedPreferences
-  await ApiSession.initialize();
+      // Initialize ApiSession to load saved tokens from SharedPreferences
+      await ApiSession.initialize();
 
-  debugPrint('Initialization took: ${stopwatch.elapsedMilliseconds}ms');
+      // 1) ปิด debugPrint โดยตั้งเป็นฟังก์ชันว่าง
+      // 2) ดักจับ print ผ่าน ZoneSpecification (print ไม่สามารถ assign ใหม่ได้)
+      if (!kEnableDebugPrint) {
+        debugPrint = (String? message, {int? wrapWidth}) {};
+      }
 
-  // ปิด debugPrint ถ้า kEnableDebugPrint = false
-  if (!kEnableDebugPrint) {
-    debugPrint = (String? message, {int? wrapWidth}) {};
-  }
+      if (kEnableDebugPrint) {
+        debugPrint('Initialization took: ${stopwatch.elapsedMilliseconds}ms');
+      }
 
-  runApp(const SplashApp());
+      runApp(const SplashApp());
+    },
+    (error, stack) {
+      final message = 'Uncaught error: $error';
+      if (kEnableDebugPrint) {
+        debugPrint('$message\n$stack');
+      }
+      _appendAppDebugLog(message);
+    },
+    zoneSpecification: ZoneSpecification(
+      print: (self, parent, zone, line) {
+        final message = line?.toString() ?? '';
+        if (kEnableDebugPrint) {
+          parent.print(zone, line);
+        }
+        _appendAppDebugLog(message);
+      },
+    ),
+  );
 }
 
 // ==== bool เปิด/ปิด ลายน้ำ ====
 const bool kShowWatermark = false; // ← true = เปิด, false = ปิด
 
 // ==== bool เปิด/ปิด debugPrint ====
-const bool kEnableDebugPrint = true; // ← true = เปิด, false = ปิด
+const bool kEnableDebugPrint = false; // ← true = เปิด, false = ปิด
+final ValueNotifier<List<String>> appDebugLogs =
+    ValueNotifier<List<String>>(<String>[]);
+final ValueNotifier<bool> appShowDebugPanel = ValueNotifier<bool>(false);
+
+void _appendAppDebugLog(String line) {
+  // ??????? ValueNotifier rebuild ??????? build phase
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final logs = List<String>.from(appDebugLogs.value);
+    logs.add(line);
+    if (logs.length > 120) {
+      logs.removeRange(0, logs.length - 120);
+    }
+    appDebugLogs.value = logs;
+  });
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -92,8 +135,9 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         // ignore: prefer_const_literals_to_create_immutables
         localizationsDelegates: [
-          GlobalMaterialLocalizations.delegate,
+          ...GlobalMaterialLocalizations.delegates,
           GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
           SfGlobalLocalizations.delegate
         ],
         // ignore: prefer_const_literals_to_create_immutables
@@ -135,7 +179,108 @@ class MyApp extends StatelessWidget {
             );
           }
 
-          return result;
+          return ValueListenableBuilder<List<String>>(
+            valueListenable: appDebugLogs,
+            builder: (context, logs, child) {
+              return ValueListenableBuilder<bool>(
+                valueListenable: appShowDebugPanel,
+                builder: (context, showDebug, child) {
+                  // ปิด debug overlay ทั้งหมดเมื่อ kEnableDebugPrint = true
+                  // (ไม่งั้น Stack ครอบ child ทำให้ UI ซีดจาง + กิน hit-test)
+                  if (!kEnableDebugPrint) {
+                    return child!;
+                  }
+                  return Stack(
+                    children: [
+                      child!,
+                      Positioned(
+                        bottom: 16,
+                        right: 16,
+                        child: FloatingActionButton.small(
+                          heroTag: 'debug-log-toggle',
+                          backgroundColor: Colors.black87,
+                          foregroundColor: Colors.white,
+                          onPressed: () {
+                            appShowDebugPanel.value = !showDebug;
+                          },
+                          child: const Icon(Icons.bug_report),
+                        ),
+                      ),
+                      if (showDebug)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          height: MediaQuery.of(context).size.height * 0.45,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.85),
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(16),
+                                topRight: Radius.circular(16),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  child: Row(
+                                    children: [
+                                      const Text(
+                                        'Debug Log',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.close,
+                                          color: Colors.white,
+                                        ),
+                                        onPressed: () {
+                                          appShowDebugPanel.value = false;
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const Divider(color: Colors.white54, height: 1),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12),
+                                    child: ListView.builder(
+                                      itemCount: logs.length,
+                                      reverse: true,
+                                      itemBuilder: (context, index) {
+                                        final log =
+                                            logs[logs.length - 1 - index];
+                                        return Text(
+                                          log,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+                child: child,
+              );
+            },
+            child: result,
+          );
         },
         // home: const ButtonNavBar(),
         home: const AuthGate(),
@@ -187,51 +332,77 @@ class _AuthGateState extends State<AuthGate> {
         url.contains('line_error=');
   }
 
+  // ✅ นำทางหลังจาก build เสร็จ เพื่อไม่ให้ LoginScreen.initState ทำงาน
+  // ระหว่างที่ AuthGate กำลัง build (ป้องกัน setState during build loop)
+  void _navigateTo(Widget page) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => page),
+        (route) => false,
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    // URL พิเศษ -> ให้ LoginScreen จัดการเอง
+    // URL พิเศษ -> ให้ LoginScreen จัดการเอง (นำทางหลัง build)
     if (_resultFuture == null) {
-      return const LoginScreen();
+      _navigateTo(const LoginScreen());
+      return const _GatePlaceholder();
     }
 
     return FutureBuilder<SignInResult>(
       future: _resultFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            backgroundColor: Colors.white,
-            body: Center(
-              child: CircularProgressIndicator(
-                color: Colors.indigo,
-              ),
-            ),
-          );
+          return const _GatePlaceholder();
         }
 
         if (!snapshot.hasData) {
-          return const LoginScreen();
+          _navigateTo(const LoginScreen());
+          return const _GatePlaceholder();
         }
 
         final result = snapshot.data!;
 
         // ✅ กรณีสำเร็จและ backend ตอบ 1 ตลาด -> เปิด FitnessAppHomeScreen
         if (result.destination != null) {
-          return result.destination!;
+          _navigateTo(result.destination!);
+          return const _GatePlaceholder();
         }
 
         // ✅ กรณี backend ตอบหลายตลาด -> เปิด MarketSelectScreen ให้ผู้ใช้เลือก
         if (result.requiresMarketSelection && result.validMarkets.isNotEmpty) {
-          return SignInService.buildMarketSelectScreen(
-              context, result.validMarkets);
+          _navigateTo(SignInService.buildMarketSelectScreen(
+              context, result.validMarkets));
+          return const _GatePlaceholder();
         }
 
         // ✅ กรณี failure (ไม่มี creds / password ผิด / error) -> LoginScreen
-        // ถ้ามี errorMessage สามารถแสดงเป็น SnackBar ได้ในอนาคต
         if (result.errorMessage != null) {
           debugPrint('AuthGate failure: ${result.errorMessage}');
         }
-        return const LoginScreen();
+        _navigateTo(const LoginScreen());
+        return const _GatePlaceholder();
       },
+    );
+  }
+}
+
+/// จอโหลดชั่วคราวระหว่างรอ AuthGate ตัดสินใจว่าจะไปหน้าไหน
+class _GatePlaceholder extends StatelessWidget {
+  const _GatePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: CircularProgressIndicator(
+          color: Colors.indigo,
+        ),
+      ),
     );
   }
 }
@@ -350,7 +521,7 @@ class ResponsiveWrapper extends StatelessWidget {
   const ResponsiveWrapper({
     super.key,
     required this.child,
-    this.maxWidth = 480, // ขนาดสูงสุดโทรศัพท์
+    this.maxWidth = 500, // ขนาดสูงสุดโทรศัพท์
     this.minWidth = 330, // ขนาดขั้นต่ำที่รองรับ
   });
 

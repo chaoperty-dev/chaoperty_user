@@ -8190,7 +8190,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: Colors.indigo,
-                                        fontSize: 16),
+                                        fontSize: 14),
                                   ),
                                   const SizedBox(width: 6),
                                   Container(
@@ -8257,6 +8257,15 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                       },
                                     ),
                                   Spacer(),
+                                  Text(
+                                    widget.cuslang == 'EN'
+                                        ? 'Help'
+                                        : 'ช่วยเหลือ',
+                                    style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.indigo),
+                                  ),
                                   InkWell(
                                     child: Icon(Icons.info_outline,
                                         color: Colors.blueGrey, size: 20),

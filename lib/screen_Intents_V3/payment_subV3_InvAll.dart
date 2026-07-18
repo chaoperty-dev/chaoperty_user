@@ -2276,6 +2276,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   String? base64_Slip, fileName_Slip;
   var extension_;
   var file_;
+  String? _lastUploadErrorMessage;
   Future<void> uploadFile_Slip() async {
     final imagePicker = ImagePicker();
     final pickedFile = await imagePicker.pickImage(
@@ -2289,17 +2290,18 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       return;
     } else {
       var imageBytes = await pickedFile.readAsBytes();
+      imageBytes = await compute(_compressImageIsolate, imageBytes);
+      final pngBytes = _convertImageToPng(imageBytes);
 
-      // 3. Encode the image as a base64 string
-      final base64Image = base64Encode(imageBytes);
+      // 3. Encode the PNG image as a base64 string in a background isolate
+      final base64Image = await compute(_base64EncodeIsolate, pngBytes);
+      if (!mounted) return;
+
       setState(() {
         base64_Slip = base64Image;
-        _uploadedSlipData = imageBytes;
-      });
-      // //print(base64_Slip);
-      setState(() {
+        _uploadedSlipData = pngBytes;
+        _slipImageBytes = pngBytes;
         extension_ = 'png';
-        // file_ = file;
       });
     }
   }
@@ -2311,6 +2313,35 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     // เอาเฉพาะตัวเลข+ตัวอักษร ลบ dash ออก แล้วตัดเอา 16 ตัวแรก
     final clean = uuid.replaceAll('-', '');
     return clean.substring(0, 16);
+  }
+
+  String _getExtensionFromName(String? name) {
+    if (name == null || name.isEmpty) return 'jpg';
+    final ext = name.split('.').last.toLowerCase();
+    if (ext == 'jpeg') return 'jpg';
+    if (ext == 'png' || ext == 'jpg') return ext;
+    return 'jpg';
+  }
+
+  String _getImageExtensionFromBytes(Uint8List bytes, [String? fallback]) {
+    final mimeType = lookupMimeType('', headerBytes: bytes);
+    if (mimeType == 'image/jpeg') return 'jpg';
+    if (mimeType == 'image/png') return 'png';
+    if (mimeType == 'image/gif') return 'gif';
+    if (fallback != null && fallback.isNotEmpty) {
+      return _getExtensionFromName(fallback);
+    }
+    return 'jpg';
+  }
+
+  Uint8List _convertImageToPng(Uint8List bytes) {
+    try {
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return bytes;
+      return Uint8List.fromList(img.encodePng(decoded));
+    } catch (e) {
+      return bytes;
+    }
   }
 
   /// อัปโหลดสลิปไปยังเซิร์ฟเวอร์
@@ -2325,7 +2356,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   ///    - จะถูก clear เฉพาะตอน `in_Trans_invoice` สำเร็จเท่านั้น
   Future<bool> OKuploadFile_Slip(newValuePDFimg) async {
     try {
-      setState(() => extension_ = 'png');
+      setState(() {
+        extension_ = extension_?.toString() ?? 'png';
+      });
 
       final preferences = await SharedPreferences.getInstance();
       final ciddoc_ = widget.teNantModel == null
@@ -2335,7 +2368,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       final unique = _uniqueSuffix();
 
       final base = 'slip_${ciddoc_ ?? "NA"}_$unique';
-      fileName_Slip = '$base.$extension_';
+      fileName_Slip = '$base.${extension_ ?? 'png'}';
       // ✅ safety: even if upload fails below, fileName_Slip is preserved
       // (the user wants traceability — losing the filename is not acceptable)
 
@@ -2345,16 +2378,6 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
           '📎 OKuploadFile_Slip: _slipImageBytes=${_slipImageBytes != null ? _slipImageBytes!.length : "null"} bytes');
       debugPrint(
           '📎 OKuploadFile_Slip: base64_Slip=${base64_Slip != null ? "${base64_Slip!.length} chars" : "null"}');
-
-      // สร้าง URI — ส่งเฉพาะ query params ที่จำเป็น (กันซ้ำซ้อนกับ body)
-      final uri =
-          Uri.parse('${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php')
-              .replace(
-        queryParameters: {
-          'Foder': foder ?? '',
-        },
-      );
-      debugPrint('📎 OKuploadFile_Slip: url=$uri');
 
       // ✅ ตรวจสอบข้อมูลรูปภาพก่อน — ป้องกันอัปโหลดเปล่า
       final hasBinary = _slipImageBytes != null && _slipImageBytes!.isNotEmpty;
@@ -2370,79 +2393,335 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
         return false;
       }
 
-      if (kIsWeb) {
-        // ✅ Web: ใช้ base64 POST (MultipartRequest ใช้ dart:io ซึ่งใช้ไม่ได้บน web)
-        if (!hasBase64) {
-          debugPrint('❌ OKuploadFile_Slip: Web ต้องมี base64_Slip');
-          return false;
-        }
-        final response = await http.post(
-          uri,
-          body: {
-            'image': base64_Slip,
-            'Foder': foder ?? '',
-            'name': fileName_Slip ?? '',
-            'ex': extension_?.toString() ?? 'png',
-          },
-        ).timeout(const Duration(seconds: 20));
-        debugPrint(
-            '📎 OKuploadFile_Slip: web base64 status=${response.statusCode}, body=${response.body}');
-        final ok = response.statusCode == 200 || response.statusCode == 201;
-        if (!ok) {
-          debugPrint(
-              '❌ OKuploadFile_Slip: web upload failed status=${response.statusCode}');
-        }
-        return ok;
+      final normalizedBytes = (_slipImageBytes != null)
+          ? _convertImageToPng(_slipImageBytes!)
+          : null;
+      if (normalizedBytes != null) {
+        _slipImageBytes = normalizedBytes;
+        base64_Slip = base64Encode(normalizedBytes);
+        extension_ = 'png';
+      }
+      final imageBase64 = base64_Slip;
+      if (imageBase64 == null || imageBase64.isEmpty) {
+        debugPrint('❌ OKuploadFile_Slip: imageBase64 is empty');
+        return false;
       }
 
-      // ✅ Mobile/Desktop
-      if (hasBinary) {
-        final request = http.MultipartRequest('POST', uri);
-        request.fields['Foder'] = foder ?? '';
-        request.fields['name'] = fileName_Slip ?? '';
-        request.fields['ex'] = extension_?.toString() ?? 'png';
-        request.files.add(http.MultipartFile.fromBytes(
-          'image',
-          _slipImageBytes!,
-          filename: fileName_Slip ?? 'slip.png',
-          contentType: MediaType('image', 'png'),
-        ));
-        final streamed =
-            await request.send().timeout(const Duration(seconds: 30));
-        final responseBody = await streamed.stream.bytesToString().timeout(
-              const Duration(seconds: 10),
-            );
-        debugPrint(
-            '📎 OKuploadFile_Slip: multipart status=${streamed.statusCode}, body=$responseBody');
-        final ok = streamed.statusCode == 200 || streamed.statusCode == 201;
-        if (!ok) {
-          debugPrint(
-              '❌ OKuploadFile_Slip: multipart failed status=${streamed.statusCode}');
-        }
-        return ok;
-      }
-
-      // Fallback: base64 POST (กรณี binary ไม่มี)
-      final response = await http.post(
-        uri,
+      // ✅ V3 NEW (2026-07-16): เปลี่ยนเป็น multipart upload → api_intents_v3.php
+      //    รองรับไฟล์ใหญ่ทุกขนาด (99%) ไม่ผ่าน base64
+      // ❌ ของเดิม (base64 POST ไป File_uploadSlip_NewEdit.php) — คอมเมนต์ไว้ ไม่ลบ
+      /*
+      final uploadUriOld =
+          Uri.parse('${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php')
+              .replace(queryParameters: {
+        'name': fileName_Slip ?? '',
+        'Foder': foder ?? '',
+        'extension': extension_ ?? 'png',
+      });
+      final responseOld = await http.post(
+        uploadUriOld,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        },
         body: {
-          'image': base64_Slip,
+          'image': imageBase64,
           'Foder': foder ?? '',
           'name': fileName_Slip ?? '',
           'ex': extension_?.toString() ?? 'png',
         },
-      ).timeout(const Duration(seconds: 20));
+      ).timeout(const Duration(seconds: 30));
+      */
+
+      // ✅ NEW: multipart → api_intents_v3.php (PHP จะแปลงเป็น PNG + ตั้งชื่อ + คืน filename/extension)
+      final uploadUri =
+          Uri.parse('${MyConstant().domain_chao}/api_intents_v3.php');
+      debugPrint('📎 OKuploadFile_Slip: uploadUri=$uploadUri');
       debugPrint(
-          '📎 OKuploadFile_Slip: base64 status=${response.statusCode}, body=${response.body}');
+          '📎 OKuploadFile_Slip: name=$fileName_Slip, Foder=$foder, extension=$extension_');
+
+      final uploadBytes = normalizedBytes ?? _slipImageBytes ?? Uint8List(0);
+      if (uploadBytes.isEmpty) {
+        debugPrint('❌ OKuploadFile_Slip: ไม่มี bytes ให้อัปโหลด');
+        return false;
+      }
+      final request = http.MultipartRequest('POST', uploadUri)
+        ..fields['Foder'] = foder ?? ''
+        ..fields['name'] = fileName_Slip ?? ''
+        ..fields['ex'] = (extension_?.toString() ?? 'png')
+        ..files.add(http.MultipartFile.fromBytes(
+          'file',
+          uploadBytes,
+          filename: fileName_Slip ?? 'slip.png',
+        ));
+      final streamedResponse =
+          await request.send().timeout(const Duration(seconds: 180));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint(
+          '📎 OKuploadFile_Slip: multipart status=${response.statusCode}, body=${response.body}');
       final ok = response.statusCode == 200 || response.statusCode == 201;
       if (!ok) {
         debugPrint(
             '❌ OKuploadFile_Slip: base64 failed status=${response.statusCode}');
+        if (response.statusCode == 404) {
+          debugPrint(
+              '❌ OKuploadFile_Slip: 404 endpoint not found URL=$uploadUri');
+        }
       }
       return ok;
     } catch (e, stack) {
       debugPrint('❌ OKuploadFile_Slip error: $e');
       debugPrint('🧭 StackTrace:\n$stack');
+      return false;
+    }
+  }
+
+  // New direct upload flow for V3: single-image raw upload without resize/compression.
+  Future<bool> _confirmPaymentNewFlow(BuildContext ctx) async {
+    if (_slipImageBytes == null || _slipImageName == null) {
+      _showMyDialogPay_Error(widget.cuslang == 'EN'
+          ? 'Please select slip image before confirming.'
+          : 'กรุณาเลือกสลิปก่อนยืนยัน');
+      return false;
+    }
+
+    _lastUploadErrorMessage = null;
+    final uploadOk = await _uploadSlipImageDirect();
+    if (!uploadOk) {
+      if (Navigator.of(ctx).canPop()) {
+        Navigator.of(ctx).pop();
+      }
+      return false;
+    }
+
+    final List newValuePDFimg = [];
+    if (renTalModels.isNotEmpty &&
+        renTalModels[0].imglogo != null &&
+        renTalModels[0].imglogo!.trim().isNotEmpty) {
+      newValuePDFimg.add(
+          '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+    }
+
+    await in_Trans_invoice(newValuePDFimg, showSuccess: false);
+    return true;
+  }
+
+  Future<bool> _uploadSlipImageDirect() async {
+    try {
+      if (_slipImageBytes == null || _slipImageName == null) {
+        debugPrint('❌ _uploadSlipImageDirect: no image selected');
+        return false;
+      }
+
+      final preferences = await SharedPreferences.getInstance();
+      final ciddoc_ = widget.teNantModel == null
+          ? preferences.getString('usercid')
+          : preferences.getString('custno');
+      // ✅ ไม่แปลง PNG ใน Flutter — ส่ง bytes ดิบไป PHP (api_intents_v3.php)
+      // ซึ่งมี GD แปลงเป็น PNG + resize 800px ให้เอง (เร็วกว่าทำใน Dart มาก)
+      final normalizedBytes = _slipImageBytes!;
+      final imageBase64 = base64Encode(normalizedBytes);
+      extension_ = 'png';
+      _slipImageBytes = normalizedBytes;
+      base64_Slip = imageBase64;
+      final unique = _uniqueSuffix();
+      final base = 'slip_${ciddoc_ ?? 'NA'}_$unique';
+      fileName_Slip = '$base.${extension_ ?? 'png'}';
+
+      if (imageBase64.isEmpty) {
+        debugPrint('❌ _uploadSlipImageDirect: base64 is empty');
+        return false;
+      }
+      if (foder == null || foder!.isEmpty) {
+        debugPrint('❌ _uploadSlipImageDirect: foder is empty');
+        return false;
+      }
+
+      // ✅ V3 NEW (2026-07-16): multipart upload → api_intents_v3.php
+      //    รองรับไฟล์ใหญ่ 99% (ไม่ผ่าน base64)
+      // ❌ ของเดิม (base64 POST ไป File_uploadSlip_NewEdit.php) — คอมเมนต์ไว้ ไม่ลบ
+      /*
+      final uploadUriOld =
+          Uri.parse('${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php')
+              .replace(queryParameters: {
+        'name': fileName_Slip ?? '',
+        'Foder': foder ?? '',
+        'extension': extension_ ?? '',
+      });
+      final responseOld = await http.post(
+        uploadUriOld,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        },
+        body: {
+          'image': imageBase64,
+          'Foder': foder ?? '',
+          'name': fileName_Slip ?? '',
+          'ex': extension_?.toString() ?? 'jpg',
+        },
+      ).timeout(const Duration(seconds: 45));
+      */
+
+      // ✅ NEW: multipart → api_intents_v3.php
+      final uploadUri =
+          Uri.parse('${MyConstant().domain_chao}/api_intents_v3.php');
+      debugPrint('📎 _uploadSlipImageDirect: uploadUri=$uploadUri');
+      debugPrint(
+          '📎 _uploadSlipImageDirect: fileName=$fileName_Slip, ext=$extension_');
+
+      final request = http.MultipartRequest('POST', uploadUri)
+        ..fields['Foder'] = foder ?? ''
+        ..fields['name'] = fileName_Slip ?? ''
+        ..fields['ex'] = (extension_?.toString() ?? 'jpg')
+        ..files.add(http.MultipartFile.fromBytes(
+          'file',
+          normalizedBytes,
+          filename: _slipImageName ?? fileName_Slip ?? 'slip.png',
+        ));
+      final streamedResponse =
+          await request.send().timeout(const Duration(seconds: 180));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint(
+          '📎 _uploadSlipImageDirect: multipart status=${response.statusCode}, body=${response.body}');
+      final ok = response.statusCode == 200 || response.statusCode == 201;
+      if (!ok) {
+        _lastUploadErrorMessage =
+            'Upload failed status=${response.statusCode} (${uploadUri.toString()})\n${response.body}';
+        if (response.statusCode == 404) {
+          _lastUploadErrorMessage =
+              'Upload failed 404: endpoint not found. URL=$uploadUri\n${response.body}';
+        }
+        debugPrint('❌ _uploadSlipImageDirect: $_lastUploadErrorMessage');
+      }
+      return ok;
+    } catch (e, stack) {
+      _lastUploadErrorMessage = 'Upload exception: $e';
+      debugPrint('❌ _uploadSlipImageDirect error: $_lastUploadErrorMessage');
+      debugPrint('🧭 StackTrace:\n$stack');
+      return false;
+    }
+  }
+
+  void _showUploadErrorDialog(String message) {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Upload Error'),
+          content: SingleChildScrollView(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool> _pickSingleSlipImage() async {
+    if (kIsWeb) {
+      final completer = Completer<bool>();
+      final uploadInput = html.FileUploadInputElement();
+      uploadInput.accept = 'image/*';
+      uploadInput.multiple = false;
+      uploadInput.style.display = 'none';
+      html.document.body?.append(uploadInput);
+
+      uploadInput.onAbort.listen((event) {
+        if (!completer.isCompleted) completer.complete(false);
+        uploadInput.remove();
+      });
+      uploadInput.onError.listen((event) {
+        if (!completer.isCompleted) completer.complete(false);
+        uploadInput.remove();
+      });
+
+      uploadInput.onChange.listen((event) async {
+        final files = uploadInput.files;
+        if (files == null || files.isEmpty) {
+          if (!completer.isCompleted) completer.complete(false);
+          uploadInput.remove();
+          return;
+        }
+
+        try {
+          final file = files.first;
+          final reader = html.FileReader();
+          reader.readAsArrayBuffer(file);
+          await reader.onLoadEnd.first;
+          if (reader.result == null) {
+            if (!completer.isCompleted) completer.complete(false);
+            uploadInput.remove();
+            return;
+          }
+
+          final result = reader.result;
+          final bytes = result is Uint8List
+              ? result
+              : Uint8List.view((result as ByteBuffer));
+          // ✅ ไม่แปลง PNG ตอนเลือกรูป (หน่วง) — โชว์ preview ด้วย bytes ดิบก่อน
+          // แปลงเป็น PNG ทีหลังตอนกดอัปโหลด (_uploadSlipImageDirect ทำอยู่แล้ว)
+          final selectedExt = _getExtensionFromName(file.name);
+          final base64Str = base64Encode(bytes);
+
+          if (mounted) {
+            setState(() {
+              _slipImageBytes = bytes;
+              _slipImageName =
+                  file.name.replaceAll(RegExp(r'\.[^\.]*$'), '.$selectedExt');
+              _uploadedSlipData = bytes;
+              base64_Slip = base64Str;
+              fileName_Slip = null;
+              extension_ = selectedExt;
+            });
+          }
+          if (!completer.isCompleted) completer.complete(true);
+        } catch (e) {
+          debugPrint('❌ _pickSingleSlipImage web error: $e');
+          if (!completer.isCompleted) completer.complete(false);
+        } finally {
+          uploadInput.remove();
+        }
+      });
+
+      uploadInput.click();
+      return completer.future;
+    }
+
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+      );
+      if (pickedFile == null) return false;
+      final bytes = await pickedFile.readAsBytes();
+      final selectedExt = _getExtensionFromName(pickedFile.name);
+      final base64Str = base64Encode(bytes);
+
+      if (mounted) {
+        setState(() {
+          _slipImageBytes = bytes;
+          _slipImageName =
+              pickedFile.name.replaceAll(RegExp(r'\.[^\.]*$'), '.$selectedExt');
+          _uploadedSlipData = bytes;
+          base64_Slip = base64Str;
+          fileName_Slip = null;
+          extension_ = selectedExt;
+        });
+      }
+      return true;
+    } catch (e) {
+      debugPrint('❌ _pickSingleSlipImage mobile error: $e');
       return false;
     }
   }
@@ -6503,9 +6782,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             );
                           },
                         );
-                        // _processPaymentConfirmation(ctx);
 
-                        final success = await _processPaymentConfirmation(ctx);
+                        // Use the new direct upload flow for V3
+                        final success = await _confirmPaymentNewFlow(ctx);
 
                         if (!mounted) return;
 
@@ -6513,56 +6792,29 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         Navigator.of(context).pop();
 
                         if (!success) {
-                          // ✅ อัปโหลดไม่เข้า — ปิด confirm dialog แล้วพากลับหน้า home ทันที
-                          // (popup แจ้งเตือนเปิดค้างไว้ให้ user กดปิดเอง)
-                          // ปิด Alert dialog หลัก (SlideConfirm)
-                          if (Navigator.of(ctx).canPop()) {
-                            Navigator.of(ctx).pop();
+                          if (mounted) {
+                            _showUploadErrorDialog(
+                              _lastUploadErrorMessage ??
+                                  (widget.cuslang == 'EN'
+                                      ? 'Slip upload failed. Please try again.'
+                                      : 'อัปโหลดสลิปไม่สำเร็จ กรุณาลองอีกครั้ง'),
+                            );
                           }
-                          // ใช้ cid จาก TeNantModel ถ้ามี ไม่งั้น fallback เป็น custno จาก SharedPreferences
-                          String? navigateCustno;
-                          if (widget.teNantModel != null &&
-                              widget.teNantModel!.isNotEmpty) {
-                            navigateCustno = widget.teNantModel![0].cid;
-                          } else {
-                            final prefs = await SharedPreferences.getInstance();
-                            navigateCustno = prefs.getString('custno');
-                          }
-                          if (!mounted) return;
-                          Navigator.pushAndRemoveUntil(context,
-                              MaterialPageRoute(builder: (context) {
-                            return FitnessAppHomeScreen(
-                                custno_s: navigateCustno);
-                          }), (route) => false);
                           return;
                         }
 
-                        if (success) {
-                          Navigator.of(ctx).pop(); // Close Alert dialog
+                        Navigator.of(ctx).pop(); // Close Alert dialog
 
-                          // Show success dialog and navigate
-                          sucress(onDismiss: () {
-                            // Use 'cid' from TeNantModel, or fallback
-                            // Note: In in_Trans_invoice, it used 'custno' from SharedPreferences.
-                            // FitnessAppHomeScreen likely expects 'custno'.
-                            // If TeNantModel.cid isn't the custno, we should grab it from Prefs or use 'cid' if it maps.
-                            // Looking at GetTeNant_Model.dart, 'cid' exists.
-                            // Let's safe bet: fetch custno from prefs again as in_Trans_invoice did,
-                            // OR just use widget.teNantModel?[0].cid if appropriate.
-                            // Given the context, let's use the safer Prefs approach if we can, or just null since
-                            // FitnessAppHomeScreen might handle it.
-                            // But wait, we can't be async here easily in onDismiss without mounting issues?
-                            // Actually, onDismiss is synchronous callback.
-                            // Let's just use widget.teNantModel?[0].cid as a best effort,
-                            // or just pass null if it's optional.
-
-                            Navigator.pushAndRemoveUntil(context,
-                                MaterialPageRoute(builder: (context) {
+                        sucress(onDismiss: () {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (context) {
                               return FitnessAppHomeScreen(
                                   custno_s: widget.teNantModel?[0].cid);
-                            }), (route) => false);
-                          });
-                        }
+                            }),
+                            (route) => false,
+                          );
+                        });
                       } finally {
                         if (mounted) {
                           setState(() => _isProcessingLink = false);
@@ -6939,141 +7191,115 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     }
 
     if (kIsWeb) {
-      // Web: use FileUploadInputElement
+      // Web: use FileUploadInputElement and allow only one image.
       final uploadInput = html.FileUploadInputElement();
       uploadInput.accept = 'image/*';
-      uploadInput.multiple = true; // Allow multiple files
-      uploadInput.click();
+      uploadInput.multiple = false;
+      uploadInput.style.display = 'none';
+
+      html.document.body?.append(uploadInput);
+
+      uploadInput.onAbort.listen((event) {
+        if (!completer.isCompleted) {
+          completer.complete(false);
+        }
+        uploadInput.remove();
+      });
+      uploadInput.onError.listen((event) {
+        if (!completer.isCompleted) {
+          completer.complete(false);
+        }
+        uploadInput.remove();
+      });
 
       uploadInput.onChange.listen((e) async {
         final files = uploadInput.files;
         if (files == null || files.isEmpty) {
-          return; // Cancelled or empty
+          if (!completer.isCompleted) {
+            completer.complete(false);
+          }
+          uploadInput.remove();
+          return;
         }
 
         _showProcessing();
 
         try {
-          List<Uint8List> images = [];
-          for (var file in files) {
-            final reader = html.FileReader();
-            reader.readAsArrayBuffer(file);
-            await reader.onLoadEnd.first;
-            if (reader.result != null) {
-              images.add(reader.result as Uint8List);
-            }
+          final file = files.first;
+          final reader = html.FileReader();
+          reader.readAsArrayBuffer(file);
+          await reader.onLoadEnd.first;
+          if (reader.result == null) {
+            if (!completer.isCompleted) completer.complete(false);
+            return;
           }
 
-          if (images.isNotEmpty) {
-            final Uint8List? finalImage = images.length == 1
-                ? images.first
-                : await mergeImagesReceiptStyle(
-                    images,
-                    ref1: return_qr_refapi1,
-                    ref2: return_qr_refapi2,
-                    ref3: return_qr_refapi3,
-                  );
+          final result = reader.result;
+          final imageBytes = result is Uint8List
+              ? result
+              : Uint8List.view((result as ByteBuffer));
+          // ✅ ไม่แปลง PNG ตอนเลือกรูป (หน่วง) — โชว์ preview ด้วย bytes ดิบก่อน
+          // แปลงเป็น PNG ทีหลังตอนกดอัปโหลด (PHP แปลงให้)
+          final base64Str = await compute(_base64EncodeIsolate, imageBytes);
+          final selectedExt = _getExtensionFromName(file.name);
 
-            if (finalImage != null) {
-              if (mounted) {
-                setState(() {
-                  _slipImageBytes = finalImage;
-                  _slipImageName =
-                      files.length > 1 ? "merged_slip.jpg" : files[0].name;
-                  _uploadedSlipData = _slipImageBytes;
-                  // Defer base64 encoding to avoid blocking UI
-                  base64_Slip = base64Encode(_slipImageBytes!);
-                  // ✅ Reset fileName_Slip & extension_ so the NEXT upload
-                  //    attempt generates a FRESH UUID-based filename.
-                  //    This guarantees: upload fail → user re-selects file →
-                  //    upload uses a new filename (not the failed attempt's).
-                  fileName_Slip = null;
-                  extension_ = null;
-                });
-                _hideProcessing();
-              }
-              completer.complete(true);
-            } else {
-              if (mounted) {
-                _hideProcessing();
-                Fluttertoast.showToast(msg: "Failed to process images");
-              }
-              completer.complete(false);
-            }
-          } else {
-            _hideProcessing();
-            completer.complete(false);
+          if (mounted) {
+            setState(() {
+              _slipImageBytes = imageBytes;
+              _slipImageName =
+                  file.name.replaceAll(RegExp(r'\.[^\.]*$'), '.$selectedExt');
+              _uploadedSlipData = imageBytes;
+              base64_Slip = base64Str;
+              fileName_Slip = null;
+              extension_ = selectedExt;
+            });
           }
+          completer.complete(true);
         } catch (e) {
-          debugPrint("Error picking web images: $e");
+          debugPrint("Error picking web image: $e");
+          if (!completer.isCompleted) completer.complete(false);
+        } finally {
           _hideProcessing();
-          completer.complete(false);
+          uploadInput.remove();
         }
       });
+
+      uploadInput.click();
     } else {
-      // Mobile/Desktop: use ImagePicker
+      // Mobile/Desktop: use ImagePicker and allow only one image.
       final ImagePicker picker = ImagePicker();
       try {
-        // Use requestQualityThumbnail for faster pick + auto-compress
-        final List<XFile> images = await picker.pickMultiImage(
-          imageQuality: 60,
-          maxWidth: 800,
-          maxHeight: 800,
+        final XFile? pickedFile = await picker.pickImage(
+          source: ImageSource.gallery,
         );
 
-        if (images.isNotEmpty) {
-          _showProcessing();
-          // Allow dialog to render before heavy work
-          await Future.delayed(const Duration(milliseconds: 100));
-
-          // Read all images in parallel instead of sequential
-          final List<Uint8List> imageBytesList = await Future.wait(
-            images.map((imgFile) => imgFile.readAsBytes()),
-          );
-
-          final Uint8List? finalImage = imageBytesList.length == 1
-              ? imageBytesList.first
-              : await mergeImagesReceiptStyle(
-                  imageBytesList,
-                  ref1: return_qr_refapi1,
-                  ref2: return_qr_refapi2,
-                  ref3: return_qr_refapi3,
-                );
-
-          if (finalImage != null) {
-            // Encode base64 outside setState to avoid blocking UI
-            final String base64Str = base64Encode(finalImage);
-            if (mounted) {
-              setState(() {
-                _slipImageBytes = finalImage;
-                _slipImageName =
-                    images.length > 1 ? "merged_slip.jpg" : images[0].name;
-                _uploadedSlipData = _slipImageBytes;
-                base64_Slip = base64Str;
-                // ✅ Reset fileName_Slip & extension_ so the NEXT upload
-                //    attempt generates a FRESH UUID-based filename.
-                //    This guarantees: upload fail → user re-selects file →
-                //    upload uses a new filename (not the failed attempt's).
-                fileName_Slip = null;
-                extension_ = null;
-              });
-              _hideProcessing();
-            }
-            completer.complete(true);
-          } else {
-            if (mounted) {
-              _hideProcessing();
-              Fluttertoast.showToast(msg: "Failed to merge images");
-            }
-            completer.complete(false);
-          }
-        } else {
+        if (pickedFile == null) {
           completer.complete(false);
+          return completer.future;
         }
-      } catch (e) {
-        debugPrint("Error picking mobile images: $e");
+
+        _showProcessing();
+        final fileBytes = await pickedFile.readAsBytes();
+        final base64Str = await compute(_base64EncodeIsolate, fileBytes);
+        final selectedExt = _getExtensionFromName(pickedFile.name);
+
+        if (mounted) {
+          setState(() {
+            _slipImageBytes = fileBytes;
+            _slipImageName = pickedFile.name
+                .replaceAll(RegExp(r'\.[^\.]*$'), '.$selectedExt');
+            _uploadedSlipData = _slipImageBytes;
+            base64_Slip = base64Str;
+            fileName_Slip = null;
+            extension_ = selectedExt;
+          });
+        }
         _hideProcessing();
-        completer.complete(false);
+        completer.complete(true);
+      } catch (e) {
+        debugPrint("Error picking mobile image: $e");
+        _hideProcessing();
+        if (!completer.isCompleted) completer.complete(false);
       }
     }
 
@@ -7725,7 +7951,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                   });
                                                   // Trigger file picker
                                                   final success =
-                                                      await _pickSlipImage();
+                                                      await _pickSingleSlipImage();
                                                   if (success &&
                                                       _slipImageBytes != null) {
                                                     if (!mounted) return;
@@ -7768,9 +7994,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                       },
                                                     );
                                                     final successUp =
-                                                        await _uploadSlipImage(
-                                                            amtRawSlip: sum_amt
-                                                                .toString());
+                                                        await _uploadSlipImageDirect();
                                                     if (mounted) {
                                                       Navigator.of(context)
                                                           .pop(); // Close dialog
@@ -8983,7 +9207,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
                                   try {
                                     // await uploadFile_Slip();
-                                    final success = await _pickSlipImage();
+                                    final success =
+                                        await _pickSingleSlipImage();
 
                                     if (!mounted) return;
 
@@ -9073,6 +9298,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                   _uploadedSlipData ??
                                                       base64Decode(base64_Slip
                                                           .toString()),
+                                                  cacheWidth: 1080,
                                                   fit: BoxFit.cover,
                                                 ),
                                               ),
@@ -9353,58 +9579,27 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                     },
                                   );
 
-                                  // Confirm Logic
-                                  List newValuePDFimg = [];
-                                  for (int index = 0; index < 1; index++) {
-                                    if ((renTalModels.isNotEmpty) &&
-                                        (renTalModels[0].imglogo?.trim() ??
-                                                '') !=
-                                            '') {
-                                      newValuePDFimg.add(
-                                          '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo?.trim() ?? ''}');
-                                    }
-                                  }
-
-                                  // sucress(); // Removed early call
-                                  // ✅ ตรวจสอบผลอัปโหลดก่อน — ถ้าไฟล์ไม่เข้า ไม่ต้องบันทึกรายการ (กันสลิปหาย)
-                                  final uploadOk =
-                                      await OKuploadFile_Slip(newValuePDFimg);
-                                  if (!uploadOk) {
-                                    debugPrint(
-                                        '❌ BottomSheet confirm: upload failed, abort');
-                                    if (!mounted) return;
-                                    // Close Loading Dialog
-                                    Navigator.of(context).pop();
-                                    // Close Sheet
-                                    Navigator.pop(context);
-                                    // ⚠️ ห้ามเรียก in_Trans_invoice! ไฟล์ยังไม่เข้าเซิร์ฟเวอร์
-                                    // บังคับให้ user เริ่มทำรายการใหม่
-                                    _showMyDialogPay_Error(widget.cuslang ==
-                                            'EN'
-                                        ? "Slip upload failed. Please start a new transaction."
-                                        : 'อัปโหลดหลักฐานไม่สำเร็จ\nกรุณาเริ่มทำรายการใหม่');
-                                    return;
-                                  }
-                                  await in_Trans_invoice(newValuePDFimg,
-                                      showSuccess: false);
-
+                                  // Confirm Logic: use the new direct upload flow
+                                  final success = await _confirmPaymentNewFlow(
+                                      parentContext);
                                   if (!mounted) return;
 
                                   // Close Loading Dialog
                                   Navigator.of(context).pop();
+
+                                  if (!success) {
+                                    // Close Sheet and do not continue
+                                    Navigator.pop(context);
+                                    return;
+                                  }
 
                                   // Close Sheet
                                   Navigator.pop(context);
 
                                   // Show Success Dialog
                                   sucress(onDismiss: () {
-                                    // Use a valid context for navigation
                                     Navigator.pushAndRemoveUntil(parentContext,
                                         MaterialPageRoute(builder: (context) {
-                                      // Fix potential null safety issue by falling back to empty string or handling null
-                                      // FitnessAppHomeScreen member 'custno_s' is nullable, so passing null is fine.
-                                      // But if 'Unexpected null value' occurred, maybe it was because of ! usage elsewhere or inside that widget.
-                                      // I will use ?.cid and ensure no bang operator is involved.
                                       return FitnessAppHomeScreen(
                                           custno_s: widget.teNantModel?[0].cid);
                                     }), (route) => false);
@@ -9576,7 +9771,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           _uploadedSlipData = null;
                         });
                         // Trigger file picker
-                        final success = await _pickSlipImage();
+                        final success = await _pickSingleSlipImage();
                         if (success && _slipImageBytes != null) {
                           if (!mounted) return;
                           showDialog(
@@ -9605,8 +9800,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                               );
                             },
                           );
-                          final successUp =
-                              await _uploadSlipImage(amtRawSlip: amount);
+                          final successUp = await _uploadSlipImageDirect();
                           if (mounted) {
                             Navigator.of(context).pop(); // Close dialog
                             if (successUp) {
@@ -9616,6 +9810,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   backgroundColor: Colors.indigo,
                                 ),
                               );
+                            } else {
+                              _showUploadErrorDialog(_lastUploadErrorMessage ??
+                                  'อัปโหลดสลิปไม่สำเร็จ กรุณาลองอีกครั้ง');
                             }
                           }
                         }
@@ -9941,6 +10138,63 @@ String _isolateFullWidthLineByChar(int width, img.BitmapFont font, String ch) {
 
 String _isolateDoubleLine(int width, img.BitmapFont font) =>
     _isolateFullWidthLineByChar(width, font, '=');
+
+// Top-level function for background base64 encoding (avoids UI hang on large images)
+String _base64EncodeIsolate(Uint8List bytes) {
+  return base64Encode(bytes);
+}
+
+// Top-level function for compressing image to max 300KB (runs in background isolate)
+Uint8List _compressImageIsolate(Uint8List bytes) {
+  const int maxSizeBytes = 300 * 1024; // 300 KB
+  const int maxWidth = 1200;
+
+  // If already small enough, return as-is
+  if (bytes.length <= maxSizeBytes) {
+    return bytes;
+  }
+
+  try {
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return bytes;
+
+    // Resize if too large
+    img.Image resized = decoded;
+    if (decoded.width > maxWidth) {
+      resized = img.copyResize(decoded, width: maxWidth);
+    }
+
+    // Loop to find optimal quality (start high, reduce)
+    Uint8List result = bytes;
+    for (int q = 85; q >= 40; q -= 10) {
+      result = Uint8List.fromList(img.encodeJpg(resized, quality: q));
+      if (result.length <= maxSizeBytes) {
+        return result;
+      }
+    }
+
+    // If still too large, resize to smaller width
+    if (result.length > maxSizeBytes && resized.width > 800) {
+      final smaller = img.copyResize(resized, width: 800);
+      for (int q = 80; q >= 40; q -= 10) {
+        result = Uint8List.fromList(img.encodeJpg(smaller, quality: q));
+        if (result.length <= maxSizeBytes) {
+          return result;
+        }
+      }
+    }
+
+    // Last resort: very small size
+    if (result.length > maxSizeBytes) {
+      final tiny = img.copyResize(resized, width: 600);
+      result = Uint8List.fromList(img.encodeJpg(tiny, quality: 50));
+    }
+
+    return result;
+  } catch (e) {
+    return bytes; // Return original if compression fails
+  }
+}
 
 // Background Isolate Function
 Future<Uint8List?> _processMergeImages(MergeParams params) async {
