@@ -3,7 +3,7 @@ import 'dart:ui';
 
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
-import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk-slip.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -328,8 +328,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       (double.tryParse(inv.amtall ?? '') ?? 0) +
       (double.tryParse(inv.vatall ?? '') ?? 0);
 
-  /// ตรวจสอบสถานะ "ชำระได้" ของบิลแบบกลุ่ม (1 ครั้งต่อสัญญา)
-  /// คืนค่า Map<billReference, bool> (true = ชำระได้)
+  /// ตรวจสอบสถานะ slip ของบิลแบบกลุ่ม (1 ครั้งต่อสัญญา)
+  /// คืนค่า Map<billReference, bool> (true = มี slip/ชำระแล้ว)
   Future<Map<String, bool>> _fetchBillAvailability({
     required String? custNo,
     required String? ren,
@@ -341,7 +341,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     }
 
     try {
-      final response = await postPaymentIntentsBillReferenceAvailableBulk(
+      final response = await postPaymentIntentsBillReferenceAvailableBulkSlip(
         cusno: custNo,
         propertyno: ren,
         billreference: docnos,
@@ -384,10 +384,18 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
 
     final todayStr = DateFormat('yyyy-MM-dd').format(_DateTimeNew);
 
+    // ═══════════════════════════════════════════
+    //  ขั้นตอนที่ 1 : ดึง invoices ทุก tenant มาเก็บไว้ก่อน
+    //  (เก็บ parsed invoices + docnos รวมทุก tenant)
+    // ═══════════════════════════════════════════
+    final allDocnos = <String>[];
+    final tenantResults = <_TenantResult>[];
+
     for (int index = 0; index < teNantModels.length; index++) {
       final ciddoc_ = teNantModels[index].cid;
       if (ciddoc_ == null || ciddoc_.isEmpty) {
-        total_list.add('0.00');
+        // ตีๆ ว่าเป็น 0 / 0 เพื่อให้ total_list / total_list_paid มีค่าตามจำนวน tenant
+        tenantResults.add(const _TenantResult());
         continue;
       }
 
@@ -398,7 +406,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         final response = await http.get(Uri.parse(url));
         if (response.statusCode != 200) {
           debugPrint('red_Trans_bill HTTP ${response.statusCode} ($ciddoc_)');
-          total_list.add('0.00');
+          allDocnos.addAll([]);
+          tenantResults.add(const _TenantResult());
           continue;
         }
 
@@ -416,37 +425,63 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
           parsed.add(inv);
         }
 
-        // เช็ค availability ทีเดียวเป็นกลุ่ม ลดการเรียก network ต่อบิล
+        // เก็บ docnos ของ tenant นี้ไว้ในลิสต์รวม
         final docnos = parsed
             .map((e) => (e.docno ?? '').toString())
             .where((d) => d.isNotEmpty)
+            .toSet() // unique within tenant
             .toList();
-        final availability = await _fetchBillAvailability(
-            custNo: custNo, ren: ren, docnos: docnos);
+        allDocnos.addAll(docnos);
 
-        // แยกยอดเป็น 2 กลุ่ม:
-        // - outstandingTotal : บิลที่ "ยังไม่มี payment intent" (ชำระได้/ค้างชำระ)
-        // - paidOrPendingTotal : บิลที่ "มี payment intent อยู่แล้ว/ชำระไปแล้ว"
-        // หากเช็คไม่ได้ (ไม่มีใน map) ถือว่าเป็นบิลปกติ → นับเข้า outstanding
-        double outstandingTotal = 0.00;
-        double paidOrPendingTotal = 0.00;
+        tenantResults.add(_TenantResult(
+          invoices: parsed,
+          docnos: docnos,
+        ));
+      } catch (e, stack) {
+        debugPrint('red_Trans_bill error (tenant $ciddoc_): $e');
+        debugPrint('$stack');
+        tenantResults.add(const _TenantResult());
+      }
+    }
+
+    // ═══════════════════════════════════════════
+    //  ขั้นตอนที่ 2 : เช็ค slip availability ครั้งเดียว (batch ทุก docno)
+    // ═══════════════════════════════════════════
+    final availability = allDocnos.isNotEmpty
+        ? await _fetchBillAvailability(
+            custNo: custNo, ren: ren, docnos: allDocnos)
+        : <String, bool>{};
+
+    // ═══════════════════════════════════════════
+    //  ขั้นตอนที่ 3 : แยกยอดตามผลลัพธ์ slip API
+    //  - true  = มี slip (ชำระแล้ว) → paidOrPending
+    //  - false / missing = ค้างชำระ → outstanding
+    // ═══════════════════════════════════════════
+    for (final tr in tenantResults) {
+      final parsed = tr.invoices;
+      final docnos = tr.docnos;
+
+      double outstandingTotal = 0.00;
+      double paidOrPendingTotal = 0.00;
+
+      if (parsed != null &&
+          docnos != null &&
+          parsed.isNotEmpty &&
+          docnos.isNotEmpty) {
         for (final inv in parsed) {
-          final isAvailable = availability[inv.docno?.toString()] ?? true;
-          if (isAvailable) {
-            outstandingTotal += _billAmount(inv);
-          } else {
+          final hasSlip = availability[inv.docno?.toString()] ?? false;
+          if (hasSlip) {
             paidOrPendingTotal += _billAmount(inv);
+          } else {
+            outstandingTotal += _billAmount(inv);
           }
         }
 
         _InvoiceModels.addAll(parsed);
-        total_list.add(outstandingTotal.toStringAsFixed(2));
-        total_list_paid.add(paidOrPendingTotal.toStringAsFixed(2));
-      } catch (e, stack) {
-        debugPrint('red_Trans_bill error (tenant $ciddoc_): $e');
-        debugPrint('$stack');
-        total_list.add('0.00');
       }
+
+      total_list.add(outstandingTotal.toStringAsFixed(2));
+      total_list_paid.add(paidOrPendingTotal.toStringAsFixed(2));
     }
 
     if (mounted) setState(() {});
@@ -750,7 +785,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                         Expanded(
                           flex: 2,
                           child: Text(
-                            isEN ? 'Date' : 'วันที่',
+                            isEN ? 'Date' : 'วันที่สร้าง',
                             textAlign: TextAlign.right,
                             style: TextStyle(
                               fontFamily: Font_.Fonts_T,
@@ -3144,4 +3179,10 @@ class _QuickAction {
     required this.label,
     required this.onTap,
   });
+}
+
+class _TenantResult {
+  final List<InvoiceModel>? invoices;
+  final List<String>? docnos;
+  const _TenantResult({this.invoices, this.docnos});
 }
