@@ -66,6 +66,8 @@ class InvoiceModel {
   int? pos;
   String? total;
   String? inv_list;
+  String? sname;
+  String? cname;
 
   InvoiceModel({
     this.ser,
@@ -133,6 +135,8 @@ class InvoiceModel {
     this.pos,
     this.total,
     this.inv_list,
+    this.sname,
+    this.cname,
   });
 
   InvoiceModel.fromJson(Map<String, dynamic> json) {
@@ -202,6 +206,9 @@ class InvoiceModel {
     pos = json['pos'];
     total = json['total'];
     inv_list = json['inv_list'];
+
+    sname = json['sname'];
+    cname = json['cname'];
   }
 
   Map<String, dynamic> toJson() {
@@ -273,6 +280,9 @@ class InvoiceModel {
     data['pos'] = this.pos;
     data['total'] = this.total;
     data['inv_list'] = this.inv_list;
+
+    data['sname'] = this.sname;
+    data['cname'] = this.cname;
 
     return data;
   }

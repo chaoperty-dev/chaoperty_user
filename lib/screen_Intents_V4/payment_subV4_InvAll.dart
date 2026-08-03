@@ -53,6 +53,7 @@ import '../INSERT_Log/Insert_log.dart';
 import '../Model/GetCFinnancetrans_Model.dart';
 import '../Model/GetContractx_Fine_Model.dart';
 import '../Model/GetInvoice_Model.dart';
+import '../Model/GetInvoiceRe_Model.dart';
 import '../Model/GetInvoice_diapay_Model.dart';
 import '../Model/GetInvoice_history_Model.dart';
 import '../Model/GetInvoice_pay_Model.dart';
@@ -218,6 +219,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       sum_amt_in = 0,
       sum_disamt_in = 0;
   int tap = 0, select_pay = 0, gopay = 0, show_qr = 0, selectTap = 1;
+  // กันสลับแท็บอัตโนมัติซ้ำ — ทำเฉพาะตอนเปิดหน้าครั้งแรก
+  bool _hasAutoSwitched = false;
   double dis_sum_Pakan = 0.00;
   String? cFinn,
       Value_newDateY = '',
@@ -587,6 +590,17 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     // Consolidated initialization to prevent race conditions & duplication
     await _initSubData();
     // await QrGenRef();
+
+    // ─── Auto-switch แท็บ ครั้งแรกที่เปิดหน้า ────────────────────────
+    // ถ้าแท็บเริ่มต้น "ค้างชำระ" (selectTap=1) มี 0 รายการ
+    // และมีรายการในแท็บ "รอยืนยัน" (selectTap=2) → สลับไปแสดงแท็บ 2 อัตโนมัติ
+    if (mounted && !_hasAutoSwitched) {
+      if (_InvoiceModels.isEmpty && paymentIntents.isNotEmpty) {
+        selectTap = 2;
+      }
+      _hasAutoSwitched = true;
+    }
+
     if (mounted) {
       setState(() {
         isLoading = false;
@@ -945,7 +959,36 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
           "metadata": metadataList,
         });
       }
-
+      // ✅ Build groupedTrans: group _InvoiceHistory by refno
+      final Map<String, List<IntentsInvoiceHistoryModel>> groupedTrans = {};
+      for (final h in _InvoiceHistory) {
+        final key = '${h.refno ?? ''}'.trim();
+        if (key.isEmpty) continue;
+        groupedTrans.putIfAbsent(key, () => []).add(h);
+      }
+      // ✅ Build invoiceByDocno: map docno → InvoiceModel
+      // ใช้ dynamic เพื่อรองรับทั้ง InvoiceModel (c_zn/c_ln) และ InvoiceReModel (zn/ln, cname, zser, aser)
+      final Map<String, dynamic> invoiceByDocno = {
+        for (final inv in _InvoiceModels) '${inv.docno ?? ''}'.trim(): inv,
+      };
+      final customer_data =
+          groupedTrans.values.map<Map<String, dynamic>>((group) {
+        final first = group.first;
+        final docno = '${first.docno ?? ''}'.trim();
+        final inv = invoiceByDocno[docno];
+        return {
+          "customer_no": "${first.custno ?? ''}",
+          "cid": "${first.cid ?? ''}",
+          "sname": "${first.sname ?? ''}",
+          "cname": "${first.cname ?? ''}",
+          "zser": "${first.zser ?? ''}",
+          "zn": "${first.zn ?? ''}",
+          "aser": "${first.aser ?? ''}",
+          "ln": "${first.ln ?? ''}",
+          "lncode": "",
+          "invoices": docno,
+        };
+      }).toList();
       // print({
       //   'cusNo': custno16Bit,
       //   'propertyNo': ren16Bit,
@@ -973,27 +1016,27 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         throw Exception('กรุณาเลือกวิธีการชำระเงิน');
       }
       await PostPaymentIntent(
-        cusNo: custno16Bit,
-        propertyNo: ren16Bit,
-        payedType: "invoice",
-        payser: int.tryParse('${widget.serPayment}') ?? 0,
-        typepayser: int.tryParse('${widget.serptPayment}') ?? 0,
-        requestedAmount: _d(requestedAmountTotalBill), // ✅ ไม่ใช้ string format
-        requestedTotal: _d(requestedAmountTotalBill), // ✅ API ต้องการ
-        lateFee: All_lateFee,
-        discountAmount: All_discountAmount,
-        depositAmount: All_depositAmount,
-        insuranceAmount: All_insuranceAmount,
-        withholdingAmount: All_withholdingAmount,
-        inVoices: invs,
-        transselect: _InvoiceHistory.map((e) => e.toJson()).toList(),
-
-        PayBno: Payment_bno ?? '',
-        PayBname: Payment_bname ?? '',
-        PayBname_en: Payment_bname_en ?? '',
-        PayBank_ncode: Payment_bank_ncode ?? '',
-        PayPaytype_ncode: Payment_paytype_ncode ?? '',
-      );
+          cusNo: custno16Bit,
+          propertyNo: ren16Bit,
+          payedType: "invoice",
+          payser: int.tryParse('${widget.serPayment}') ?? 0,
+          typepayser: int.tryParse('${widget.serptPayment}') ?? 0,
+          requestedAmount:
+              _d(requestedAmountTotalBill), // ✅ ไม่ใช้ string format
+          requestedTotal: _d(requestedAmountTotalBill), // ✅ API ต้องการ
+          lateFee: All_lateFee,
+          discountAmount: All_discountAmount,
+          depositAmount: All_depositAmount,
+          insuranceAmount: All_insuranceAmount,
+          withholdingAmount: All_withholdingAmount,
+          inVoices: invs,
+          transselect: _InvoiceHistory.map((e) => e.toJson()).toList(),
+          PayBno: Payment_bno ?? '',
+          PayBname: Payment_bname ?? '',
+          PayBname_en: Payment_bname_en ?? '',
+          PayBank_ncode: Payment_bank_ncode ?? '',
+          PayPaytype_ncode: Payment_paytype_ncode ?? '',
+          customerData: customer_data);
 
       // await redPaymentIntents(
       //     cusno: custno16Bit, propertyno: ren16Bit.toString() ?? '');
@@ -1051,7 +1094,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       required String PayBname,
       required String PayBname_en,
       required String PayBank_ncode,
-      required String PayPaytype_ncode}) async {
+      required String PayPaytype_ncode,
+      required List<Map<String, dynamic>> customerData}) async {
     debugPrint('🔄 เรียกใช้งาน PostPaymentIntents()');
     final accountType = (PayPaytype_ncode == '' ||
             PayPaytype_ncode == 'null' ||
@@ -1085,7 +1129,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         accountType: accountType,
         accountNumber: PayBno,
         accountNameTh: PayBname,
-        accountNameEn: PayBname_en);
+        accountNameEn: PayBname_en,
+        customerData: customerData);
 
     if (response == null) {
       debugPrint('❌ ไม่มี response จาก server');

@@ -276,7 +276,8 @@ Future<http.Response?> postPaymentIntents(
     required String accountNumber,
     required String accountNameTh,
     required String accountNameEn,
-    required List<Map<String, dynamic>> transSelect}) async {
+    required List<Map<String, dynamic>> transSelect,
+    required List<Map<String, dynamic>> customerData}) async {
   try {
     SharedPreferences preferences = await SharedPreferences.getInstance();
     String? ren = preferences.getString('renTalSer');
@@ -296,6 +297,7 @@ Future<http.Response?> postPaymentIntents(
     final body = {
       "payloads": {
         "customer_no": customerNo16,
+        "customer_data": customerData ?? [],
         "property_no": propertyNo16,
         "payed_type": payedType,
         "channel": chanNel,
