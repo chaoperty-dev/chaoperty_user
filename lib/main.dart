@@ -95,7 +95,7 @@ void main() {
 const bool kShowWatermark = false; // ← true = เปิด, false = ปิด
 
 // ==== bool เปิด/ปิด debugPrint ====
-const bool kEnableDebugPrint = false; // ← true = เปิด, false = ปิด
+const bool kEnableDebugPrint = true; // ← true = เปิด, false = ปิด
 final ValueNotifier<List<String>> appDebugLogs =
     ValueNotifier<List<String>>(<String>[]);
 final ValueNotifier<bool> appShowDebugPanel = ValueNotifier<bool>(false);
