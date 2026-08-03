@@ -396,14 +396,15 @@ class _BodyContentState extends State<_BodyContent> {
                               padding: const EdgeInsets.only(top: 6),
                               child: Text(
                                 cuslangs == 'EN'
-                                    ? 'Pending/Verification'
-                                    : 'รอยืนยัน/ตรวจสอบ',
+                                    ? 'Awaiting verificatio'
+                                    : 'ชำระแล้วรอตรวจสอบ',
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontFamily: FitnessAppTheme.fontName,
                                   fontWeight: FontWeight.w600,
                                   fontSize: 12,
-                                  color: FitnessAppTheme.grey.withOpacity(0.5),
+                                  //color: FitnessAppTheme.grey.withOpacity(0.5),
+                                  color: Colors.blue,
                                 ),
                               ),
                             ),
@@ -412,10 +413,10 @@ class _BodyContentState extends State<_BodyContent> {
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontFamily: FitnessAppTheme.fontName,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w700,
                                 fontSize: 16,
-                                letterSpacing: -0.2,
-                                color: FitnessAppTheme.nearlyDarkBlue,
+                                letterSpacing: -0.2, color: Colors.orange,
+                                // color: FitnessAppTheme.nearlyDarkBlue,
                               ),
                             ),
                             Padding(
@@ -426,7 +427,7 @@ class _BodyContentState extends State<_BodyContent> {
                                 style: TextStyle(
                                   fontFamily: FitnessAppTheme.fontName,
                                   fontWeight: FontWeight.w600,
-                                  fontSize: 12,
+                                  // fontSize: 12, color: Colors.orange,
                                   color: FitnessAppTheme.grey.withOpacity(0.5),
                                 ),
                               ),
