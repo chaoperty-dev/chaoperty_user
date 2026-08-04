@@ -638,8 +638,8 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                                               horizontal: 8),
                                           child: Text(
                                             widget.cuslang == 'EN'
-                                                ? 'Outstanding/Pending Payments'
-                                                : 'รายการค้าง/รอชำระ',
+                                                ? 'All Items'
+                                                : 'รายการทั้งหมด',
                                             maxLines: 2,
                                             textAlign: TextAlign.center,
                                             style: TextStyle(
@@ -1331,82 +1331,82 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
               ],
             ),
             const SizedBox(height: 5),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(Icons.warning, color: Colors.red.shade600, size: 14),
-                const SizedBox(width: 8),
-                Text(
-                  isEN
-                      ? 'Note: The amount shown does not include any penalties/overdue payments that may occur.'
-                      : 'หมายเหตุ:ยอดที่แสดงยังไม่รวมค่าปรับ/ชำระเกินกำหนดที่อาจเกิดขึ้น',
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontFamily: Font_.Fonts_T,
-                    // fontWeight: FontWeight.w800,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // กริด 2–4 คอลัมน์ตามความกว้าง
-            LayoutBuilder(builder: (_, c) {
-              final w = c.maxWidth;
-              final cols = w >= 1100 ? 5 : (w >= 740 ? 3 : 2);
-              final itemW = (w - ((cols - 1) * 10)) / cols;
+            // Row(
+            //   crossAxisAlignment: CrossAxisAlignment.center,
+            //   children: [
+            //     Icon(Icons.warning, color: Colors.red.shade600, size: 14),
+            //     const SizedBox(width: 8),
+            //     Text(
+            //       isEN
+            //           ? 'Note: The amount shown does not include any penalties/overdue payments that may occur.'
+            //           : 'หมายเหตุ:ยอดที่แสดงยังไม่รวมค่าปรับ/ชำระเกินกำหนดที่อาจเกิดขึ้น',
+            //       style: const TextStyle(
+            //         color: Colors.red,
+            //         fontFamily: Font_.Fonts_T,
+            //         // fontWeight: FontWeight.w800,
+            //         fontSize: 10,
+            //       ),
+            //     ),
+            //   ],
+            // ),
+            // const SizedBox(height: 12),
+            // // กริด 2–4 คอลัมน์ตามความกว้าง
+            // LayoutBuilder(builder: (_, c) {
+            //   final w = c.maxWidth;
+            //   final cols = w >= 1100 ? 5 : (w >= 740 ? 3 : 2);
+            //   final itemW = (w - ((cols - 1) * 10)) / cols;
 
-              return Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  // _metricTile(
-                  //   width: itemW,
-                  //   icon: Icons.receipt_long,
-                  //   label: isEN ? 'PVAT' : 'ก่อนภาษีมูลค่าเพิ่ม',
-                  //   value: fmtMoney(inv.pvatAll),
-                  //   color: Colors.teal,
-                  //   // สัดส่วน PVAT/Total
-                  //   progress: ratio(inv.pvatAll ?? 0),
-                  // ),
-                  // _metricTile(
-                  //   width: itemW,
-                  //   icon: Icons.percent,
-                  //   label: isEN ? 'VAT' : 'ภาษีมูลค่าเพิ่ม',
-                  //   value: fmtMoney(inv.vatAll ?? 0),
-                  //   color: Colors.orange,
-                  //   progress: ratio(inv.vatAll ?? 0),
-                  // ),
-                  // _metricTile(
-                  //   width: itemW,
-                  //   icon: Icons.money_off_csred_outlined,
-                  //   label: isEN ? 'WHT' : 'ภาษีหัก ณ ที่จ่าย',
-                  //   value: fmtMoney(inv.whtAll),
-                  //   color: Colors.pink,
-                  //   progress: ratio(inv.whtAll ?? 0),
-                  // ),
-                  _metricTile(
-                    width: itemW,
-                    icon: Icons.money_off_csred_outlined,
-                    label: isEN ? 'DISCOUNT' : 'ส่วนลดรวม',
-                    value: fmtMoney(totalDisendbill),
-                    color: Colors.pink,
-                    progress: ratio(totalDisendbill),
-                  ),
-                  _metricTile(
-                    width: itemW,
-                    icon: Icons.payments,
-                    label: isEN ? 'TOTAL' : 'ยอดสุทธิรวม',
-                    value: fmtMoney(totalAll),
-                    // fmtMoney(inv.totalAll ?? 0),
-                    color: Colors.blue,
-                    // TOTAL = 100%
-                    progress: totalAll == 0 ? 0 : 1,
-                    emphasize: true,
-                  ),
-                ],
-              );
-            }),
+            //   return Wrap(
+            //     spacing: 10,
+            //     runSpacing: 10,
+            //     children: [
+            //       // _metricTile(
+            //       //   width: itemW,
+            //       //   icon: Icons.receipt_long,
+            //       //   label: isEN ? 'PVAT' : 'ก่อนภาษีมูลค่าเพิ่ม',
+            //       //   value: fmtMoney(inv.pvatAll),
+            //       //   color: Colors.teal,
+            //       //   // สัดส่วน PVAT/Total
+            //       //   progress: ratio(inv.pvatAll ?? 0),
+            //       // ),
+            //       // _metricTile(
+            //       //   width: itemW,
+            //       //   icon: Icons.percent,
+            //       //   label: isEN ? 'VAT' : 'ภาษีมูลค่าเพิ่ม',
+            //       //   value: fmtMoney(inv.vatAll ?? 0),
+            //       //   color: Colors.orange,
+            //       //   progress: ratio(inv.vatAll ?? 0),
+            //       // ),
+            //       // _metricTile(
+            //       //   width: itemW,
+            //       //   icon: Icons.money_off_csred_outlined,
+            //       //   label: isEN ? 'WHT' : 'ภาษีหัก ณ ที่จ่าย',
+            //       //   value: fmtMoney(inv.whtAll),
+            //       //   color: Colors.pink,
+            //       //   progress: ratio(inv.whtAll ?? 0),
+            //       // ),
+            //       _metricTile(
+            //         width: itemW,
+            //         icon: Icons.money_off_csred_outlined,
+            //         label: isEN ? 'DISCOUNT' : 'ส่วนลดรวม',
+            //         value: fmtMoney(totalDisendbill),
+            //         color: Colors.pink,
+            //         progress: ratio(totalDisendbill),
+            //       ),
+            //       _metricTile(
+            //         width: itemW,
+            //         icon: Icons.payments,
+            //         label: isEN ? 'TOTAL' : 'ยอดสุทธิรวม',
+            //         value: fmtMoney(totalAll),
+            //         // fmtMoney(inv.totalAll ?? 0),
+            //         color: Colors.blue,
+            //         // TOTAL = 100%
+            //         progress: totalAll == 0 ? 0 : 1,
+            //         emphasize: true,
+            //       ),
+            //     ],
+            //   );
+            // }),
           ],
         ),
       ),
@@ -1647,18 +1647,18 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700)),
                   ]),
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.money_off_csred_outlined,
-                        size: 15, color: Colors.black54),
-                    const SizedBox(width: 6),
-                    Text(
-                        '${widget.cuslang == "EN" ? "Discount" : "ส่วนลดรวม"} : ${fmtMoney(groupDiscount)}',
-                        style: const TextStyle(
-                            color: Colors.black54,
-                            fontFamily: Font_.Fonts_T,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w700)),
-                  ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.money_off_csred_outlined,
+                  //       size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text(
+                  //       '${widget.cuslang == "EN" ? "Discount" : "ส่วนลดรวม"} : ${fmtMoney(groupDiscount)}',
+                  //       style: const TextStyle(
+                  //           color: Colors.black54,
+                  //           fontFamily: Font_.Fonts_T,
+                  //           fontSize: 12.5,
+                  //           fontWeight: FontWeight.w700)),
+                  // ]),
                   Row(mainAxisSize: MainAxisSize.min, children: [
                     Spacer(),
                     const Icon(Icons.receipt, size: 15, color: Colors.black54),
@@ -1710,15 +1710,21 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                         }
 
                         // 2. Handle Document Selection
-                        List<String>? selectedDocNos;
+                        Map<String, dynamic>? dialogResult;
+                        List<String> selectedDocNos;
+                        bool cameFromIntent = false;
                         if (bills.length != 0) {
-                          selectedDocNos = await _showBillSelectionDialog(
+                          dialogResult = await _showBillSelectionDialog(
                             bills.toList(growable: false),
                             serPayment: payser.toString() ?? '',
                           );
-                          if (selectedDocNos == null) {
+                          if (dialogResult == null) {
                             return; // User cancelled
                           }
+                          selectedDocNos = (dialogResult['docNos'] as List?)
+                                  ?.cast<String>() ??
+                              [];
+                          cameFromIntent = dialogResult['fromIntent'] == true;
                         } else {
                           selectedDocNos = bills
                               .map((b) => b.docno ?? '')
@@ -1761,6 +1767,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                                   serPayment: payser.toString(),
                                   serptPayment: payptser.toString(),
                                   selectedDocNos: selectedDocNos,
+                                  fromIntent: cameFromIntent,
                                 );
                               } else {
                                 return paymentSubV3InvAll(
@@ -2229,7 +2236,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     );
   }
 
-  Future<List<String>?> _showBillSelectionDialog(
+  Future<Map<String, dynamic>?> _showBillSelectionDialog(
     List<Bill> bills, {
     required String serPayment,
   }) async {
@@ -2320,7 +2327,10 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     }
     debugPrint('==========================');
 
-    return await showDialog<List<String>>(
+    // ✅ Track ว่าผู้ใช้กดจาก card สีส้ม (intent) หรือไม่
+    bool cameFromIntentCard = false;
+
+    return await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (BuildContext context) {
         return StatefulBuilder(
@@ -2342,19 +2352,19 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                         fontWeight: FontWeight.bold,
                         fontSize: 19),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    isEN
-                        ? 'Choose the items you want to proceed with.'
-                        : 'เลือกรายการที่คุณต้องการดำเนินการต่อ',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontSize: 11.5,
-                        color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w500),
-                  ),
+                  // const SizedBox(height: 4),
+                  // Text(
+                  //   isEN
+                  //       ? 'Choose the items you want to proceed with.'
+                  //       : 'เลือกรายการที่คุณต้องการดำเนินการต่อ',
+                  //   maxLines: 1,
+                  //   overflow: TextOverflow.ellipsis,
+                  //   style: TextStyle(
+                  //       fontFamily: Font_.Fonts_T,
+                  //       fontSize: 11.5,
+                  //       color: Colors.grey.shade600,
+                  //       fontWeight: FontWeight.w500),
+                  // ),
                   // Text(
                   //   isEN
                   //       ? '#Note: If payment has already been initiated, please confirm to complete the process.'
@@ -2381,21 +2391,37 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // const Divider(height: 12),
-                      // หัวข้อย่อย: รายการบิลทั้งหมด
-                      Padding(
-                        padding: const EdgeInsets.only(left: 2, bottom: 6),
-                        child: Text(
-                          isEN
-                              ? 'The items you are currently processing'
-                              : 'รายการที่คุณกำลังดำเนินการอยู่',
-                          style: TextStyle(
-                            fontFamily: Font_.Fonts_T,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 12,
-                            color: Colors.orange.shade700,
+                      // ✅ หัวข้อย่อย "รายการที่กำลังดำเนินการอยู่" → แสดงเฉพาะเมื่อมี intent
+                      if (paymentIntents.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, bottom: 6),
+                          child: Text(
+                            isEN
+                                ? 'The items you are currently processing'
+                                : 'รายการที่คุณกำลังดำเนินการอยู่',
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              color: Colors.orange.shade700,
+                            ),
                           ),
                         ),
-                      ),
+                      ] else ...[
+                        // ✅ ถ้าไม่มี intent → แสดงหัวข้อ "รายการที่ต้องชำระ" ตรงนี้แทน
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, bottom: 6),
+                          child: Text(
+                            isEN ? 'Bills to be paid' : 'รายการที่ต้องชำระ',
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              color: Colors.indigo.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
                       // ✅ Section: รายการ payment intents ที่กำลังรอชำระ (บนสุด, scroll ได้)
                       if (paymentIntents.isNotEmpty) ...[
                         ...paymentIntents.toList().asMap().entries.map((entry) {
@@ -2412,271 +2438,310 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                               ? '#${(intent.intentUuid ?? '').substring(0, 16)}…'
                               : '#${intent.intentUuid ?? '-'}';
                           final isExpanded = expandedCards[idx] ?? false;
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 6),
-                            padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.amber.withOpacity(0.10),
-                                  Colors.orange.withOpacity(0.05),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: Colors.amber.shade700, width: 1.0),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Row(
-                                  children: [
-                                    // Status pill: รอชำระเงิน
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 7, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.amber.shade700,
-                                        borderRadius: BorderRadius.circular(20),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            width: 5,
-                                            height: 5,
-                                            decoration: const BoxDecoration(
-                                              color: Colors.white,
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 5),
-                                          Text(
-                                            intent.status ?? 'รอชำระเงิน',
-                                            style: const TextStyle(
-                                              fontFamily: Font_.Fonts_T,
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w800,
-                                              fontSize: 10.5,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        shortUuid,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontFamily: Font_.Fonts_T,
-                                          color: Colors.amber.shade900,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 10,
-                                        ),
-                                      ),
-                                    ),
+                          return InkWell(
+                            onTap: () {
+                              // ✅ กดที่ card → ติ๊ก checkbox ทุกบิลในรายการที่ต้องชำระอัตโนมัติ
+                              // (เฉพาะบิลที่ยังไม่ถูก initiate และยังไม่ถูกเลือก)
+                              if (billRefs.isEmpty) return;
+                              setDialogState(() {
+                                // ✅ Mark ว่าผู้ใช้กดจาก card intent
+                                cameFromIntentCard = true;
+                                for (final ref in billRefs) {
+                                  // เพิ่มเฉพาะบิลที่:
+                                  // 1) ยังไม่ถูก initiate (initiatedMap[ref] != true)
+                                  // 2) ยังไม่อยู่ใน selectedDocNos
+                                  final isInit = initiatedMap[ref] == true;
+                                  if (!isInit &&
+                                      !selectedDocNos.contains(ref)) {
+                                    selectedDocNos.add(ref);
+                                  }
+                                }
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.amber.withOpacity(0.10),
+                                    Colors.orange.withOpacity(0.05),
                                   ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
-                                const SizedBox(height: 2),
-                                // ✅ ฿ จำนวนเงิน + ดูเลขบิล อยู่ Row เดียวกัน
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    // ฿ จำนวนเงิน — เด่น (ใหญ่ + สีชัด)
-                                    Expanded(
-                                      child: Text(
-                                        '฿${fmtMoney(intentTotal)}',
-                                        style: TextStyle(
-                                          fontFamily: Font_.Fonts_T,
-                                          color: Colors.amber.shade900,
-                                          fontWeight: FontWeight.w900,
-                                          fontSize: 17,
-                                          letterSpacing: -0.5,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: Colors.amber.shade700, width: 1.0),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
+                                    children: [
+                                      // Status pill: รอชำระเงิน
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.shade700,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 5,
+                                              height: 5,
+                                              decoration: const BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              intent.status ?? 'รอชำระเงิน',
+                                              style: const TextStyle(
+                                                fontFamily: Font_.Fonts_T,
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 10.5,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          shortUuid,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontFamily: Font_.Fonts_T,
+                                            color: Colors.amber.shade900,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  // ✅ ฿ จำนวนเงิน + ดูเลขบิล อยู่ Row เดียวกัน
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      // ฿ จำนวนเงิน — เด่น (ใหญ่ + สีชัด)
+                                      Expanded(
+                                        child: Text(
+                                          '฿${fmtMoney(intentTotal)}',
+                                          style: TextStyle(
+                                            fontFamily: Font_.Fonts_T,
+                                            color: Colors.amber.shade900,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 17,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                      ),
+                                      // ✅ ดูเลขบิล — collapsible toggle
+                                      if (billRefs.isNotEmpty)
+                                        InkWell(
+                                          onTap: () {
+                                            setDialogState(() {
+                                              expandedCards[idx] = !isExpanded;
+                                            });
+                                          },
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 4, horizontal: 6),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.receipt_long,
+                                                  size: 13,
+                                                  color: Colors.amber.shade900,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  isEN
+                                                      ? (isExpanded
+                                                          ? 'Hide'
+                                                          : 'Show ${billRefs.length}')
+                                                      : (isExpanded
+                                                          ? 'ซ่อน'
+                                                          : 'ดูเลขบิล (${billRefs.length})'),
+                                                  style: TextStyle(
+                                                    fontFamily: Font_.Fonts_T,
+                                                    color:
+                                                        Colors.amber.shade900,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    decoration: TextDecoration
+                                                        .underline,
+                                                    decorationColor:
+                                                        Colors.amber.shade700,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 2),
+                                                AnimatedRotation(
+                                                  duration: const Duration(
+                                                      milliseconds: 200),
+                                                  turns: isExpanded ? 0.5 : 0,
+                                                  child: Icon(
+                                                    Icons.keyboard_arrow_down,
+                                                    size: 14,
+                                                    color:
+                                                        Colors.amber.shade900,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  // ✅ เลขบิล — แสดงเมื่อยืดออก (ครอบด้วย if เดียวกับด้านบน)
+                                  if (billRefs.isNotEmpty)
+                                    AnimatedSize(
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      curve: Curves.easeOut,
+                                      child: isExpanded
+                                          ? Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 6),
+                                              child: Wrap(
+                                                spacing: 6,
+                                                runSpacing: 4,
+                                                children: billRefs.map((ref) {
+                                                  return Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white
+                                                          .withOpacity(0.85),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              6),
+                                                      border: Border.all(
+                                                        color: Colors
+                                                            .amber.shade700,
+                                                        width: 0.8,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      ref,
+                                                      style: TextStyle(
+                                                        fontFamily:
+                                                            Font_.Fonts_T,
+                                                        color: Colors
+                                                            .amber.shade900,
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            )
+                                          : const SizedBox.shrink(),
                                     ),
-                                    // ✅ ดูเลขบิล — collapsible toggle
-                                    if (billRefs.isNotEmpty)
-                                      InkWell(
-                                        onTap: () {
-                                          setDialogState(() {
-                                            expandedCards[idx] = !isExpanded;
+                                  const SizedBox(height: 3),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: Builder(builder: (_) {
+                                      // ✅ map status → label + icon + color
+                                      final status = intent.status ?? '';
+                                      // รอการตรวจสอบ / รอตรวจสอบ / contains "review"/"pending"
+                                      final isWaitingReview =
+                                          status.contains('ตรวจ') ||
+                                              status.contains('รอ') &&
+                                                  !status.contains('ชำระ') ||
+                                              status
+                                                  .toLowerCase()
+                                                  .contains('review') ||
+                                              status
+                                                  .toLowerCase()
+                                                  .contains('pending');
+                                      // รอชำระเงิน / contains "ชำระเงิน"/"awaiting"/"pay"
+                                      final isPaid = status
+                                              .contains('รอชำระเงิน') ||
+                                          status.contains('ชำระเงิน') ||
+                                          status
+                                              .toLowerCase()
+                                              .contains('awaiting') ||
+                                          status.toLowerCase().contains('pay');
+
+                                      String btnLabel;
+                                      IconData btnIcon;
+                                      Color btnColor;
+                                      if (isWaitingReview && !isPaid) {
+                                        btnLabel = isEN
+                                            ? 'Slip attached'
+                                            : 'แนบหลักฐานแล้ว';
+                                        btnIcon = Icons.check_circle;
+                                        btnColor = Colors.green.shade600;
+                                      } else {
+                                        btnLabel = isEN
+                                            ? 'Tap to attach slip'
+                                            : 'กดเพื่อแนบหลักฐาน';
+                                        btnIcon = Icons.upload_file_rounded;
+                                        btnColor = Colors.indigo.shade600;
+                                      }
+
+                                      return ElevatedButton.icon(
+                                        onPressed: () {
+                                          // ✅ Mark ว่าผู้ใช้กดจาก card intent
+                                          cameFromIntentCard = true;
+                                          // ส่งค่ากลับ: รวมรายการ billRef ของ intent นี้
+                                          // + บิลที่ user ติ๊กไว้ใน checkbox (selectedDocNos)
+                                          // ที่ยังไม่ถูก initiate (เพื่อให้แสดงใน Tab 1 ของ V4)
+                                          final combined = <String>{
+                                            ...billRefs,
+                                            ...selectedDocNos,
+                                          }.toList();
+                                          Navigator.pop(context, {
+                                            'docNos': combined,
+                                            'fromIntent': true,
                                           });
                                         },
-                                        borderRadius: BorderRadius.circular(6),
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 4, horizontal: 6),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                Icons.receipt_long,
-                                                size: 13,
-                                                color: Colors.amber.shade900,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                isEN
-                                                    ? (isExpanded
-                                                        ? 'Hide'
-                                                        : 'Show ${billRefs.length}')
-                                                    : (isExpanded
-                                                        ? 'ซ่อน'
-                                                        : 'ดูเลขบิล (${billRefs.length})'),
-                                                style: TextStyle(
-                                                  fontFamily: Font_.Fonts_T,
-                                                  color: Colors.amber.shade900,
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w700,
-                                                  decoration:
-                                                      TextDecoration.underline,
-                                                  decorationColor:
-                                                      Colors.amber.shade700,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 2),
-                                              AnimatedRotation(
-                                                duration: const Duration(
-                                                    milliseconds: 200),
-                                                turns: isExpanded ? 0.5 : 0,
-                                                child: Icon(
-                                                  Icons.keyboard_arrow_down,
-                                                  size: 14,
-                                                  color: Colors.amber.shade900,
-                                                ),
-                                              ),
-                                            ],
+                                        icon: Icon(btnIcon,
+                                            color: Colors.white, size: 13),
+                                        label: Text(
+                                          btnLabel,
+                                          style: const TextStyle(
+                                            fontFamily: Font_.Fonts_T,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 11,
                                           ),
                                         ),
-                                      ),
-                                  ],
-                                ),
-                                // ✅ เลขบิล — แสดงเมื่อยืดออก (ครอบด้วย if เดียวกับด้านบน)
-                                if (billRefs.isNotEmpty)
-                                  AnimatedSize(
-                                    duration: const Duration(milliseconds: 200),
-                                    curve: Curves.easeOut,
-                                    child: isExpanded
-                                        ? Padding(
-                                            padding:
-                                                const EdgeInsets.only(top: 6),
-                                            child: Wrap(
-                                              spacing: 6,
-                                              runSpacing: 4,
-                                              children: billRefs.map((ref) {
-                                                return Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 3),
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.white
-                                                        .withOpacity(0.85),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            6),
-                                                    border: Border.all(
-                                                      color:
-                                                          Colors.amber.shade700,
-                                                      width: 0.8,
-                                                    ),
-                                                  ),
-                                                  child: Text(
-                                                    ref,
-                                                    style: TextStyle(
-                                                      fontFamily: Font_.Fonts_T,
-                                                      color:
-                                                          Colors.amber.shade900,
-                                                      fontSize: 11,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
-                                                  ),
-                                                );
-                                              }).toList(),
-                                            ),
-                                          )
-                                        : const SizedBox.shrink(),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: btnColor,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 4),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                      );
+                                    }),
                                   ),
-                                const SizedBox(height: 3),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: Builder(builder: (_) {
-                                    // ✅ map status → label + icon + color
-                                    final status = intent.status ?? '';
-                                    // รอการตรวจสอบ / รอตรวจสอบ / contains "review"/"pending"
-                                    final isWaitingReview =
-                                        status.contains('ตรวจ') ||
-                                            status.contains('รอ') &&
-                                                !status.contains('ชำระ') ||
-                                            status
-                                                .toLowerCase()
-                                                .contains('review') ||
-                                            status
-                                                .toLowerCase()
-                                                .contains('pending');
-                                    // รอชำระเงิน / contains "ชำระเงิน"/"awaiting"/"pay"
-                                    final isPaid = status
-                                            .contains('รอชำระเงิน') ||
-                                        status.contains('ชำระเงิน') ||
-                                        status
-                                            .toLowerCase()
-                                            .contains('awaiting') ||
-                                        status.toLowerCase().contains('pay');
-
-                                    String btnLabel;
-                                    IconData btnIcon;
-                                    Color btnColor;
-                                    if (isWaitingReview && !isPaid) {
-                                      btnLabel = isEN
-                                          ? 'Slip attached'
-                                          : 'แนบหลักฐานแล้ว';
-                                      btnIcon = Icons.check_circle;
-                                      btnColor = Colors.green.shade600;
-                                    } else {
-                                      btnLabel = isEN
-                                          ? 'Tap to attach slip'
-                                          : 'กดเพื่อแนบหลักฐาน';
-                                      btnIcon = Icons.upload_file_rounded;
-                                      btnColor = Colors.indigo.shade600;
-                                    }
-
-                                    return ElevatedButton.icon(
-                                      onPressed: () {
-                                        // ส่งค่ากลับ: ใช้รายการ billRef ของ intent นี้
-                                        Navigator.pop(context, billRefs);
-                                      },
-                                      icon: Icon(btnIcon,
-                                          color: Colors.white, size: 13),
-                                      label: Text(
-                                        btnLabel,
-                                        style: const TextStyle(
-                                          fontFamily: Font_.Fonts_T,
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: btnColor,
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 4),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           );
                         }),
@@ -2694,6 +2759,36 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                             ),
                           ),
                         ),
+                        // ✅ กรณีไม่มีบิลเลย (ทุกบิลถูก initiate แล้ว หรือไม่มีบิลในกลุ่ม)
+                        if ((() {
+                          final availableBills = sortedBills
+                              .where(
+                                  (b) => !(initiatedMap[b.docno ?? ''] == true))
+                              .toList();
+                          return availableBills.isEmpty;
+                        })())
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Column(
+                              children: [
+                                Icon(Icons.inbox_outlined,
+                                    size: 36, color: Colors.grey.shade400),
+                                const SizedBox(height: 8),
+                                Text(
+                                  isEN
+                                      ? 'No bills to be paid'
+                                      : 'ไม่มีรายการที่ต้องชำระ',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: Font_.Fonts_T,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                       // รายการบิล (ต่อจาก intents section)
                       ...(() {
@@ -2928,25 +3023,35 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context, selectedDocNos),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.indigo.shade600,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: Text(
-                          isEN ? 'Confirm' : 'ยืนยัน',
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700),
+                    // ✅ ซ่อนปุ่ม "ดำเนินการต่อ" ถ้าไม่มีรายการที่ต้องชำระ
+                    if ((() {
+                      final availableBills = sortedBills
+                          .where((b) => !(initiatedMap[b.docno ?? ''] == true))
+                          .toList();
+                      return availableBills.isNotEmpty;
+                    })())
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context, {
+                            'docNos': selectedDocNos,
+                            'fromIntent': cameFromIntentCard,
+                          }),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.indigo.shade600,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(
+                            isEN ? 'Continue' : 'ดำเนินการต่อ',
+                            style: const TextStyle(
+                                fontFamily: Font_.Fonts_T,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ],

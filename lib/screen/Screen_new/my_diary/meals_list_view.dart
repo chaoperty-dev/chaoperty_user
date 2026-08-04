@@ -73,9 +73,8 @@ class _MealsListViewState extends State<MealsListView>
             transform: Matrix4.translationValues(
                 0.0, 30 * (1.0 - widget.mainScreenAnimation!.value), 0.0),
             child: Container(
-              // ✅ FIX: เพิ่ม height 205 → 240 ให้ container parent
-              // สอดคล้องกับ card height ใหม่ (เดิม 206 → 240)
-              height: 240,
+              // ✅ ลด height 240 → 170 ให้พอดีกับ chip 3 ตัว
+              height: 185,
               width: double.infinity,
               child: ScrollConfiguration(
                 behavior:
@@ -170,7 +169,7 @@ class MealsView extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Icon(icon,
-                size: 11, color: FitnessAppTheme.grey.withOpacity(0.7)),
+                size: 10, color: FitnessAppTheme.grey.withOpacity(0.7)),
           ),
           const SizedBox(width: 4),
           // ✅ FIX: Expanded บังคับ max width ให้ AutoSizeText + maxLines:2
@@ -181,8 +180,8 @@ class MealsView extends StatelessWidget {
               label,
               minFontSize: 8,
               maxFontSize: 11,
-              maxLines: 2,
-              softWrap: true,
+              maxLines: 1,
+              softWrap: false,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: FitnessAppTheme.fontName,
@@ -241,15 +240,13 @@ class MealsView extends StatelessWidget {
                 100 * (1.0 - animation!.value), 0.0, 0.0),
             child: SizedBox(
               width: 140,
-              // ✅ FIX: เพิ่ม height 206 → 240 รองรับ chip ที่ wrap 2 lines
-              // (ป้องกัน "BOTTOM OVERFLOWED BY 14-15 PIXELS" ที่เกิดจาก
-              //  chip _infoChip() มี wrap 2 บรรทัด ทำให้ content height เกิน)
-              height: 240,
+              // ✅ ลด height 240 → 170 ให้พอดีกับ chip 3 ตัว
+              height: 185,
               child: Stack(
                 children: <Widget>[
                   Padding(
                     padding: const EdgeInsets.only(
-                        top: 10, left: 8, right: 8, bottom: 10),
+                        top: 8, left: 8, right: 8, bottom: 8),
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -275,17 +272,16 @@ class MealsView extends StatelessWidget {
                             Expanded(
                               child: Container(
                                 color: Colors.white,
-                                // Decreased top padding as we handle spacing via Column/Stack
+                                // ✅ ลด padding ให้ chip 3 ตัวพอดีกับ height 170
                                 padding:
-                                    const EdgeInsets.fromLTRB(12, 24, 12, 0),
+                                    const EdgeInsets.fromLTRB(10, 8, 10, 4),
                                 child: Padding(
                                   padding: const EdgeInsets.only(
                                       left: 0.0), // Space for GIF
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment: MainAxisAlignment.start,
                                     children: [
                                       Column(
                                         crossAxisAlignment:
@@ -304,22 +300,24 @@ class MealsView extends StatelessWidget {
                                                   .nearlyDarkBlue,
                                             ),
                                           ),
-                                          SizedBox(height: 5),
-                                          // Zone Badge (Grey Pill)
+                                          SizedBox(height: 3),
+                                          // ✅ "โซน" แสดงเสมอ (ข้อมูลสำคัญ)
                                           _infoChip(
                                             Icons.map_outlined,
                                             cuslangs == 'EN'
                                                 ? 'Zone: ${mealsListData!.zn}'
                                                 : 'โซน: ${mealsListData!.zn}',
                                           ),
-                                          SizedBox(height: 5),
+                                          SizedBox(height: 3),
+                                          // ✅ แสดง chip "พื้นที่" ตั้งแต่แรก
                                           _infoChip(
                                             Icons.square_foot_outlined,
                                             cuslangs == 'EN'
                                                 ? 'Area: ${mealsListData!.ln}'
                                                 : 'พื้นที่: ${mealsListData!.ln}',
                                           ),
-                                          SizedBox(height: 5),
+                                          SizedBox(height: 3),
+                                          // ✅ แสดง chip "ประเภท" ตั้งแต่แรก
                                           _infoChip(
                                             Icons.category_outlined,
                                             cuslangs == 'EN'
@@ -430,32 +428,31 @@ class MealsView extends StatelessWidget {
                     ),
                   ),
 
-                  // 3. Full Tap Interaction
+                  // 3. Full Tap Interaction (Positioned.fill ทำให้ InkWell ครอบทั้ง card)
+                  // ✅ ใช้ InkWell + onTap ตรวจ tap position ผ่าน GestureDetector
+                  // ปุ่ม "ดูเพิ่มเติม" ใช้ GestureDetector(behavior: opaque) เพื่อ absorb event
+                  // ไม่ให้ลามไปถึง InkWell ของ card
                   Positioned.fill(
-                    child: Padding(
-                      padding:
-                          const EdgeInsets.all(16.0), // Match container padding
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(24),
-                          onTap: sumAll == '0.00'
-                              ? null
-                              : () async {
-                                  SharedPreferences preferences =
-                                      await SharedPreferences.getInstance();
-                                  preferences.setString(
-                                      'usercid', mealsListData!.cid.toString());
-                                  preferences.setString('payby', 'PAY');
-                                  MaterialPageRoute route = MaterialPageRoute(
-                                    builder: (context) => FitnessAppHomeScreen(
-                                      pageroot: 'PAY',
-                                      initialCid: mealsListData!.cid.toString(),
-                                    ),
-                                  );
-                                  Navigator.push(context, route);
-                                },
-                        ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(24),
+                        onTap: sumAll == '0.00'
+                            ? null
+                            : () async {
+                                SharedPreferences preferences =
+                                    await SharedPreferences.getInstance();
+                                preferences.setString(
+                                    'usercid', mealsListData!.cid.toString());
+                                preferences.setString('payby', 'PAY');
+                                MaterialPageRoute route = MaterialPageRoute(
+                                  builder: (context) => FitnessAppHomeScreen(
+                                    pageroot: 'PAY',
+                                    initialCid: mealsListData!.cid.toString(),
+                                  ),
+                                );
+                                Navigator.push(context, route);
+                              },
                       ),
                     ),
                   ),

@@ -11,6 +11,7 @@ import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsContractx_Fine_Model.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsInv_history_Model.dart';
 import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
+import 'package:chaoperty_user/screen_Intents_V3/payment_mainV3_InvAll.dart';
 import 'package:flutter/material.dart';
 // หรือ
 import 'package:flutter/widgets.dart';
@@ -88,6 +89,7 @@ class paymentSubV4InvAll extends StatefulWidget {
   final String? serptPayment;
 
   final List<String>? selectedDocNos;
+  final bool fromIntent;
   paymentSubV4InvAll({
     Key? key,
     this.mainScreenAnimationController,
@@ -97,6 +99,7 @@ class paymentSubV4InvAll extends StatefulWidget {
     this.serPayment,
     this.serptPayment,
     this.selectedDocNos,
+    this.fromIntent = false,
   }) : super(key: key);
 
   @override
@@ -219,6 +222,67 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       sum_amt_in = 0,
       sum_disamt_in = 0;
   int tap = 0, select_pay = 0, gopay = 0, show_qr = 0, selectTap = 1;
+
+  // ✅ นับจำนวนรายการในแต่ละแท็บ (intents based)
+  int get _countAwaitingSlip {
+    return paymentIntents.where((p) => _isAwaitingSlipStatus(p.status)).length;
+  }
+
+  int get _countAwaitingVerify {
+    return paymentIntents
+        .where((p) => _isAwaitingVerifyStatus(p.status))
+        .length;
+  }
+
+  // ✅ helper: ตรวจสอบ status intent
+  bool _isAwaitingSlipStatus(String? status) {
+    final s = (status ?? '').toLowerCase();
+    // รอแนบหลักฐาน = intent ใหม่ที่รอชำระ (มี QR แล้วแต่ user ยังไม่จ่าย)
+    final isPaidIntent =
+        s.contains('รอชำระเงิน') || s.contains('awaiting') || s.contains('pay');
+    final hasReview =
+        s.contains('ตรวจ') || s.contains('review') || s.contains('pending');
+    return isPaidIntent && !hasReview;
+  }
+
+  bool _isAwaitingVerifyStatus(String? status) {
+    final s = (status ?? '').toLowerCase();
+    // รอระบบตรวจสอบ = user แนบ slip แล้ว รอ admin ตรวจ
+    return s.contains('ตรวจ') ||
+        s.contains('review') ||
+        s.contains('pending') ||
+        s.contains('รอการ');
+  }
+
+  // ✅ helper: แสดงข้อความเมื่อ tab ว่าง
+  Widget _emptyTabMsg(String msg) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.inbox_outlined, size: 40, color: Colors.grey.shade400),
+          const SizedBox(height: 8),
+          Text(
+            msg,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: Font_.Fonts_T,
+              color: Colors.grey.shade600,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // กันสลับแท็บอัตโนมัติซ้ำ — ทำเฉพาะตอนเปิดหน้าครั้งแรก
   bool _hasAutoSwitched = false;
   double dis_sum_Pakan = 0.00;
@@ -592,11 +656,50 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     // await QrGenRef();
 
     // ─── Auto-switch แท็บ ครั้งแรกที่เปิดหน้า ────────────────────────
-    // ถ้าแท็บเริ่มต้น "ค้างชำระ" (selectTap=1) มี 0 รายการ
-    // และมีรายการในแท็บ "รอยืนยัน" (selectTap=2) → สลับไปแสดงแท็บ 2 อัตโนมัติ
+    // ถ้าแท็บเริ่มต้น "ที่ต้องชำระ" (selectTap=1) มี 0 รายการ
+    // → สลับไปแท็บถัดไปที่มีรายการอัตโนมัติ (2: รอแนบหลักฐาน / 3: รอระบบตรวจสอบ)
+    // ✅ ถ้ามาจาก intent card (selectedDocNos มีค่าและตรงกับ intent) → สลับไปแท็บที่ตรงสถานะ
     if (mounted && !_hasAutoSwitched) {
-      if (_InvoiceModels.isEmpty && paymentIntents.isNotEmpty) {
-        selectTap = 2;
+      // กรณี A: มาจาก intent card → ตรวจสถานะ intent แล้วเลือกแท็บ
+      final cameFromIntent = widget.selectedDocNos != null &&
+          widget.selectedDocNos!.isNotEmpty &&
+          paymentIntents.any((p) => p.invoices.any((inv) {
+                final ref = (inv.billReference ?? '').trim();
+                return widget.selectedDocNos!.contains(ref);
+              }));
+
+      if (cameFromIntent) {
+        // ✅ หา intent ที่เกี่ยวข้อง (เฉพาะบิลที่ user ติ๊ก)
+        final relatedIntents = paymentIntents.where((p) {
+          return p.invoices.any((inv) {
+            final ref = (inv.billReference ?? '').trim();
+            return widget.selectedDocNos!.contains(ref);
+          });
+        }).toList();
+
+        // ✅ นับสถานะของ intents ที่เกี่ยวข้อง
+        final hasVerify =
+            relatedIntents.any((p) => _isAwaitingVerifyStatus(p.status));
+        final hasSlip =
+            relatedIntents.any((p) => _isAwaitingSlipStatus(p.status));
+
+        // ✅ ลำดับความสำคัญ: intent status มาก่อน (เพราะ user กดจาก card intent)
+        if (hasVerify) {
+          selectTap = 3; // รอระบบตรวจสอบ (เช่น "แนบหลักฐานแล้ว")
+        } else if (hasSlip) {
+          selectTap = 2; // รอแนบหลักฐาน (เช่น "กดเพื่อแนบหลักฐาน")
+        } else {
+          // ✅ ไม่มี intent (ทุกบิลยังไม่ถูก initiate) → ไปแท็บ 1
+          selectTap = 1;
+        }
+      }
+      // กรณี B: แท็บ 1 ว่าง → สลับไปแท็บถัดไป
+      else if (_InvoiceModels.isEmpty) {
+        if (_countAwaitingSlip > 0) {
+          selectTap = 2;
+        } else if (_countAwaitingVerify > 0) {
+          selectTap = 3;
+        }
       }
       _hasAutoSwitched = true;
     }
@@ -1952,28 +2055,47 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                   .any((b) => (b.billReference ?? '').trim() == targetUuid))
               .toList();
 
-          if (_InvoiceModel.payser.toString() == '${widget.serPayment}') {
-            // ✅ Only proceed if the bill is in the selected list (if provided)
-            if (widget.selectedDocNos != null &&
-                !widget.selectedDocNos!.contains(targetUuid)) {
-              continue;
-            }
+          // ✅ Filter ตาม payser เฉพาะเมื่อมาจากการเลือกบิลปกติ (ไม่ใช่จาก intent card)
+          // ถ้ามาจาก intent card → ยอมรับบิลทุก payser ที่อยู่ใน selectedDocNos
+          final isPayerMatched =
+              _InvoiceModel.payser.toString() == '${widget.serPayment}';
+          final isFromIntent = widget.fromIntent;
+          final isInSelected = widget.selectedDocNos != null &&
+              widget.selectedDocNos!.contains(targetUuid);
 
-            if (intents.isEmpty) {
-              // Not currently in any active intent -> Available to pay
-              print('NO MATCH target=$targetUuid');
-              var in_amtx = double.parse(_InvoiceModel.amtall!);
-              var disendbill = double.parse(_InvoiceModel.disendbill!);
+          // ข้ามบิลนี้ถ้า:
+          // 1) payser ไม่ตรง และ ไม่ได้มาจาก intent
+          // 2) มี selectedDocNos แต่บิลนี้ไม่อยู่ในรายการ
+          if (!isPayerMatched && !isFromIntent) {
+            print(
+                'SKIP target=$targetUuid (payser mismatch: ${_InvoiceModel.payser} != ${widget.serPayment})');
+            continue;
+          }
+          if (widget.selectedDocNos != null &&
+              widget.selectedDocNos!.isNotEmpty &&
+              !widget.selectedDocNos!.contains(targetUuid)) {
+            print(
+                'SKIP target=$targetUuid (not in selectedDocNos, payser=${_InvoiceModel.payser})');
+            continue;
+          }
 
-              tempSumDis += disendbill;
-              tempInAmt += in_amtx;
-              tempInvoiceModels.add(_InvoiceModel);
-            } else {
-              // Already in an intent
-              print(
-                  'MATCH target=$targetUuid -> intentNos=${intents.map((e) => e.bankmerchantid).toList()}');
-              tempInvoiceInIntent.add(_InvoiceModel);
-            }
+          print(
+              'PROCESS target=$targetUuid payser=${_InvoiceModel.payser} (widget.serPayment=${widget.serPayment}, fromIntent=$isFromIntent)');
+
+          if (intents.isEmpty) {
+            // Not currently in any active intent -> Available to pay
+            print('NO MATCH target=$targetUuid (no intent)');
+            var in_amtx = double.parse(_InvoiceModel.amtall!);
+            var disendbill = double.parse(_InvoiceModel.disendbill!);
+
+            tempSumDis += disendbill;
+            tempInAmt += in_amtx;
+            tempInvoiceModels.add(_InvoiceModel);
+          } else {
+            // Already in an intent
+            print(
+                'MATCH target=$targetUuid -> intentNos=${intents.map((e) => e.bankmerchantid).toList()}');
+            tempInvoiceInIntent.add(_InvoiceModel);
           }
         }
       }
@@ -3743,13 +3865,20 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     );
   } */
 
-  Widget _IntentBox() {
+  Widget _IntentBox({
+    List<PaymentIntent>? filteredIntents,
+    bool isVerifyTab = false,
+  }) {
     String _fmtExpireLocal(String? isoUtc) {
       final d =
           (isoUtc == null || isoUtc.isEmpty) ? null : DateTime.tryParse(isoUtc);
       if (d == null) return '-';
       return DateFormat('d-MM-yyyy HH:mm').format(d.toLocal());
     }
+
+    // ✅ ใช้ filtered intents ถ้ามี (จาก tab 2/3) ไม่งั้นใช้ทั้งหมด
+    final List<PaymentIntent> displayIntents =
+        (filteredIntents ?? paymentIntents);
 
     // Helper helper for chip
     Widget chip(String text, Color bg, Color fg) => Container(
@@ -3781,6 +3910,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       required VoidCallback onTap,
       double fine = 0,
       bool showCheckbox = true,
+      bool showSlipAttachedText = false,
     }) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -3869,7 +3999,30 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                       )
                     ],
                   ])
-                ]
+                ],
+                // ✅ ถ้าติ๊ก (แนบหลักฐานแล้ว) → แสดงข้อความ "แนบหลักฐานแล้ว" ใต้บิล (ด้านนอก)
+                if (showSlipAttachedText)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, top: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle,
+                            size: 14, color: Colors.green.shade700),
+                        const SizedBox(width: 4),
+                        Text(
+                          widget.cuslang == 'EN'
+                              ? 'Slip attached'
+                              : 'แนบหลักฐานแล้ว',
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -3877,11 +4030,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       );
     }
 
-    if (paymentIntents.isEmpty) {
+    if (displayIntents.isEmpty) {
       return const SizedBox.shrink();
     }
-
-    final displayIntents = paymentIntents.take(4).toList();
 
     return Column(
       children: displayIntents.map((intent) {
@@ -3911,6 +4062,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         final double totalAmount = (intent as dynamic).amount ?? 0.0;
         final String? paymentIntentNo = intent.paymentIntentNo ?? "-";
         final String? paymentIntentUuid = intent.intentUuid ?? "-";
+
         final String? statusIntentUuid = intent.status ?? "-";
         final String? systemStatusIntentUuid = intent.systemStatus ?? "-";
 
@@ -3927,10 +4079,20 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         final bool showSlipAction =
             intent.latestSlip != null || isSlipUploaded || isWaitingCheck;
 
-        final Color stBgColor =
-            isWaitingCheck ? Colors.orange.shade100 : Colors.cyan.shade100;
-        final Color stTextColor =
-            isWaitingCheck ? Colors.orange.shade700 : Colors.cyan.shade700;
+        // ✅ สี status pill ตรงกับสีแท็บ
+        // - รอแนบหลักฐาน (awaitingSlip) → สีส้ม (Tab 2)
+        // - รอระบบตรวจสอบ (awaitingVerify) → สีเขียว (Tab 3)
+        // - อื่นๆ (รอจ่าย/สถานะอื่น) → สีฟ้า (fallback)
+        final Color stBgColor = _isAwaitingVerifyStatus(intent.status)
+            ? Colors.green.shade100
+            : _isAwaitingSlipStatus(intent.status)
+                ? Colors.orange.shade100
+                : Colors.cyan.shade100;
+        final Color stTextColor = _isAwaitingVerifyStatus(intent.status)
+            ? Colors.green.shade700
+            : _isAwaitingSlipStatus(intent.status)
+                ? Colors.orange.shade700
+                : Colors.cyan.shade700;
 
         return Card(
           elevation: 0.4,
@@ -3993,7 +4155,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          '#${paymentIntentUuid ?? '-'}',
+                          '#${paymentIntentNo ?? '-'}',
                           style: const TextStyle(
                               color: Colors.grey,
                               fontSize: 11.5,
@@ -4068,108 +4230,144 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                     ? Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          InkWell(
-                            onTap: () async {
-                              setState(() {
-                                numinvoice = intent.intentUuid;
-                                sum_amt = totalAmount;
-                              });
-                              await QrGenRef(
-                                QR_Ref1: intent.ref1 ?? '',
-                                QR_Ref2: intent.ref2 ?? '',
-                                QR_Ref3: intent.ref3 ?? '',
-                                softExpireAt:
-                                    intent.softExpireAt?.toIso8601String() ??
-                                        '',
-                              );
-                              if (!mounted) return;
-                              _showPaymentConfirmationSheet(context,
-                                  totalAmount: totalAmount);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.indigo.shade50,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.description_outlined,
-                                      color: Colors.indigo.shade800, size: 18),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    widget.cuslang == "EN"
-                                        ? "Payment proof"
-                                        : "หลักฐานการชำระ",
-                                    style: TextStyle(
-                                      color: Colors.indigo.shade800,
-                                      fontFamily: Font_.Fonts_T,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
+                          // ✅ ปิดปุ่ม "หลักฐานการชำระ" ถ้า status เป็น "รอตรวจสอบ"
+                          // (user แนบ slip ไปแล้ว รอ admin ตรวจ)
+                          if (!_isAwaitingVerifyStatus(intent.status))
+                            InkWell(
+                              onTap: () async {
+                                setState(() {
+                                  numinvoice = intent.intentUuid;
+                                  sum_amt = totalAmount;
+                                });
+                                await QrGenRef(
+                                  QR_Ref1: intent.ref1 ?? '',
+                                  QR_Ref2: intent.ref2 ?? '',
+                                  QR_Ref3: intent.ref3 ?? '',
+                                  softExpireAt:
+                                      intent.softExpireAt?.toIso8601String() ??
+                                          '',
+                                );
+                                if (!mounted) return;
+                                _showPaymentConfirmationSheet(context,
+                                    totalAmount: totalAmount);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.indigo.shade50,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.description_outlined,
+                                        color: Colors.indigo.shade800,
+                                        size: 18),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      widget.cuslang == "EN"
+                                          ? "Payment proof"
+                                          : "หลักฐานการชำระ",
+                                      style: TextStyle(
+                                        color: Colors.indigo.shade800,
+                                        fontFamily: Font_.Fonts_T,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                  ),
-                                  Icon(Icons.chevron_right,
-                                      color: Colors.indigo.shade800, size: 18),
-                                ],
+                                    Icon(Icons.chevron_right,
+                                        color: Colors.indigo.shade800,
+                                        size: 18),
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       )
                     : Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          InkWell(
-                            onTap: () async {
-                              setState(() {
-                                numinvoice = intent.intentUuid;
-                                sum_amt = totalAmount;
-                              });
-                              await QrGenRef(
-                                QR_Ref1: intent.ref1 ?? '',
-                                QR_Ref2: intent.ref2 ?? '',
-                                QR_Ref3: intent.ref3 ?? '',
-                                softExpireAt:
-                                    intent.softExpireAt?.toIso8601String() ??
-                                        '',
-                              );
-                              if (!mounted) return;
-                              _showPaymentConfirmationSheet(context,
-                                  totalAmount: totalAmount);
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: Colors.indigo.shade50,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.credit_card,
-                                      color: Colors.indigo.shade800, size: 18),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    widget.cuslang == "EN"
-                                        ? "Press to pay"
-                                        : "กดเพื่อยืนยัน",
-                                    style: TextStyle(
-                                      color: Colors.indigo.shade800,
-                                      fontFamily: Font_.Fonts_T,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.bold,
+                          Builder(builder: (_) {
+                            // ✅ Map status → label & icon & color
+                            // - "รอแนบหลักฐาน" → กดเพื่อแนบหลักฐาน (สีส้ม)
+                            // - "รอยืนยัน/รอตรวจสอบ" → กดเพื่อดูหลักฐาน (สีเขียว)
+                            final awaitingSlip =
+                                _isAwaitingSlipStatus(intent.status);
+                            final awaitingVerify =
+                                _isAwaitingVerifyStatus(intent.status);
+
+                            IconData btnIcon;
+                            Color btnBg;
+                            Color btnFg;
+                            String btnLabel;
+                            if (awaitingVerify) {
+                              btnIcon = Icons.verified_outlined;
+                              btnBg = Colors.green.shade50;
+                              btnFg = Colors.green.shade800;
+                              btnLabel = widget.cuslang == "EN"
+                                  ? "View proof"
+                                  : "กดเพื่อดูหลักฐาน";
+                            } else if (awaitingSlip) {
+                              btnIcon = Icons.attach_file_rounded;
+                              btnBg = Colors.orange.shade50;
+                              btnFg = Colors.orange.shade800;
+                              btnLabel = widget.cuslang == "EN"
+                                  ? "Attach proof"
+                                  : "กดเพื่อแนบหลักฐาน";
+                            } else {
+                              btnIcon = Icons.credit_card;
+                              btnBg = Colors.indigo.shade50;
+                              btnFg = Colors.indigo.shade800;
+                              btnLabel = widget.cuslang == "EN"
+                                  ? "Press to pay"
+                                  : "กดเพื่อยืนยัน";
+                            }
+
+                            return InkWell(
+                              onTap: () async {
+                                setState(() {
+                                  numinvoice = intent.intentUuid;
+                                  sum_amt = totalAmount;
+                                });
+                                await QrGenRef(
+                                  QR_Ref1: intent.ref1 ?? '',
+                                  QR_Ref2: intent.ref2 ?? '',
+                                  QR_Ref3: intent.ref3 ?? '',
+                                  softExpireAt:
+                                      intent.softExpireAt?.toIso8601String() ??
+                                          '',
+                                );
+                                if (!mounted) return;
+                                _showPaymentConfirmationSheet(context,
+                                    totalAmount: totalAmount);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: btnBg,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(btnIcon, color: btnFg, size: 18),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      btnLabel,
+                                      style: TextStyle(
+                                        color: btnFg,
+                                        fontFamily: Font_.Fonts_T,
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                  ),
-                                  // const Spacer(),
-                                  // Icon(Icons.chevron_right,
-                                  //     color: Colors.indigo.shade800, size: 20),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                          ),
+                            );
+                          }),
                         ],
                       ),
               ),
@@ -4188,6 +4386,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                   final double invAmount =
                       (inv as dynamic).total ?? (inv as dynamic).amount ?? 0.0;
 
+                  // ✅ แสดง checkbox ติ๊กถูกเสมอ (เพราะเป็นบิลใน Tab 2/3 = กำลังดำเนินการ)
+                  // ✅ แสดงข้อความ "แนบหลักฐานแล้ว" ใต้บิล เฉพาะ Tab 3 (รอตรวจ)
                   return _invoiceItem(
                       index: 0,
                       docNo: inv.billReference ?? '',
@@ -4196,7 +4396,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                       isSelected: true,
                       lateFee: inv.lateFee ?? 0.0,
                       onTap: () {},
-                      showCheckbox: false);
+                      showCheckbox: true,
+                      showSlipAttachedText: isVerifyTab);
                 }).toList(),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -4981,20 +5182,24 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                               BorderRadius.circular(14)),
                                     ),
                                     onPressed: () async {
+                                      // ✅ กด "ชำระภายหลัง" → ปิด dialog แล้วไปหน้าหลัก (เปิด tab "การชำระ" ทันที)
                                       final nav = Navigator.of(ctx,
                                           rootNavigator: true);
-                                      final rootNav = Navigator.of(context);
+                                      nav.pop(); // ปิด dialog
                                       SharedPreferences preferences =
                                           await SharedPreferences.getInstance();
                                       var custno =
                                           preferences.getString('custno');
-                                      nav.pop();
-                                      rootNav.pushAndRemoveUntil(
-                                          MaterialPageRoute(
-                                              builder: (_) =>
-                                                  FitnessAppHomeScreen(
-                                                      custno_s: custno)),
-                                          (route) => false);
+                                      Navigator.of(context).pushAndRemoveUntil(
+                                        MaterialPageRoute(
+                                          builder: (_) => FitnessAppHomeScreen(
+                                            custno_s: custno,
+                                            pageroot:
+                                                'PAY', // ✅ เปิด tab "การชำระ" ทันที
+                                          ),
+                                        ),
+                                        (route) => false,
+                                      );
                                     },
                                     child: Text(
                                         isEN ? 'Pay Later' : 'ชำระภายหลัง',
@@ -5169,194 +5374,392 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                         width: 1.5),
                                   ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    // Tab 1: ค้างชำระ
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () async {
-                                          await _initData();
-                                          setState(() => selectTap = 1);
-                                        },
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: 11),
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.receipt_long_rounded,
-                                                    size: 15,
-                                                    color: selectTap == 1
-                                                        ? Colors.black87
-                                                        : Colors.grey.shade400,
-                                                  ),
-                                                  const SizedBox(width: 5),
-                                                  Text(
-                                                    'ค้างชำระ',
-                                                    style: TextStyle(
-                                                      fontSize: 13,
-                                                      fontWeight: selectTap == 1
-                                                          ? FontWeight.w700
-                                                          : FontWeight.w500,
+                                child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                  // ✅ Responsive: ลดขนาดเมื่อจอเล็ก (<380px)
+                                  final bool isNarrow =
+                                      constraints.maxWidth < 380;
+                                  final double iconSize = isNarrow ? 12 : 15;
+                                  final double gapSmall = isNarrow ? 3 : 5;
+                                  final double tabFontSize = isNarrow ? 11 : 13;
+                                  final double badgeH = isNarrow ? 6 : 8;
+                                  final double badgeV = isNarrow ? 1 : 2;
+                                  final double vPad = isNarrow ? 8 : 11;
+                                  final double badgeFont = isNarrow ? 10 : 12;
+
+                                  return Row(
+                                    children: [
+                                      // Tab 1: ค้างชำระ
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () async {
+                                            await _initData();
+                                            setState(() => selectTap = 1);
+                                          },
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    vertical: vPad),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      Icons
+                                                          .receipt_long_rounded,
+                                                      size: iconSize,
                                                       color: selectTap == 1
                                                           ? Colors.black87
                                                           : Colors
                                                               .grey.shade400,
                                                     ),
-                                                  ),
-                                                  const SizedBox(width: 5),
-                                                  AnimatedContainer(
-                                                    duration: const Duration(
-                                                        milliseconds: 200),
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 7,
-                                                        vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: selectTap == 1
-                                                          ? Colors.red.shade400
-                                                          : Colors
-                                                              .grey.shade200,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              20),
+                                                    SizedBox(width: gapSmall),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'ที่ต้องชำระ',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: tabFontSize,
+                                                          fontWeight:
+                                                              selectTap == 1
+                                                                  ? FontWeight
+                                                                      .w700
+                                                                  : FontWeight
+                                                                      .w500,
+                                                          color: selectTap == 1
+                                                              ? Colors.black87
+                                                              : Colors.grey
+                                                                  .shade400,
+                                                        ),
+                                                      ),
                                                     ),
-                                                    child: Text(
-                                                      '${_InvoiceModels.length}',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        fontWeight:
-                                                            FontWeight.bold,
+                                                    SizedBox(width: gapSmall),
+                                                    AnimatedContainer(
+                                                      duration: const Duration(
+                                                          milliseconds: 200),
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                              horizontal:
+                                                                  badgeH,
+                                                              vertical: badgeV),
+                                                      decoration: BoxDecoration(
                                                         color: selectTap == 1
-                                                            ? Colors.white
+                                                            ? Colors
+                                                                .red.shade600
                                                             : Colors
-                                                                .grey.shade500,
+                                                                .red.shade100,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20),
+                                                        boxShadow: selectTap ==
+                                                                1
+                                                            ? [
+                                                                BoxShadow(
+                                                                  color: Colors
+                                                                      .red
+                                                                      .withValues(
+                                                                          alpha:
+                                                                              0.4),
+                                                                  blurRadius: 6,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 2),
+                                                                ),
+                                                              ]
+                                                            : null,
+                                                      ),
+                                                      constraints:
+                                                          BoxConstraints(
+                                                              minWidth: isNarrow
+                                                                  ? 18
+                                                                  : 22),
+                                                      child: Text(
+                                                        '${_InvoiceModels.length}',
+                                                        style: TextStyle(
+                                                          fontSize: badgeFont,
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                          color: selectTap == 1
+                                                              ? Colors.white
+                                                              : Colors
+                                                                  .red.shade700,
+                                                        ),
                                                       ),
                                                     ),
-                                                  ),
-                                                ],
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                            AnimatedContainer(
-                                              duration: const Duration(
-                                                  milliseconds: 250),
-                                              height: 2.5,
-                                              margin:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 20),
-                                              decoration: BoxDecoration(
-                                                color: selectTap == 1
-                                                    ? Colors.black87
-                                                    : Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(2),
+                                              AnimatedContainer(
+                                                duration: const Duration(
+                                                    milliseconds: 250),
+                                                height: 2.5,
+                                                margin:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 20),
+                                                decoration: BoxDecoration(
+                                                  color: selectTap == 1
+                                                      ? Colors.black87
+                                                      : Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(2),
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    // Tab 2: รอยืนยัน
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () async {
-                                          await _initData();
-                                          setState(() => selectTap = 2);
-                                        },
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: 11),
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons
-                                                        .hourglass_bottom_rounded,
-                                                    size: 15,
-                                                    color: selectTap == 2
-                                                        ? Colors.black87
-                                                        : Colors.grey.shade400,
-                                                  ),
-                                                  const SizedBox(width: 5),
-                                                  Text(
-                                                    'รอยืนยัน',
-                                                    style: TextStyle(
-                                                      fontSize: 13,
-                                                      fontWeight: selectTap == 2
-                                                          ? FontWeight.w700
-                                                          : FontWeight.w500,
+                                      // Tab 2: รอแนบหลักฐาน
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () async {
+                                            await _initData();
+                                            setState(() => selectTap = 2);
+                                          },
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    vertical: vPad),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.attach_file_rounded,
+                                                      size: iconSize,
                                                       color: selectTap == 2
                                                           ? Colors.black87
                                                           : Colors
                                                               .grey.shade400,
                                                     ),
-                                                  ),
-                                                  const SizedBox(width: 5),
-                                                  AnimatedContainer(
-                                                    duration: const Duration(
-                                                        milliseconds: 200),
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 7,
-                                                        vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: selectTap == 2
-                                                          ? Colors
-                                                              .orange.shade500
-                                                          : Colors
-                                                              .grey.shade200,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              20),
-                                                    ),
-                                                    child: Text(
-                                                      '${paymentIntents.length}',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: selectTap == 2
-                                                            ? Colors.white
-                                                            : Colors
-                                                                .grey.shade500,
+                                                    SizedBox(width: gapSmall),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'รอแนบหลักฐาน',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: tabFontSize,
+                                                          fontWeight:
+                                                              selectTap == 2
+                                                                  ? FontWeight
+                                                                      .w700
+                                                                  : FontWeight
+                                                                      .w500,
+                                                          color: selectTap == 2
+                                                              ? Colors.black87
+                                                              : Colors.grey
+                                                                  .shade400,
+                                                        ),
                                                       ),
                                                     ),
-                                                  ),
-                                                ],
+                                                    SizedBox(width: gapSmall),
+                                                    AnimatedContainer(
+                                                      duration: const Duration(
+                                                          milliseconds: 200),
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                              horizontal:
+                                                                  badgeH,
+                                                              vertical: badgeV),
+                                                      decoration: BoxDecoration(
+                                                        color: selectTap == 2
+                                                            ? Colors
+                                                                .orange.shade600
+                                                            : Colors.orange
+                                                                .shade100,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20),
+                                                        boxShadow: selectTap ==
+                                                                2
+                                                            ? [
+                                                                BoxShadow(
+                                                                  color: Colors
+                                                                      .orange
+                                                                      .withValues(
+                                                                          alpha:
+                                                                              0.4),
+                                                                  blurRadius: 6,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 2),
+                                                                ),
+                                                              ]
+                                                            : null,
+                                                      ),
+                                                      constraints:
+                                                          BoxConstraints(
+                                                              minWidth: isNarrow
+                                                                  ? 18
+                                                                  : 22),
+                                                      child: Text(
+                                                        '${_countAwaitingSlip}',
+                                                        style: TextStyle(
+                                                          fontSize: badgeFont,
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                          color: selectTap == 2
+                                                              ? Colors.white
+                                                              : Colors.orange
+                                                                  .shade700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                            AnimatedContainer(
-                                              duration: const Duration(
-                                                  milliseconds: 250),
-                                              height: 2.5,
-                                              margin:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 20),
-                                              decoration: BoxDecoration(
-                                                color: selectTap == 2
-                                                    ? Colors.black87
-                                                    : Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(2),
+                                              AnimatedContainer(
+                                                duration: const Duration(
+                                                    milliseconds: 250),
+                                                height: 2.5,
+                                                margin:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 20),
+                                                decoration: BoxDecoration(
+                                                  color: selectTap == 2
+                                                      ? Colors.orange.shade600
+                                                      : Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(2),
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
+                                      // Tab 3: รอระบบตรวจสอบ
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () async {
+                                            await _initData();
+                                            setState(() => selectTap = 3);
+                                          },
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    vertical: vPad),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      Icons
+                                                          .verified_user_rounded,
+                                                      size: iconSize,
+                                                      color: selectTap == 3
+                                                          ? Colors.black87
+                                                          : Colors
+                                                              .grey.shade400,
+                                                    ),
+                                                    SizedBox(width: gapSmall),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'รอระบบตรวจสอบ',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: tabFontSize,
+                                                          fontWeight:
+                                                              selectTap == 3
+                                                                  ? FontWeight
+                                                                      .w700
+                                                                  : FontWeight
+                                                                      .w500,
+                                                          color: selectTap == 3
+                                                              ? Colors.black87
+                                                              : Colors.grey
+                                                                  .shade400,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: gapSmall),
+                                                    AnimatedContainer(
+                                                      duration: const Duration(
+                                                          milliseconds: 200),
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                              horizontal:
+                                                                  badgeH,
+                                                              vertical: badgeV),
+                                                      decoration: BoxDecoration(
+                                                        color: selectTap == 3
+                                                            ? Colors
+                                                                .green.shade600
+                                                            : Colors
+                                                                .green.shade100,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20),
+                                                        boxShadow: selectTap ==
+                                                                3
+                                                            ? [
+                                                                BoxShadow(
+                                                                  color: Colors
+                                                                      .green
+                                                                      .withValues(
+                                                                          alpha:
+                                                                              0.4),
+                                                                  blurRadius: 6,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 2),
+                                                                ),
+                                                              ]
+                                                            : null,
+                                                      ),
+                                                      constraints:
+                                                          BoxConstraints(
+                                                              minWidth: isNarrow
+                                                                  ? 18
+                                                                  : 22),
+                                                      child: Text(
+                                                        '${_countAwaitingVerify}',
+                                                        style: TextStyle(
+                                                          fontSize: badgeFont,
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                          color: selectTap == 3
+                                                              ? Colors.white
+                                                              : Colors.green
+                                                                  .shade700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              AnimatedContainer(
+                                                duration: const Duration(
+                                                    milliseconds: 250),
+                                                height: 2.5,
+                                                margin:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 20),
+                                                decoration: BoxDecoration(
+                                                  color: selectTap == 3
+                                                      ? Colors.green.shade600
+                                                      : Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(2),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }),
                               ),
                               const SizedBox(
                                 height: 5,
@@ -5380,11 +5783,41 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                               if (selectTap == 2) ...[
                                 LayoutBuilder(builder: (context, constraints) {
                                   final maxW = constraints.maxWidth;
+                                  // ✅ filter intents: รอแนบหลักฐาน (สถานะ "รอชำระเงิน" / awaiting)
+                                  final awaitingSlip = paymentIntents
+                                      .where((p) =>
+                                          _isAwaitingSlipStatus(p.status))
+                                      .toList();
                                   return Column(
                                     children: [
                                       _groupTile2(),
                                       const SizedBox(height: 2),
-                                      _IntentBox(),
+                                      if (awaitingSlip.isEmpty)
+                                        _emptyTabMsg('ไม่มีรายการรอแนบหลักฐาน')
+                                      else
+                                        _IntentBox(
+                                            filteredIntents: awaitingSlip),
+                                    ],
+                                  );
+                                })
+                              ] else if (selectTap == 3) ...[
+                                LayoutBuilder(builder: (context, constraints) {
+                                  final maxW = constraints.maxWidth;
+                                  // ✅ filter intents: รอระบบตรวจสอบ
+                                  final awaitingVerify = paymentIntents
+                                      .where((p) =>
+                                          _isAwaitingVerifyStatus(p.status))
+                                      .toList();
+                                  return Column(
+                                    children: [
+                                      _groupTile2(),
+                                      const SizedBox(height: 2),
+                                      if (awaitingVerify.isEmpty)
+                                        _emptyTabMsg('ไม่มีรายการรอระบบตรวจสอบ')
+                                      else
+                                        _IntentBox(
+                                            filteredIntents: awaitingVerify,
+                                            isVerifyTab: true),
                                     ],
                                   );
                                 })
@@ -5472,7 +5905,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                   ),
               ],
             ),
-            bottomNavigationBar: (selectTap == 2)
+            bottomNavigationBar: (selectTap == 2 || selectTap == 3) ||
+                    _InvoiceModels.isEmpty
                 ? null
                 : Container(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),

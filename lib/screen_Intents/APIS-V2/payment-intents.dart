@@ -82,6 +82,7 @@ Future<http.Response?> postPaymentIntentsState({
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      print('✅ postPaymentIntentsState Success: ${response.body}');
       return response;
     } else {
       try {
