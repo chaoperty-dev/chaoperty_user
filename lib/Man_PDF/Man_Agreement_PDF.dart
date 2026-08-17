@@ -1,9 +1,14 @@
 import 'dart:convert';
+import 'package:chaoperty_user/Model/AuthorizedLessor_Model.dart';
+import 'package:chaoperty_user/PDF/PDF_Agreement/agreement_lao_preview.dart';
+import 'package:flutter/material.dart';
 
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../Constant/Myconstant.dart';
+import '../Constant/global_http.dart';
+
 import '../Model/GetC_Quot_Select_Model.dart';
 import '../Model/GetContract_Photo_Model.dart';
 import '../Model/GetFinnancetrans_Model.dart';
@@ -19,6 +24,13 @@ import '../PDF/Choice/Sub_Agreement_Choice/pdf_SubAgreement_Choice3.dart';
 import '../PDF/Choice/pdf_Agreement_Choice.dart';
 import '../PDF/Choice/pdf_Agreement_Choice2.dart';
 import '../PDF/Choice/pdf_Agreement_Choice3.dart';
+import '../PDF/Choice/pdf_Agreement_Choice8.dart';
+import '../PDF/Choice/pdf_Agreement_Choice9.dart';
+import '../PDF/LAMPHUN/pdf_lamphun.dart';
+import '../PDF/LAMPHUN/pdf_lamphun1.dart';
+import '../PDF/LAMPHUN/pdf_lamphun2.dart';
+import '../PDF/Meechok/Sub_Pdf_Meechok/pdf_sub_meechok.dart';
+import '../PDF/Meechok/pdf_meechok.dart';
 import '../PDF/NichadaThani/pdf_Agreement_Nichada.dart';
 import '../PDF/NichadaThani/pdf_Agreement_Nichada2.dart';
 import '../PDF/NichadaThani/pdf_Agreement_Nichada3.dart';
@@ -27,6 +39,7 @@ import '../PDF/NichadaThani/pdf_Agreement_Nichada5.dart';
 import '../PDF/PDF_Agreement/Ama1000/pdf_Agreement_ama1000.dart';
 import '../PDF/PDF_Agreement/Ortor/BangKla/pdf_Agreement_Ortor.dart';
 import '../PDF/PDF_Agreement/pdf_Agreement.dart';
+
 import '../PDF/PDF_Agreement/pdf_Agreement_JSpace.dart';
 import '../PDF/PDF_Agreement/pdf_Agreement_JSpace2.dart';
 import '../PDF/PDF_Receipt/pdf_AC_his_statusbill.dart';
@@ -124,17 +137,24 @@ class Man_Agreement_PDF {
       FormName1_choice,
       FormName2_choice,
       FormName3_choice,
-      FormName4_choice) async {
+      FormName4_choice,
+      Contract_num,
+      {AuthorizedLessorModel? authorizedLessor,
+
+      /// วันเกิดผู้เช่า (dd/MM/yyyy หรือ yyyy-MM-dd) จากหน้าข้อมูลผู้เช่า
+      /// ใช้คำนวณช่อง "อายุ" ในสัญญา
+      String? tenantBirth}) async {
     List<QuotxSelectModel> quotxSelectModels = [];
+    List<QuotxSelectModel> lpjatujak_quotxSelectModels = [];
     List<ContractPhotoModel> contractPhotoModels = [];
     List<TeNantModel> teNantModels = [];
     SharedPreferences preferences = await SharedPreferences.getInstance();
     var ren = preferences
         .getString('renTalSer'); /////////////////////------------------------->
     String url_Payment =
-        '${MyConstant().domain}/GC_payMent.php?isAdd=true&ren=$ren';
+        '${MyConstant().domain_chao}/GC_payMent.php?isAdd=true&ren=$ren';
     try {
-      var response_Payment = await http.get(Uri.parse(url_Payment));
+      var response_Payment = await httpClient.get(Uri.parse(url_Payment));
       var result_Payment = json.decode(response_Payment.body);
 
       if (result_Payment.toString() != 'null') {
@@ -156,9 +176,9 @@ class Man_Agreement_PDF {
 
     /////////////////////------------------------->
     String url_paper_run =
-        '${MyConstant().domain}/UP_Paper_Run.php?isAdd=true&ren=$ren&ciddoc=$Get_Value_cid&paper_run=${int.parse('$paper_run') + 1}&type=agm';
+        '${MyConstant().domain_chao}/UP_Paper_Run.php?isAdd=true&ren=$ren&ciddoc=$Get_Value_cid&paper_run=${int.parse('$paper_run') + 1}&type=agm';
     try {
-      var response = await http.get(Uri.parse(url_paper_run));
+      var response = await httpClient.get(Uri.parse(url_paper_run));
       var result = json.decode(response.body);
 
       if (result.toString() != 'null') {}
@@ -166,12 +186,12 @@ class Man_Agreement_PDF {
 
     /////////////////////------------------------->
     String url2 =
-        '${MyConstant().domain}/GC_quot_conxPDF.php?isAdd=true&ren=$ren&ciddoc=$Get_Value_cid&qutser=$Get_Value_NameShop_index&fiddoc=$Form_fid';
+        '${MyConstant().domain_chao}/GC_quot_conxPDF.php?isAdd=true&ren=$ren&ciddoc=$Get_Value_cid&qutser=$Get_Value_NameShop_index&fiddoc=$Form_fid';
     print(url2);
     try {
-      var response2 = await http.get(Uri.parse(url2));
+      var response2 = await httpClient.get(Uri.parse(url2));
       var result2 = json.decode(response2.body);
-
+      // print(result2);
       if (result2.toString() != 'null') {
         for (var map in result2) {
           QuotxSelectModel quotxSelectModel = QuotxSelectModel.fromJson(map);
@@ -188,11 +208,11 @@ class Man_Agreement_PDF {
     final qutser = Get_Value_NameShop_index;
 
     String url =
-        '${MyConstant().domain}/GC_photo_cont.php?isAdd=true&ren=$ren&user=$user&ciddoc=$ciddoc&qutser=$qutser';
+        '${MyConstant().domain_chao}/GC_photo_cont.php?isAdd=true&ren=$ren&user=$user&ciddoc=$ciddoc&qutser=$qutser';
     print('read_GC_photo aaa///// $url');
 
     try {
-      var response = await http.get(Uri.parse(url));
+      var response = await httpClient.get(Uri.parse(url));
       var result = json.decode(response.body);
 
       if (result.toString() != 'null') {
@@ -208,11 +228,11 @@ class Man_Agreement_PDF {
     }
 
     String url_TeNant =
-        '${MyConstant().domain}/GC_tenant.php?isAdd=true&ren=$ren&user=$user&ciddoc=$ciddoc&qutser=$qutser';
-    print('read_GC_tenant aaa///// $url_TeNant');
+        '${MyConstant().domain_chao}/GC_tenant.php?isAdd=true&ren=$ren&user=$user&ciddoc=$ciddoc&qutser=$qutser';
+    print('read_GC_tenant $url_TeNant');
 
     try {
-      var response = await http.get(Uri.parse(url_TeNant));
+      var response = await httpClient.get(Uri.parse(url_TeNant));
       var result = json.decode(response.body);
 
       if (result.toString() != 'null') {
@@ -221,10 +241,39 @@ class Man_Agreement_PDF {
           teNantModels.add(teNantModel);
         }
       }
+      // เช็คว่า GC_tenant.php ส่ง field birth มาหรือยัง (ใช้คำนวณอายุในสัญญา)
+      if (result is List && result.isNotEmpty) {
+        print('🎂 GC_tenant keys = ${(result.first as Map).keys.toList()}');
+        print(
+            '🎂 birth = ${teNantModels.isNotEmpty ? teNantModels.first.birth : null}');
+      }
       // print('👤 จำนวนผู้เช่าที่โหลดได้: ${teNantModels.length}');
     } catch (e) {
       print('❌ read_GC_tenant error: $e');
     }
+
+    String LPJATUJAK =
+        '${MyConstant().domain_chao}/LP_JATUJAK_API/GC_tenantlookAS_LPJATUJAK.php?isAdd=true&ren=$ren&ciddoc=$ciddoc&qutser=$qutser';
+    print('read_GC_TransLP $LPJATUJAK');
+
+    try {
+      var response = await httpClient.get(Uri.parse(LPJATUJAK));
+      // print('🔍 LPJATUJAK response: ${response.body}');
+      var result = json.decode(response.body);
+
+      if (result.toString() != 'null') {
+        for (var map in result) {
+          QuotxSelectModel quotxSelectModel = QuotxSelectModel.fromJson(map);
+          lpjatujak_quotxSelectModels.add(quotxSelectModel);
+        }
+      }
+      // print(
+      //     '🔍 lpjatujak_quotxSelectModels.length = ${lpjatujak_quotxSelectModels.length}');
+    } catch (e) {
+      print('❌ LPJATUJAK error: $e');
+    }
+
+    // print('👤 จำนวนผู้เช่าที่โหลดได้: ${teNantModels.length}');
 
 /////////////////////------------------------->
     ///
@@ -455,7 +504,56 @@ class Man_Agreement_PDF {
               DatexChoice_Sub2_1text,
               DatexChoice_Sub2_2text);
           // } else if (_ReportValue_type == '6') {
-        } else {
+        }
+        //  else if (_ReportValue_type == '28' || ren.toString() == '185') {
+        //   // มีโชค เอกสารแนบท้ายสัญญา
+        //   Pdfgen_Agreementmeechoksub.exportPDF_Agreementmeechoksub(
+        //     context,
+        //     '${Get_Value_NameShop_index}',
+        //     '${Get_Value_cid}',
+        //     _verticalGroupValue,
+        //     Form_nameshop,
+        //     Form_typeshop,
+        //     Form_bussshop,
+        //     Form_bussscontact,
+        //     Form_address,
+        //     Form_tel,
+        //     Form_email,
+        //     Form_tax,
+        //     Form_ln,
+        //     Form_zn,
+        //     Form_area,
+        //     Form_qty,
+        //     Form_sdate,
+        //     Form_ldate,
+        //     Form_period,
+        //     Form_rtname,
+        //     quotxSelectModels,
+        //     lpjatujak_quotxSelectModels.isNotEmpty
+        //         ? (lpjatujak_quotxSelectModels.first.charge_type ?? '')
+        //         : '',
+        //     _TransModels,
+        //     '$renTal_name',
+        //     '${bill_addr}',
+        //     '${bill_email}',
+        //     '${bill_tel}',
+        //     '${bill_tax}',
+        //     '${bill_name}',
+        //     newValuePDFimg,
+        //     tableData00,
+        //     TitleType_Default_Receipt_Name,
+        //     Datex_text,
+        //     teNantModels,
+        //     contractPhotoModels,
+        //     FormName1_choice,
+        //     FormName2_choice,
+        //     FormName3_choice,
+        //     FormName4_choice,
+        //     Title_text,
+        //     Details_text,
+        //   );
+        // }
+        else {
           Pdfgen_Agreement_JSpace2.exportPDF_Agreement_JSpace2(
               context,
               '${Get_Value_NameShop_index}',
@@ -505,7 +603,51 @@ class Man_Agreement_PDF {
         String _ReportValue_type = cid_typePaper_ser;
         // String _ReportValue_type = _ReportValue_type_doc;
         print('_ReportValue_type  $_ReportValue_type');
-        if (_ReportValue_type == '0' || _ReportValue_type == '1') {
+        if ((_ReportValue_type == '0' || _ReportValue_type == '1') &&
+                ren == '118' ||
+            ren == '209') {
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => AgreementLaoPreviewPage(
+              context0: context,
+              Get_Value_NameShop_index: '${Get_Value_NameShop_index}',
+              Get_Value_cid: '${Get_Value_cid}',
+              verticalGroupValue: _verticalGroupValue,
+              Form_nameshop: Form_nameshop,
+              Form_typeshop: Form_typeshop,
+              Form_bussshop: Form_bussshop,
+              Form_bussscontact: Form_bussscontact,
+              Form_address: Form_address,
+              Form_areaaddrx: Form_areaaddrx,
+              Form_tel: Form_tel,
+              Form_email: Form_email,
+              Form_tax: Form_tax,
+              Form_ln: Form_ln,
+              Form_zn: Form_zn,
+              Form_area: Form_area,
+              Form_qty: Form_qty,
+              Form_sdate: Form_sdate,
+              Form_ldate: Form_ldate,
+              Form_period: Form_period,
+              Form_rtname: Form_rtname,
+              quotxSelectModels: quotxSelectModels,
+              TransModels: _TransModels,
+              renTal_name: '$renTal_name',
+              bill_addr: '${bill_addr}',
+              bill_email: '${bill_email}',
+              bill_tel: '${bill_tel}',
+              bill_tax: '${bill_tax}',
+              bill_name: '${bill_name}',
+              newValuePDFimg: newValuePDFimg,
+              tableData00: tableData00,
+              TitleType_Default_Receipt_Name: TitleType_Default_Receipt_Name,
+              Datex_text: Datex_text,
+              FormName1_choice: FormName1_choice,
+              FormName2_choice: FormName2_choice,
+              FormName3_choice: FormName3_choice,
+              FormName4_choice: FormName4_choice,
+            ),
+          ));
+        } else if (_ReportValue_type == '0' || _ReportValue_type == '1') {
           Pdfgen_Agreement.exportPDF_Agreement(
               context,
               '${Get_Value_NameShop_index}',
@@ -755,6 +897,118 @@ class Man_Agreement_PDF {
                   : 0.00,
               Form_wnote,
               FormPeriod_choice);
+        } else if (_ReportValue_type == '8' && ren == '106') {
+          Pdfgen_Agreement_Choice8.exportPDF_Agreement_Choice8(
+              context,
+              '${Get_Value_NameShop_index}',
+              '${Get_Value_cid}',
+              _verticalGroupValue,
+              Form_nameshop,
+              Form_typeshop,
+              Form_bussshop,
+              Form_bussscontact,
+              Form_address,
+              Form_tel,
+              Form_email,
+              Form_tax,
+              Form_ln,
+              Form_zn,
+              Form_area,
+              Form_qty,
+              Form_sdate,
+              Form_ldate,
+              Form_period,
+              Form_rtname,
+              quotxSelectModels,
+              _TransModels,
+              '$renTal_name',
+              '${bill_addr}',
+              '${bill_email}',
+              '${bill_tel}',
+              '${bill_tax}',
+              '${bill_name}',
+              newValuePDFimg,
+              tableData00,
+              TitleType_Default_Receipt_Name,
+              Datex_text,
+              _ReportValue_type_docOttor,
+              Form_fid,
+              Form_renew_cid,
+              Form_PakanSdate,
+              Form_PakanLdate,
+              Form_PakanSdate_Doc,
+              Form_PakanLdate_Doc,
+              (Form_PakanAll_amt != null && Form_PakanAll_amt != '')
+                  ? Form_PakanAll_amt
+                  : 0.00,
+              (Form_PakanAll_pvat != null && Form_PakanAll_pvat != '')
+                  ? Form_PakanAll_pvat
+                  : 0.00,
+              (Form_PakanAll_vat != null && Form_PakanAll_vat != '')
+                  ? Form_PakanAll_vat
+                  : 0.00,
+              (Form_PakanAll_Total != null && Form_PakanAll_Total != '')
+                  ? Form_PakanAll_Total
+                  : 0.00,
+              Form_wnote,
+              FormPeriod_choice,
+              DatexChoice_Sub2_3text);
+        } else if (_ReportValue_type == '9' && ren == '106') {
+          Pdfgen_Agreement_Choice9.exportPDF_Agreement_Choice9(
+              context,
+              '${Get_Value_NameShop_index}',
+              '${Get_Value_cid}',
+              _verticalGroupValue,
+              Form_nameshop,
+              Form_typeshop,
+              Form_bussshop,
+              Form_bussscontact,
+              Form_address,
+              Form_tel,
+              Form_email,
+              Form_tax,
+              Form_ln,
+              Form_zn,
+              Form_area,
+              Form_qty,
+              Form_sdate,
+              Form_ldate,
+              Form_period,
+              Form_rtname,
+              quotxSelectModels,
+              _TransModels,
+              '$renTal_name',
+              '${bill_addr}',
+              '${bill_email}',
+              '${bill_tel}',
+              '${bill_tax}',
+              '${bill_name}',
+              newValuePDFimg,
+              tableData00,
+              TitleType_Default_Receipt_Name,
+              Datex_text,
+              _ReportValue_type_docOttor,
+              Form_fid,
+              Form_renew_cid,
+              Form_PakanSdate,
+              Form_PakanLdate,
+              Form_PakanSdate_Doc,
+              Form_PakanLdate_Doc,
+              (Form_PakanAll_amt != null && Form_PakanAll_amt != '')
+                  ? Form_PakanAll_amt
+                  : 0.00,
+              (Form_PakanAll_pvat != null && Form_PakanAll_pvat != '')
+                  ? Form_PakanAll_pvat
+                  : 0.00,
+              (Form_PakanAll_vat != null && Form_PakanAll_vat != '')
+                  ? Form_PakanAll_vat
+                  : 0.00,
+              (Form_PakanAll_Total != null && Form_PakanAll_Total != '')
+                  ? Form_PakanAll_Total
+                  : 0.00,
+              Form_wnote,
+              FormPeriod_choice,
+              DatexChoice_Sub2_3text);
         } else if (_ReportValue_type == '5') {
           Pdfgen_Agreement_Ama1000.exportPDF_Agreement_Ama1000(
               context,
@@ -1019,44 +1273,45 @@ class Man_Agreement_PDF {
               FormName4_choice);
         } else if (_ReportValue_type == '18') {
           // nim สัญญาเช่าอาคาร
-          Pdfgen_Agreementnim1.exportPDF_Agreementnim1(
-              context,
-              '${Get_Value_NameShop_index}',
-              '${Get_Value_cid}',
-              _verticalGroupValue,
-              Form_nameshop,
-              Form_typeshop,
-              Form_bussshop,
-              Form_bussscontact,
-              Form_address,
-              Form_tel,
-              Form_email,
-              Form_tax,
-              Form_ln,
-              Form_zn,
-              Form_area,
-              Form_qty,
-              Form_sdate,
-              Form_ldate,
-              Form_period,
-              Form_rtname,
-              quotxSelectModels,
-              _TransModels,
-              '$renTal_name',
-              '${bill_addr}',
-              '${bill_email}',
-              '${bill_tel}',
-              '${bill_tax}',
-              '${bill_name}',
-              newValuePDFimg,
-              tableData00,
-              TitleType_Default_Receipt_Name,
-              Datex_text,
-              FormName1_choice,
-              FormName2_choice,
-              FormName3_choice,
-              FormName4_choice,
-              contractPhotoModels);
+          // Pdfgen_Agreementnim1.exportPDF_Agreementnim1(
+          //     context,
+          //     '${Get_Value_NameShop_index}',
+          //     '${Get_Value_cid}',
+          //     _verticalGroupValue,
+          //     Form_nameshop,
+          //     Form_typeshop,
+          //     Form_bussshop,
+          //     Form_bussscontact,
+          //     Form_address,
+          //     Form_tel,
+          //     Form_email,
+          //     Form_tax,
+          //     Form_ln,
+          //     Form_zn,
+          //     Form_area,
+          //     Form_qty,
+          //     Form_sdate,
+          //     Form_ldate,
+          //     Form_period,
+          //     Form_rtname,
+          //     quotxSelectModels,
+          //     _TransModels,
+          //     '$renTal_name',
+          //     '${bill_addr}',
+          //     '${bill_email}',
+          //     '${bill_tel}',
+          //     '${bill_tax}',
+          //     '${bill_name}',
+          //     newValuePDFimg,
+          //     tableData00,
+          //     TitleType_Default_Receipt_Name,
+          //     Datex_text,
+          //     FormName1_choice,
+          //     FormName2_choice,
+          //     FormName3_choice,
+          //     FormName4_choice,
+          //     contractPhotoModels,
+          //     Contract_num);
         } else if (_ReportValue_type == '19') {
           // nim สัญญาบริการ
           Pdfgen_Agreementnim2.exportPDF_Agreementnim2(
@@ -1298,6 +1553,180 @@ class Man_Agreement_PDF {
               FormName4_choice,
               teNantModels,
               contractPhotoModels);
+        } else if (_ReportValue_type == '25') {
+          Pdfgen_Agreementlamphun.exportPDF_Agreementlamphun(
+            context,
+            '${Get_Value_NameShop_index}',
+            '${Get_Value_cid}',
+            _verticalGroupValue,
+            Form_nameshop,
+            Form_typeshop,
+            Form_bussshop,
+            Form_bussscontact,
+            Form_address,
+            Form_tel,
+            Form_email,
+            Form_tax,
+            Form_ln,
+            Form_zn,
+            Form_area,
+            Form_qty,
+            Form_sdate,
+            Form_ldate,
+            Form_period,
+            Form_rtname,
+            quotxSelectModels,
+            lpjatujak_quotxSelectModels.isNotEmpty
+                ? (lpjatujak_quotxSelectModels.first.charge_type ?? '')
+                : '',
+            _TransModels,
+            '$renTal_name',
+            '${bill_addr}',
+            '${bill_email}',
+            '${bill_tel}',
+            '${bill_tax}',
+            '${bill_name}',
+            newValuePDFimg,
+            tableData00,
+            TitleType_Default_Receipt_Name,
+            Datex_text,
+            teNantModels,
+            contractPhotoModels,
+            FormName1_choice,
+            FormName2_choice,
+            FormName3_choice,
+            FormName4_choice,
+          );
+        } else if (_ReportValue_type == '26') {
+          Pdfgen_Agreementlamphun1.exportPDF_Agreementlamphun1(
+            context,
+            '${Get_Value_NameShop_index}',
+            '${Get_Value_cid}',
+            _verticalGroupValue,
+            Form_nameshop,
+            Form_typeshop,
+            Form_bussshop,
+            Form_bussscontact,
+            Form_address,
+            Form_tel,
+            Form_email,
+            Form_tax,
+            Form_ln,
+            Form_zn,
+            Form_area,
+            Form_qty,
+            Form_sdate,
+            Form_ldate,
+            Form_period,
+            Form_rtname,
+            quotxSelectModels,
+            _TransModels,
+            '$renTal_name',
+            '${bill_addr}',
+            '${bill_email}',
+            '${bill_tel}',
+            '${bill_tax}',
+            '${bill_name}',
+            newValuePDFimg,
+            tableData00,
+            TitleType_Default_Receipt_Name,
+            Datex_text,
+            teNantModels,
+            contractPhotoModels,
+            FormName1_choice,
+            FormName2_choice,
+            FormName3_choice,
+            FormName4_choice,
+          );
+        } else if (_ReportValue_type == '27') {
+          Pdfgen_Agreementlamphun2.exportPDF_Agreementlamphun2(
+            context,
+            '${Get_Value_NameShop_index}',
+            '${Get_Value_cid}',
+            _verticalGroupValue,
+            Form_nameshop,
+            Form_typeshop,
+            Form_bussshop,
+            Form_bussscontact,
+            Form_address,
+            Form_tel,
+            Form_email,
+            Form_tax,
+            Form_ln,
+            Form_zn,
+            Form_area,
+            Form_qty,
+            Form_sdate,
+            Form_ldate,
+            Form_period,
+            Form_rtname,
+            quotxSelectModels,
+            _TransModels,
+            '$renTal_name',
+            '${bill_addr}',
+            '${bill_email}',
+            '${bill_tel}',
+            '${bill_tax}',
+            '${bill_name}',
+            newValuePDFimg,
+            tableData00,
+            TitleType_Default_Receipt_Name,
+            Datex_text,
+            teNantModels,
+            contractPhotoModels,
+            FormName1_choice,
+            FormName2_choice,
+            FormName3_choice,
+            FormName4_choice,
+          );
+        } else if (_ReportValue_type == '28') {
+          Pdfgen_Agreementmeechok.exportPDF_Agreementmeechok(
+            context,
+            '${Get_Value_NameShop_index}',
+            '${Get_Value_cid}',
+            _verticalGroupValue,
+            Form_nameshop,
+            Form_typeshop,
+            Form_bussshop,
+            Form_bussscontact,
+            Form_address,
+            Form_tel,
+            Form_email,
+            Form_tax,
+            Form_ln,
+            Form_zn,
+            Form_area,
+            Form_qty,
+            Form_sdate,
+            Form_ldate,
+            Form_period,
+            Form_rtname,
+            quotxSelectModels,
+            lpjatujak_quotxSelectModels.isNotEmpty
+                ? (lpjatujak_quotxSelectModels.first.charge_type ?? '')
+                : '',
+            _TransModels,
+            '$renTal_name',
+            '${bill_addr}',
+            '${bill_email}',
+            '${bill_tel}',
+            '${bill_tax}',
+            '${bill_name}',
+            newValuePDFimg,
+            tableData00,
+            TitleType_Default_Receipt_Name,
+            Datex_text,
+            teNantModels,
+            contractPhotoModels,
+            FormName1_choice,
+            FormName2_choice,
+            FormName3_choice,
+            FormName4_choice,
+            // ที่อยู่ผู้ให้เช่าที่เลือกจาก dropdown ทะเบียนผู้ให้เช่า
+            lessorAddress: authorizedLessor?.address,
+            // วันเกิดผู้เช่า -> ใช้คำนวณช่อง "อายุ"
+            tenantBirth: tenantBirth,
+          );
         }
       }
     });

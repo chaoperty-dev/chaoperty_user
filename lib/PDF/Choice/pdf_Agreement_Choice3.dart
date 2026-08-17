@@ -12,10 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 import '../../Constant/Myconstant.dart';
 import '../../Man_PDF/Preview_PDF/Preview_Agreement.dart';
-
 
 class Pdfgen_Agreement_Choice3 {
 //////////---------------------------------------------------->( **** เอกสารสัญญาบริการ Choice)
@@ -91,6 +89,28 @@ class Pdfgen_Agreement_Choice3 {
     String thaiDate = DateFormat('d เดือน MMM', 'th').format(date);
     var nFormat = NumberFormat("#,##0.00", "en_US");
     var nFormat2 = NumberFormat("###0.00", "en_US");
+    String _fmtDMY(dynamic val, {String locale = 'th'}) {
+      try {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty) return '-';
+        final dt = DateFormat("dd-MM-yyyy HH:mm:ss").parse('$s 00:00:00');
+        return '${DateFormat('dd MMM', locale).format(dt)} ${dt.year + 543}';
+      } catch (_) {
+        return '-';
+      }
+    }
+
+    String _fmtISO(dynamic val, {String locale = 'th'}) {
+      try {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty) return '-';
+        final dt = DateTime.parse(s);
+        return '${DateFormat('dd MMM', locale).format(dt)} ${dt.year + 543}';
+      } catch (_) {
+        return '-';
+      }
+    }
+
     final iconImage =
         (await rootBundle.load('images/LOGO.png')).buffer.asUint8List();
     final ByteData image = await rootBundle.load('images/image7-11.png');
@@ -1113,7 +1133,7 @@ class Pdfgen_Agreement_Choice3 {
                                   width: 0.3, // Underline thickness
                                 ))),
                                 child: pw.Text(
-                                  '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}").year + 543}',
+                                  '${_fmtDMY(Form_sdate)}',
                                   //   "$Form_sdate",
                                   textAlign: pw.TextAlign.center,
                                   style: pw.TextStyle(
@@ -1143,7 +1163,7 @@ class Pdfgen_Agreement_Choice3 {
                                   width: 0.3, // Underline thickness
                                 ))),
                                 child: pw.Text(
-                                  '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}").year + 543}',
+                                  '${_fmtDMY(Form_ldate)}',
                                   //  "$Form_ldate",
                                   textAlign: pw.TextAlign.center,
                                   style: pw.TextStyle(
@@ -1242,7 +1262,7 @@ class Pdfgen_Agreement_Choice3 {
                                             e.cfid.toString() == '0')
                                         .isEmpty)
                                     ? '0.00'
-                                    : '${nFormat.format(double.parse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').pvat ?? '0.00'))} บาท',
+                                    : '${nFormat.format(double.tryParse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').pvat.toString()) ?? 0.00)} บาท',
                                 // (quotxSelectModels
                                 //             .where((e) =>
                                 //                 e.expser.toString() == '16')
@@ -1285,7 +1305,7 @@ class Pdfgen_Agreement_Choice3 {
                                             e.cfid.toString() == '0')
                                         .isEmpty)
                                     ? '0.00'
-                                    : '${nFormat.format(double.parse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').vat ?? '0.00'))} บาท',
+                                    : '${nFormat.format(double.tryParse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').vat.toString()) ?? 0.00)} บาท',
                                 // (quotxSelectModels
                                 //             .where((e) =>
                                 //                 e.expser.toString() == '16')
@@ -1311,7 +1331,7 @@ class Pdfgen_Agreement_Choice3 {
                                     .isEmpty)
                                 ? 'หักภาษี ณ ที่จ่าย '
                                 : 'หักภาษี ณ ที่จ่าย ' +
-                                    '( ${quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').nwht != null ? double.parse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').nwht.toString()) : 0.00} ) % ',
+                                    '( ${double.tryParse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').nwht.toString()) ?? 0.00} ) % ',
                             // (quotxSelectModels
                             //             .where(
                             //                 (e) => e.expser.toString() == '16')
@@ -1348,7 +1368,7 @@ class Pdfgen_Agreement_Choice3 {
                                             e.cfid.toString() == '0')
                                         .isEmpty)
                                     ? '0.00'
-                                    : '${nFormat.format(double.parse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').wht ?? '0.00'))} บาท',
+                                    : '${nFormat.format(double.tryParse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').wht.toString()) ?? 0.00)} บาท',
                                 // (quotxSelectModels
                                 //             .where((e) =>
                                 //                 e.expser.toString() == '16')
@@ -1376,42 +1396,42 @@ class Pdfgen_Agreement_Choice3 {
                             ),
                           ),
                           pw.Expanded(
-                            flex: 3,
-                            child: pw.Container(
-                              decoration: pw.BoxDecoration(
-                                  border: pw.Border(
-                                      bottom: pw.BorderSide(
-                                color: Colors_pd,
-                                width: 0.3, // Underline thickness
-                              ))),
-                              child: pw.Text(
-                                (quotxSelectModels
-                                            .where((e) =>
-                                                e.expser.toString() == '16' &&
-                                                e.cfid.toString() == '0')
-                                            .length ==
-                                        0)
-                                    ? '0.00 บาท (~${convertToThaiBaht(0.00)}~)'
-                                    : '${nFormat.format(double.parse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').total ?? '0.00'))} บาท ' +
-                                        '(~${convertToThaiBaht(double.parse(quotxSelectModels.firstWhere((e) => e.expser.toString() == '16' && e.cfid.toString() == '0').total ?? '0.00'))}~)',
-                                // (quotxSelectModels
-                                //             .where((e) =>
-                                //                 e.expser.toString() == '16')
-                                //             .length ==
-                                //         0)
-                                //     ? '0.00 บาท (~${convertToThaiBaht(0.00)}~)'
-                                //     : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '16' && e.cfid.toString() != '1').map((e) => e.total != null ? double.parse(e.total.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท ' +
-                                //         '(~${convertToThaiBaht(quotxSelectModels.where((e) => e.expser.toString() == '16' && e.cfid.toString() != '1').map((e) => e.total != null ? double.parse(e.total.toString()) : 0.00).fold(0.00, (a, b) => a + b))}~)',
-                                textAlign: pw.TextAlign.center,
-                                style: pw.TextStyle(
+                              flex: 3,
+                              child: pw.Container(
+                                decoration: pw.BoxDecoration(
+                                    border: pw.Border(
+                                        bottom: pw.BorderSide(
                                   color: Colors_pd,
-                                  fontSize: font_Size,
-                                  fontWeight: pw.FontWeight.bold,
-                                  font: ttf,
+                                  width: 0.3, // Underline thickness
+                                ))),
+                                child: pw.Text(
+                                  quotxSelectModels.any(
+                                    (e) =>
+                                        e.expser.toString() == '16' &&
+                                        e.cfid.toString() == '0',
+                                  )
+                                      ? (() {
+                                          final item =
+                                              quotxSelectModels.firstWhere(
+                                            (e) =>
+                                                e.expser.toString() == '16' &&
+                                                e.cfid.toString() == '0',
+                                          );
+                                          final total = double.tryParse(
+                                                  item.total.toString()) ??
+                                              0.00;
+                                          return '${nFormat.format(total)} บาท (~${convertToThaiBaht(total)}~)';
+                                        })()
+                                      : '0.00 บาท (~${convertToThaiBaht(0.00)}~)',
+                                  textAlign: pw.TextAlign.center,
+                                  style: pw.TextStyle(
+                                    color: Colors_pd,
+                                    fontSize: font_Size,
+                                    fontWeight: pw.FontWeight.bold,
+                                    font: ttf,
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ),
+                              )),
                         ],
                       ),
                       pw.SizedBox(height: 1 * PdfPageFormat.mm),
@@ -1452,14 +1472,14 @@ class Pdfgen_Agreement_Choice3 {
                                                 e.cfid.toString() == '1')
                                             .length !=
                                         0)
-                                    ? "${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '16' && e.cfid.toString() == '1').map((e) => e.first_total != null ? double.parse(e.first_total.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท"
+                                    ? "${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '16' && e.cfid.toString() == '1').map((e) => double.tryParse(e.first_total.toString()) ?? 0.00).fold(0.00, (a, b) => a + b))} บาท"
                                     : (quotxSelectModels
                                                 .where((e) =>
                                                     e.expser.toString() == '16')
                                                 .length ==
                                             0)
                                         ? '0.00 บาท'
-                                        : "${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '16' && e.cfid.toString() != '1').map((e) => e.first_total != null ? double.parse(e.first_total.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท",
+                                        : "${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '16' && e.cfid.toString() != '1').map((e) => double.tryParse(e.first_total.toString()) ?? 0.00).fold(0.00, (a, b) => a + b))} บาท",
                                 textAlign: pw.TextAlign.center,
                                 style: pw.TextStyle(
                                   color: Colors_pd,
@@ -1495,7 +1515,7 @@ class Pdfgen_Agreement_Choice3 {
                                             .length ==
                                         0)
                                     ? '0.00 (~${convertToThaiBaht(0.00)}~)'
-                                    : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '25').map((e) => e.pvat != null ? double.parse(e.pvat.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท ',
+                                    : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '25').map((e) => double.tryParse(e.pvat.toString()) ?? 0.00).fold(0.00, (a, b) => a + b))} บาท ',
                                 // (Form_PakanAll_pvat == null ||
                                 //         Form_PakanAll_pvat.toString() == '')
                                 //     ? '0.00 บาท'
@@ -1540,7 +1560,7 @@ class Pdfgen_Agreement_Choice3 {
                                             .length ==
                                         0)
                                     ? '0.00 (~${convertToThaiBaht(0.00)}~)'
-                                    : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '25').map((e) => e.vat != null ? double.parse(e.vat.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท ',
+                                    : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '25').map((e) => double.tryParse(e.vat.toString()) ?? 0.00).fold(0.00, (a, b) => a + b))} บาท ',
                                 // (Form_PakanAll_vat == null ||
                                 //         Form_PakanAll_vat.toString() == '')
                                 //     ? '0.00 บาท'
@@ -1580,7 +1600,7 @@ class Pdfgen_Agreement_Choice3 {
                                             .length ==
                                         0)
                                     ? '0.00 (~${convertToThaiBaht(0.00)}~)'
-                                    : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '25').map((e) => e.total != null ? double.parse(e.total.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท ',
+                                    : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '25').map((e) => double.tryParse(e.total.toString()) ?? 0.00).fold(0.00, (a, b) => a + b))} บาท ',
                                 // (Form_PakanAll_Total == null ||
                                 //         Form_PakanAll_Total.toString() == '')
                                 //     ? '0.00 บาท (~${convertToThaiBaht(0.00)}~)'
@@ -1800,7 +1820,7 @@ class Pdfgen_Agreement_Choice3 {
                                       0)
                                   ? ' ' * 2 + 'ค่าชุดผ้ากันเปื้อน จำนวน_____บาท'
                                   : ' ' * 2 +
-                                      'ค่าชุดผ้ากันเปื้อน จำนวน ${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '19').map((e) => e.total != null ? double.parse(e.total.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท',
+                                      'ค่าชุดผ้ากันเปื้อน จำนวน ${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '19').map((e) => double.tryParse(e.total.toString()) ?? 0.00).fold(0.00, (a, b) => a + b))} บาท',
                               // (quotxSelectModels
                               //             .where((e) =>
                               //                 e.expser.toString() == '19')
@@ -1809,7 +1829,7 @@ class Pdfgen_Agreement_Choice3 {
                               //     ? ' ' * 15 +
                               //         '[   ] ค่าชุดผ้ากันเปื้อน จำนวน_____บาท'
                               //     : ' ' * 15 +
-                              //         '[ / ] ค่าชุดผ้ากันเปื้อน จำนวน ${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '19').map((e) => e.total != null ? double.parse(e.total.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท',
+                              //         '[ / ] ค่าชุดผ้ากันเปื้อน จำนวน ${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '19').map((e) => double.tryParse(e.total.toString()) ?? 0.00).fold(0.00, (a, b) => a + b))} บาท',
                               textAlign: pw.TextAlign.left,
                               style: pw.TextStyle(
                                 color: Colors_pd,
@@ -2997,7 +3017,7 @@ class Pdfgen_Agreement_Choice3 {
             ////////////------------------->
             ///
             // Get_Value_NameShop_index: Get_Value_NameShop_index,
-            // Get_Value_cid: Get_Value_cid,
+            Get_Value_cid: Get_Value_cid,
             // verticalGroupValue: _verticalGroupValue,
             // Form_nameshop: Form_nameshop,
             // Form_typeshop: Form_typeshop,

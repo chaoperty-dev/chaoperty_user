@@ -36,7 +36,6 @@ class TeNantModel {
   String? rtname;
   String? rtname_q;
   String? stype;
-  String? stype_q;
   String? attn;
   String? addr;
   String? tax;
@@ -44,6 +43,7 @@ class TeNantModel {
   String? email;
   String? ctype;
   String? zn;
+  String? znn;
   String? aser;
   String? qty;
   String? count_bill;
@@ -59,14 +59,63 @@ class TeNantModel {
   String? amt_expser10;
   String? amt_expser11;
   String? amt_expser12;
-  String? wnote;
-  String? mainten;
-  String? customer_name;
-  String? name_user;
   String? cc_remark;
+  String? custno;
+  String? user_name;
+  String? passw;
+  String? fid;
+  String? renew_cid;
   String? cc_date;
+  String? wnote;
+  String? daterec;
+  String? name_user;
+  String? min_sdate;
+  String? ser_paper;
+  String? remark;
+  String? note;
+  String? paper;
+  String? paper_run;
+  String? renew_datex;
+  String? renew_sdate;
+  String? renew_ldate;
+  String? exp_array;
+  String? unit;
+  String? type_cid;
   String? w1;
-  String? e_bill;
+  String? customer_name;
+  String? addrx;
+  String? birth;
+  String? pgroup;
+  String? is_mon;
+  String? is_tue;
+  String? is_wed;
+  String? is_thu;
+  String? is_fri;
+  String? is_sat;
+  String? is_sun;
+
+  String? stime;
+  String? ltime;
+  String? zn_code;
+  String? areatype;
+  String? ucancel;
+  String? datex_cc_date;
+  String? datex_cancel;
+  String? cc_date_remark;
+  String? cancel_remark;
+  String? contract_stype;
+  // ฟิลด์ขนาด/ค่าเช่าพื้นที่ที่ API เพิ่มเข้ามา
+  String? area_rent;
+  String? area_size;
+  String? area_width;
+  String? area_length;
+  String? area_unit_th;
+  String? area_dimension_id;
+  String? width_val;
+  String? length_val;
+  String? stype_q;
+  String? mainten;
+
   TeNantModel({
     this.ser,
     this.datex,
@@ -105,7 +154,6 @@ class TeNantModel {
     this.rtname,
     this.rtname_q,
     this.stype,
-    this.stype_q,
     this.attn,
     this.addr,
     this.tax,
@@ -113,6 +161,7 @@ class TeNantModel {
     this.email,
     this.ctype,
     this.zn,
+    this.znn,
     this.aser,
     this.qty,
     this.count_bill,
@@ -128,88 +177,181 @@ class TeNantModel {
     this.amt_expser10,
     this.amt_expser11,
     this.amt_expser12,
-    this.wnote,
-    this.mainten,
-    this.customer_name,
-    this.name_user,
     this.cc_remark,
+    this.custno,
+    this.user_name,
+    this.passw,
+    this.fid,
+    this.renew_cid,
     this.cc_date,
+    this.wnote,
+    this.daterec,
+    this.name_user,
+    this.min_sdate,
+    this.ser_paper,
+    this.remark,
+    this.note,
+    this.paper,
+    this.paper_run,
+    this.renew_datex,
+    this.renew_sdate,
+    this.renew_ldate,
+    this.exp_array,
+    this.unit,
+    this.type_cid,
     this.w1,
-    this.e_bill,
+    this.customer_name,
+    this.addrx,
+    this.birth,
+    this.pgroup,
+    this.is_mon,
+    this.is_tue,
+    this.is_wed,
+    this.is_thu,
+    this.is_fri,
+    this.is_sat,
+    this.is_sun,
+    this.stime,
+    this.ltime,
+    this.zn_code,
+    this.areatype,
+    this.ucancel,
+    this.datex_cc_date,
+    this.datex_cancel,
+    this.cc_date_remark,
+    this.cancel_remark,
+    this.contract_stype,
+    this.area_rent,
+    this.area_size,
+    this.area_width,
+    this.area_length,
+    this.area_unit_th,
+    this.area_dimension_id,
+    this.width_val,
+    this.length_val,
+    this.stype_q,
+    this.mainten,
   });
-
   TeNantModel.fromJson(Map<String, dynamic> json) {
-    ser = json['ser'];
-    datex = json['datex'];
-    timex = json['timex'];
-    rser = json['rser'];
-    zser = json['zser'];
-    lncode = json['lncode'];
-    ln = json['ln'];
-    area = json['area'];
-    rent = json['rent'];
-    st = json['st'];
-    img = json['img'];
-    tser = json['tser'];
-    tname = json['tname'];
-    cid = json['cid'];
-    dataUpdate = json['data_update'];
-    total = json['total'];
-    sdate = json['sdate'];
-    ldate = json['ldate'];
-    cdate = json['cdate'];
-    cname = json['cname'];
-    sname = json['sname'];
-    ln_c = json['ln_c'];
-    area_c = json['area_c'];
-    docno = json['docno'];
-    date = json['date'];
+    ser = json['ser']?.toString();
+    datex = json['datex']?.toString();
+    timex = json['timex']?.toString();
+    rser = json['rser']?.toString();
+    zser = json['zser']?.toString();
+    lncode = json['lncode']?.toString();
+    ln = json['ln']?.toString();
+    area = json['area']?.toString();
+    rent = json['rent']?.toString();
+    st = json['st']?.toString();
+    img = json['img']?.toString();
+    tser = json['tser']?.toString();
+    tname = json['tname']?.toString();
+    cid = json['cid']?.toString();
+    dataUpdate = json['data_update']?.toString();
+    total = json['total']?.toString();
+    sdate = json['sdate']?.toString();
+    cdate = json['cdate']?.toString();
+    ldate = json['ldate']?.toString();
+    cname = json['cname']?.toString();
+    sname = json['sname']?.toString();
+    ln_c = json['ln_c']?.toString();
+    area_c = json['area_c']?.toString();
+    area_dimension_id = json['area_dimension_id']?.toString();
+    width_val = json['width_val']?.toString();
+    length_val = json['length_val']?.toString();
+    docno = json['docno']?.toString();
+    date = json['date']?.toString();
 
-    cname_q = json['cname_q'];
-    sname_q = json['sname_q'];
-    ln_q = json['ln_q'];
-    ldate_q = json['ldate_q'];
-    sdate_q = json['sdate_q'];
-    area_q = json['area_q'];
-    quantity = json['quantity'];
-    period = json['period'];
-    period_q = json['period_q'];
-    rtname = json['rtname'];
-    rtname_q = json['rtname_q'];
-    stype = json['stype'];
-    stype_q = json['stype_q'];
-    attn = json['attn'];
-    addr = json['addr'];
-    tax = json['tax'];
-    tel = json['tel'];
-    email = json['email'];
-    ctype = json['ctype'];
-    zn = json['zn'];
-    aser = json['aser'];
-    qty = json['qty'];
-    count_bill = json['count_bill'];
-    invoice = json['invoice'];
-    expname = json['expname'];
-    ser_tran = json['ser_tran'];
+    cname_q = json['cname_q']?.toString();
+    sname_q = json['sname_q']?.toString();
+    ln_q = json['ln_q']?.toString();
+    ldate_q = json['ldate_q']?.toString();
+    sdate_q = json['sdate_q']?.toString();
+    area_q = json['area_q']?.toString();
+    quantity = json['quantity']?.toString();
+    period = json['period']?.toString();
+    period_q = json['period_q']?.toString();
+    rtname = json['rtname']?.toString();
+    rtname_q = json['rtname_q']?.toString();
+    stype = json['stype']?.toString();
+    attn = json['attn']?.toString();
+    addr = json['addr']?.toString();
+    tax = json['tax']?.toString();
+    tel = json['tel']?.toString();
+    email = json['email']?.toString();
+    ctype = json['ctype']?.toString();
+    zn = json['zn']?.toString();
+    znn = json['znn']?.toString();
+    aser = json['aser']?.toString();
+    qty = json['qty']?.toString();
+    count_bill = json['count_bill']?.toString();
+    invoice = json['invoice']?.toString();
+    expname = json['expname']?.toString();
+    ser_tran = json['ser_tran']?.toString();
 
-    custno_1 = json['custno_1'];
-    custno_2 = json['custno_2'];
-    duedate = json['duedate'];
-    amt = json['amt'];
+    custno_1 = json['custno_1']?.toString();
+    custno_2 = json['custno_2']?.toString();
+    duedate = json['duedate']?.toString();
+    amt = json['amt']?.toString();
 
-    amt_expser1 = json['amt_expser1'];
-    amt_expser9 = json['amt_expser9'];
-    amt_expser10 = json['amt_expser10'];
-    amt_expser11 = json['amt_expser11'];
-    amt_expser12 = json['amt_expser12'];
-    wnote = json['wnote'];
-    mainten = json['mainten'];
-    customer_name = json['customer_name'];
-    name_user = json['name_user'];
-    cc_remark = json['cc_remark'];
-    cc_date = json['cc_date'];
-    w1 = json['w1'];
-    e_bill = json['e_bill'];
+    amt_expser1 = json['amt_expser1']?.toString();
+    amt_expser9 = json['amt_expser9']?.toString();
+    amt_expser10 = json['amt_expser10']?.toString();
+    amt_expser11 = json['amt_expser11']?.toString();
+    amt_expser12 = json['amt_expser12']?.toString();
+    cc_remark = json['cc_remark']?.toString();
+    custno = json['custno']?.toString();
+    user_name = json['user_name']?.toString();
+    passw = json['passw']?.toString();
+    fid = json['fid']?.toString();
+    renew_cid = json['renew_cid']?.toString();
+    cc_date = json['cc_date']?.toString();
+    wnote = json['wnote']?.toString();
+    daterec = json['daterec']?.toString();
+    name_user = json['name_user']?.toString();
+    min_sdate = json['min_sdate']?.toString();
+    ser_paper = json['ser_paper']?.toString();
+    remark = json['remark']?.toString();
+    note = json['note']?.toString();
+    paper = json['paper']?.toString();
+    paper_run = json['paper_run']?.toString();
+
+    renew_datex = json['renew_datex']?.toString();
+    renew_sdate = json['renew_sdate']?.toString();
+    renew_ldate = json['renew_ldate']?.toString();
+    exp_array = json['exp_array']?.toString();
+    unit = json['unit']?.toString();
+    type_cid = json['type_cid']?.toString();
+    w1 = json['w1']?.toString();
+    customer_name = json['customer_name']?.toString();
+    addrx = json['addrx']?.toString();
+    birth = json['birth']?.toString();
+    pgroup = json['pgroup']?.toString();
+
+    is_mon = json['is_mon']?.toString();
+    is_tue = json['is_tue']?.toString();
+    is_wed = json['is_wed']?.toString();
+    is_thu = json['is_thu']?.toString();
+    is_fri = json['is_fri']?.toString();
+    is_sat = json['is_sat']?.toString();
+    is_sun = json['is_sun']?.toString();
+    stime = json['stime']?.toString();
+    ltime = json['ltime']?.toString();
+    zn_code = json['zn_code']?.toString();
+    areatype = json['areatype']?.toString();
+    ucancel = json['ucancel']?.toString();
+    datex_cc_date = json['datex_cc_date']?.toString();
+    datex_cancel = json['datex_cancel']?.toString();
+    cc_date_remark = json['cc_date_remark']?.toString();
+    cancel_remark = json['cancel_remark']?.toString();
+    contract_stype = json['contract_stype']?.toString();
+    area_rent = json['area_rent']?.toString();
+    area_size = json['area_size']?.toString();
+    area_width = json['area_width']?.toString();
+    area_length = json['area_length']?.toString();
+    area_unit_th = json['area_unit_th']?.toString();
+    stype_q = json['stype_q']?.toString();
+    mainten = json['mainten']?.toString();
   }
 
   Map<String, dynamic> toJson() {
@@ -251,7 +393,6 @@ class TeNantModel {
     data['rtname'] = this.rtname;
     data['rtname_q'] = this.rtname_q;
     data['stype'] = this.stype;
-    data['stype_q'] = this.stype_q;
     data['attn'] = this.attn;
     data['addr'] = this.addr;
     data['tax'] = this.tax;
@@ -259,6 +400,7 @@ class TeNantModel {
     data['email'] = this.email;
     data['ctype'] = this.ctype;
     data['zn'] = this.zn;
+    data['znn'] = this.znn;
     data['aser'] = this.aser;
     data['qty'] = this.qty;
     data['count_bill'] = this.count_bill;
@@ -276,16 +418,59 @@ class TeNantModel {
     data['amt_expser10'] = this.amt_expser10;
     data['amt_expser11'] = this.amt_expser11;
     data['amt_expser12'] = this.amt_expser12;
-
-    data['wnote'] = this.wnote;
-    data['mainten'] = this.mainten;
-    data['customer_name'] = this.customer_name;
-    data['name_user'] = this.name_user;
     data['cc_remark'] = this.cc_remark;
+    data['custno'] = this.custno;
+    data['user_name'] = this.user_name;
+    data['passw'] = this.passw;
+    data['fid'] = this.fid;
+    data['renew_cid'] = this.renew_cid;
     data['cc_date'] = this.cc_date;
+    data['wnote'] = this.wnote;
+    data['daterec'] = this.daterec;
+    data['name_user'] = this.name_user;
+    data['min_sdate'] = this.min_sdate;
+    data['ser_paper'] = this.ser_paper;
+    data['remark'] = this.remark;
+    data['note'] = this.note;
+    data['paper'] = this.paper;
+    data['paper_run'] = this.paper_run;
+    data['renew_datex'] = this.renew_datex;
+    data['renew_sdate'] = this.renew_sdate;
+    data['renew_ldate'] = this.renew_ldate;
+    data['exp_array'] = this.exp_array;
+    data['unit'] = this.unit;
+    data['type_cid'] = this.type_cid;
     data['w1'] = this.w1;
-    data['e_bill'] = this.e_bill;
-
+    data['customer_name'] = this.customer_name;
+    data['addrx'] = this.addrx;
+    data['birth'] = this.birth;
+    data['pgroup'] = this.pgroup;
+    data['is_mon'] = this.is_mon;
+    data['is_tue'] = this.is_tue;
+    data['is_wed'] = this.is_wed;
+    data['is_thu'] = this.is_thu;
+    data['is_fri'] = this.is_fri;
+    data['is_sat'] = this.is_sat;
+    data['is_sun'] = this.is_sun;
+    data['stime'] = this.stime;
+    data['ltime'] = this.ltime;
+    data['zn_code'] = this.zn_code;
+    data['areatype'] = this.areatype;
+    data['ucancel'] = this.ucancel;
+    data['datex_cc_date'] = this.datex_cc_date;
+    data['datex_cancel'] = this.datex_cancel;
+    data['cc_date_remark'] = this.cc_date_remark;
+    data['cancel_remark'] = this.cancel_remark;
+    data['contract_stype'] = this.contract_stype;
+    data['area_rent'] = this.area_rent;
+    data['area_size'] = this.area_size;
+    data['area_width'] = this.area_width;
+    data['area_length'] = this.area_length;
+    data['area_unit_th'] = this.area_unit_th;
+    data['width_val'] = this.width_val;
+    data['length_val'] = this.length_val;
+    data['stype_q'] = this.stype_q;
+    data['mainten'] = this.mainten;
     return data;
   }
 }

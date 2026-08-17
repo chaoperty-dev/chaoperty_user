@@ -1442,11 +1442,12 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                           fontSize: 14.5)),
                 ),
                 const SizedBox(width: 8),
-                Text(amount,
-                    style: const TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.5)),
+                // ✅ คอมเม้นปิดจำนวนเงินไว้ (amount hidden per request)
+                // Text(amount,
+                //     style: const TextStyle(
+                //         fontFamily: Font_.Fonts_T,
+                //         fontWeight: FontWeight.w700,
+                //         fontSize: 14.5)),
               ]),
               const SizedBox(height: 6),
               Wrap(
@@ -1458,7 +1459,10 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       const Icon(Icons.badge_outlined,
                           size: 14, color: Colors.black54),
                       const SizedBox(width: 6),
-                      Text(b.cid ?? '-',
+                      Text(
+                          widget.cuslang == 'EN'
+                              ? 'Contract : ' + (b.cid ?? '-')
+                              : 'สัญญา : ' + (b.cid ?? '-'),
                           style: const TextStyle(
                               fontFamily: Font_.Fonts_T, fontSize: 12.5)),
                     ]),
@@ -1466,7 +1470,10 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       const Icon(Icons.calendar_today,
                           size: 14, color: Colors.black54),
                       const SizedBox(width: 6),
-                      Text(fmtDate(b.date),
+                      Text(
+                          widget.cuslang == 'EN'
+                              ? 'Due : ' + fmtDate(b.date)
+                              : 'ครบกำหนด : ' + fmtDate(b.date),
                           style: const TextStyle(
                               fontFamily: Font_.Fonts_T, fontSize: 12.5)),
                     ]),
@@ -1635,18 +1642,28 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                           Colors.red.shade700),
                     ]),
                   ],
-
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.payments, size: 15, color: Colors.black54),
+                    const Icon(Icons.receipt, size: 15, color: Colors.black54),
                     const SizedBox(width: 6),
                     Text(
-                        '${widget.cuslang == "EN" ? "Total" : "ยอดสุทธิรวม"} : ${fmtMoney(groupTotal)}',
+                        '${widget.cuslang == "EN" ? "Bill All" : "บิลทั้งหมด"} : $groupBillCount',
                         style: const TextStyle(
                             color: Colors.black87,
                             fontFamily: Font_.Fonts_T,
                             fontSize: 12.5,
                             fontWeight: FontWeight.w700)),
                   ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.payments, size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text(
+                  //       '${widget.cuslang == "EN" ? "Total" : "ยอดสุทธิรวม"} : ${fmtMoney(groupTotal)}',
+                  //       style: const TextStyle(
+                  //           color: Colors.black87,
+                  //           fontFamily: Font_.Fonts_T,
+                  //           fontSize: 12.5,
+                  //           fontWeight: FontWeight.w700)),
+                  // ]),
                   // Row(mainAxisSize: MainAxisSize.min, children: [
                   //   const Icon(Icons.money_off_csred_outlined,
                   //       size: 15, color: Colors.black54),
@@ -1661,15 +1678,15 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                   // ]),
                   Row(mainAxisSize: MainAxisSize.min, children: [
                     Spacer(),
-                    const Icon(Icons.receipt, size: 15, color: Colors.black54),
-                    const SizedBox(width: 6),
-                    Text(
-                        '${widget.cuslang == "EN" ? "Bill All  : $groupBillCount " : "บิลทั้งหมด  : $groupBillCount "}',
-                        style: const TextStyle(
-                            color: Colors.grey,
-                            fontFamily: Font_.Fonts_T,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700)),
+                    // const Icon(Icons.receipt, size: 15, color: Colors.black54),
+                    // const SizedBox(width: 6),
+                    // Text(
+                    //     '${widget.cuslang == "EN" ? "Bill All  : $groupBillCount " : "บิลทั้งหมด  : $groupBillCount "}',
+                    //     style: const TextStyle(
+                    //         color: Colors.grey,
+                    //         fontFamily: Font_.Fonts_T,
+                    //         fontSize: 10,
+                    //         fontWeight: FontWeight.w700)),
                     const SizedBox(width: 6),
                     InkWell(
                       borderRadius: BorderRadius.circular(4),

@@ -426,22 +426,22 @@ class _InvioceScreenState extends State<InvioceScreen>
                                 try {
                                   Man_BillingNoteInvlice_PDF
                                       .ManBillingNoteInvlice_PDF(
-                                    null,
-                                    folder,
-                                    '1',
-                                    temPageSer,
-                                    context,
-                                    inv.cid ?? '',
-                                    '', // ชื่อผู้เช่า
-                                    billAddr,
-                                    billEmail,
-                                    billTel,
-                                    billTax,
-                                    billName,
-                                    newValuePDFimg,
-                                    inv.docno,
-                                    '1',
-                                  );
+                                          null,
+                                          folder,
+                                          '1',
+                                          temPageSer,
+                                          context,
+                                          inv.cid ?? '',
+                                          '', // ชื่อผู้เช่า
+                                          billAddr,
+                                          billEmail,
+                                          billTel,
+                                          billTax,
+                                          billName,
+                                          newValuePDFimg,
+                                          inv.docno,
+                                          '1',
+                                          'แบบเต็ม');
                                 } catch (e) {
                                   debugPrint('PDF Error: $e');
                                 } finally {
@@ -538,22 +538,22 @@ class _InvioceScreenState extends State<InvioceScreen>
                         try {
                           // ✅ รอให้สร้าง PDF เสร็จจริง ๆ (ถ้าเป็น Future)
                           Man_BillingNoteInvlice_PDF.ManBillingNoteInvlice_PDF(
-                            null,
-                            folder,
-                            '1',
-                            temPageSer,
-                            context,
-                            inv.cid ?? '',
-                            '', // ชื่อผู้เช่า
-                            billAddr,
-                            billEmail,
-                            billTel,
-                            billTax,
-                            billName,
-                            newValuePDFimg,
-                            inv.docno,
-                            '1',
-                          );
+                              null,
+                              folder,
+                              '1',
+                              temPageSer,
+                              context,
+                              inv.cid ?? '',
+                              '', // ชื่อผู้เช่า
+                              billAddr,
+                              billEmail,
+                              billTel,
+                              billTax,
+                              billName,
+                              newValuePDFimg,
+                              inv.docno,
+                              '1',
+                              'แบบเต็ม');
 
                           // ✅ reload list หลังทำเสร็จ (ถ้ามี)
                         } catch (e) {

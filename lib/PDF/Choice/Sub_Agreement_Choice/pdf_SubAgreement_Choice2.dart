@@ -12,9 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 import '../../../Man_PDF/Preview_PDF/Preview_Agreement.dart';
-
 
 class Pdfgen_SubAgreement_Choice2 {
 //////////---------------------------------------------------->( **** เอกสารสัญญาเช่า  Choice)
@@ -97,6 +95,28 @@ class Pdfgen_SubAgreement_Choice2 {
     String thaiDate = DateFormat('d เดือน MMM', 'th').format(date);
     var nFormat = NumberFormat("#,##0.00", "en_US");
     var nFormat2 = NumberFormat("###0.00", "en_US");
+    String _fmtDMY(dynamic val, {String locale = 'th'}) {
+      try {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty) return '-';
+        final dt = DateFormat("dd-MM-yyyy HH:mm:ss").parse('$s 00:00:00');
+        return '${DateFormat('dd MMM', locale).format(dt)} ${dt.year + 543}';
+      } catch (_) {
+        return '-';
+      }
+    }
+
+    String _fmtISO(dynamic val, {String locale = 'th'}) {
+      try {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty) return '-';
+        final dt = DateTime.parse(s);
+        return '${DateFormat('dd MMM', locale).format(dt)} ${dt.year + 543}';
+      } catch (_) {
+        return '-';
+      }
+    }
+
     final iconImage =
         (await rootBundle.load('images/LOGO.png')).buffer.asUint8List();
     final ByteData image = await rootBundle.load('images/image7-11.png');
@@ -514,7 +534,7 @@ class Pdfgen_SubAgreement_Choice2 {
                           pw.Text(
                             (Datex_text == null)
                                 ? 'วันที่ -'
-                                : 'วันที่ ${DateFormat('dd MMM', 'TH').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('${Datex_text.text} 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('${Datex_text.text} 00:00:00')}").year + 543}',
+                                : 'วันที่ ${_fmtDMY(Datex_text.text, locale: 'TH')}',
                             //  'วันที่  ${Datex_text.text} ',
                             textAlign: pw.TextAlign.center,
                             style: pw.TextStyle(
@@ -590,7 +610,7 @@ class Pdfgen_SubAgreement_Choice2 {
                               child: pw.Text(
                                 (Form_renew_datex == null)
                                     ? '-'
-                                    : '${DateFormat('dd MMM', 'TH').format(DateTime.parse('${Form_renew_datex}'))} ${DateTime.parse('${Form_renew_datex}').year + 543}',
+                                    : '${_fmtISO(Form_renew_datex, locale: 'TH')}',
                                 textAlign: pw.TextAlign.center,
                                 style: pw.TextStyle(
                                   color: Colors_pd,
@@ -968,7 +988,7 @@ class Pdfgen_SubAgreement_Choice2 {
                             child: pw.Text(
                               (Form_renew_ldate == null)
                                   ? ''
-                                  : '${DateFormat('dd MMM', 'th').format(DateTime.parse('${Form_renew_ldate}'))} ${DateTime.parse('${Form_renew_ldate}').year + 543}',
+                                  : '${_fmtISO(Form_renew_ldate)}',
                               textAlign: pw.TextAlign.center,
                               style: pw.TextStyle(
                                 color: Colors_pd,
@@ -1058,7 +1078,7 @@ class Pdfgen_SubAgreement_Choice2 {
                             child: pw.Text(
                               (Form_sdate == null)
                                   ? '-'
-                                  : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}").year + 543}',
+                                  : '${_fmtDMY(Form_sdate)}',
                               // "$Form_sdate",
                               textAlign: pw.TextAlign.center,
                               style: pw.TextStyle(
@@ -1089,7 +1109,7 @@ class Pdfgen_SubAgreement_Choice2 {
                             child: pw.Text(
                               (Form_ldate == null)
                                   ? '-'
-                                  : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}").year + 543}',
+                                  : '${_fmtDMY(Form_ldate)}',
                               // "$Form_ldate",
                               textAlign: pw.TextAlign.center,
                               style: pw.TextStyle(
@@ -1579,7 +1599,7 @@ class Pdfgen_SubAgreement_Choice2 {
                                   ? '-'
                                   : (DatexChoice_Sub2_1text == null)
                                       ? '-'
-                                      : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_1text 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_1text 00:00:00')}").year + 543}',
+                                      : '${_fmtDMY(DatexChoice_Sub2_1text)}',
                               // '${DatexChoice_Sub2_1text}',
                               textAlign: pw.TextAlign.center,
                               style: pw.TextStyle(
@@ -1696,7 +1716,7 @@ class Pdfgen_SubAgreement_Choice2 {
                                   ? '-'
                                   : (DatexChoice_Sub2_2text == null)
                                       ? '-'
-                                      : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_2text 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_2text 00:00:00')}").year + 543}',
+                                      : '${_fmtDMY(DatexChoice_Sub2_2text)}',
                               // '${DatexChoice_Sub2_2text}',
                               // (quotxSelectModels
                               //             .where((e) =>
@@ -2364,7 +2384,7 @@ class Pdfgen_SubAgreement_Choice2 {
             ////////////------------------->
             ///
             // Get_Value_NameShop_index: Get_Value_NameShop_index,
-            // Get_Value_cid: Get_Value_cid,
+            Get_Value_cid: Get_Value_cid,
             // verticalGroupValue: _verticalGroupValue,
             // Form_nameshop: Form_nameshop,
             // Form_typeshop: Form_typeshop,

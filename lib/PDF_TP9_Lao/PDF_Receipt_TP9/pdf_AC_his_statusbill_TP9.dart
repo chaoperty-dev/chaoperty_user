@@ -1,5 +1,6 @@
-import 'dart:convert';
-
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -9,21 +10,15 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
+
 import '../../CRC_16_Prompay/generate_qrcode.dart';
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
+import '../../Man_PDF/Man_Pay_Receipt_PDF.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../Model/GetInvoice_history_Model.dart';
 import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 
 class Pdfgen_his_statusbill_TP9_Lao {
-//////////---------------------------------------------------->(ใบเสร็จรับเงิน/ใบกำกับภาษี)   ใช้  //
+//////////---------------------------------------------------->(ใบเสร็จรับเงิน/ใบกำกับภาษี)   ใช้  //,
 
   static void exportPDF_statusbill_TP9_Lao(
       List<TransReBillHistoryModel> TransReBillHistory,
@@ -74,7 +69,12 @@ class Pdfgen_his_statusbill_TP9_Lao {
       Con_remark) async {
     ////
     //// ------------>(ใบเสร็จรับเงิน)
-    ///////
+    // ------------------------------------------------------->
+    // แสดง Dialog เลือกขนาดกระดาษก่อน Export
+    final String? _selectedMode =
+        await ManPay_Receipt_PDF.showPageFormatDialog(context as BuildContext);
+    if (_selectedMode == null) return; // ผู้ใช้กด Cancel → หยุดทันที
+    // ------------------------------------------------------->
     final pdf = pw.Document();
     final font = await rootBundle.load("${fonts_pdf}");
     var Colors_pd = PdfColors.black;
@@ -82,8 +82,36 @@ class Pdfgen_his_statusbill_TP9_Lao {
 
     int pageCount = 1; // Initialize the page count
     final ttf = pw.Font.ttf(font);
+    // ─────────────────────────────────────────────────────
+    // โหมดกระดาษจาก Dialog
+    // 'pos80' | 'pos58' | 'a3' | 'a4' | 'a5'
+    final String pageMode = _selectedMode;
+    final bool isPos = pageMode == 'pos80' || pageMode == 'pos58';
 
-    double font_Size = 7.0;
+    // ── Responsive layout variables ─────────────────────
+    // font_Size  : ขนาดตัวอักษรหลัก
+    // logoSize   : ขนาด logo สี่เหลี่ยม
+    // infoGapMm  : ช่องว่างระหว่าง logo กับ info text
+    // ────────────────────────────────────────────────────
+    final double font_Size = () {
+      switch (pageMode) {
+        case 'pos58':
+          return 5.5;
+        case 'pos80':
+          return 7.5;
+        case 'a3':
+          return 11.0;
+        case 'a5':
+          return 7.0;
+        case 'a4':
+        default:
+          return 10.0; // A4 — ค่าเดิม ไม่เปลี่ยน
+      }
+    }();
+
+    final double logoSize = isPos ? 32.0 : 60.0;
+    final double infoGapMm = isPos ? 1.5 : 6.0;
+
     //////--------------------------------------------->
     DateTime date = DateTime.now();
     // // var formatter = new DateFormat.MMMMd('th_TH');
@@ -103,10 +131,26 @@ class Pdfgen_his_statusbill_TP9_Lao {
     Uint8List imageData = (image).buffer.asUint8List();
     List netImage = [];
     List netImage_QR = [];
-    Uint8List? resizedLogo = await getResizedLogo();
+    //////--------------------------------------------->
+    // targetPx ปรับตามขนาดหน้า: A3 ใหญ่สุด → px สูง → คมชัด
+    // PNG (lossless) ไม่เบลอเหมือน JPEG
+    final int _logoPx = () {
+      switch (_selectedMode) {
+        case 'a3':
+          return 300;
+        case 'pos58':
+          return 96;
+        case 'pos80':
+          return 120;
+        case 'a5':
+          return 150;
+        case 'a4':
+        default:
+          return 180;
+      }
+    }();
+    Uint8List? resizedLogo = await getResizedLogoForSize(targetPx: _logoPx);
 
-    ///
-    ///
 ////////////////------------------------------->
     double Total_CASH = double.parse(
       '${finnancetransModels.where((model) => model.ptser == '1' && model.dtype == 'KP').fold<double>(
@@ -223,6 +267,92 @@ class Pdfgen_his_statusbill_TP9_Lao {
       return (double.tryParse(value ?? '0.00') ?? 0.00) > 0;
     }
 
+    // ── คำนวณความสูงกระดาษ POS จากเนื้อหาจริง ──────────────────
+    //  เพิ่ม safety buffer 40% เพื่อป้องกัน text wrap / image
+    //  ทำให้เนื้อหาอยู่หน้าเดียว ไม่แตกหน้า 2
+    final int _itemCount = _TransReBillHistoryModels.length;
+    final double _rowH = font_Size * 5.5; // ต่อแถว (รวม wrap)
+    final double _posH = isPos
+        ? ((logoSize // header logo
+                    +
+                    90 // header info + doc title
+                    +
+                    15 // divider
+                    +
+                    100 // customer info block
+                    +
+                    28 // table header
+                    +
+                    (_itemCount * _rowH) // table rows (generous)
+                    +
+                    200 // summary / totals section
+                    +
+                    180 // footer (หมายเหตุ + ลงชื่อ)
+                    +
+                    60 // padding รวม
+                ) *
+                1.4 // safety buffer +40%
+            )
+            .clamp(500, 4500) // ต่ำสุด 500pt, สูงสุด 4500pt
+        : 5000.0; // non-POS ไม่ใช้ค่านี้
+    // ────────────────────────────────────────────────────────────
+
+    PdfPageFormat buildFormat() {
+      // margin ซ้าย/ขวา/บน/ล่าง (หน่วย pt — 1 pt = 1/72 inch)
+      const double mLeft = 8;
+      const double mRight = 8;
+      const double mTop = 8;
+      const double mBottom = 4;
+
+      switch (pageMode) {
+        // ---- POS (กระดาษม้วน) — ความสูงคำนวณจากเนื้อหาจริง ----
+        case 'pos80':
+          return PdfPageFormat(80.0 * PdfPageFormat.mm, _posH).copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+        case 'pos58':
+          return PdfPageFormat(58.0 * PdfPageFormat.mm, _posH).copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+
+        // ---- A3 (297 × 420 mm) ----
+        case 'a3':
+          return PdfPageFormat.a3.copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+
+        // ---- A5 (148 × 210 mm) ----
+        case 'a5':
+          return PdfPageFormat(14.8 * PdfPageFormat.cm, 21.0 * PdfPageFormat.cm)
+              .copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+
+        // ---- A4 (210 × 297 mm) — default ----
+        case 'a4':
+        default:
+          return PdfPageFormat.a4.copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+      }
+    }
+
+    ///////------------------------------->
     pw.Widget buildCell({
       required String text,
       int flex = 1,
@@ -437,12 +567,13 @@ class Pdfgen_his_statusbill_TP9_Lao {
 
     pdf.addPage(
       pw.MultiPage(
-        pageFormat: PdfPageFormat.a4.copyWith(
-          marginBottom: 8.00,
-          marginLeft: 8.00,
-          marginRight: 8.00,
-          marginTop: 8.00,
-        ),
+        pageFormat: buildFormat(),
+        // pageFormat: PdfPageFormat.a4.copyWith(
+        //   marginBottom: 8.00,
+        //   marginLeft: 8.00,
+        //   marginRight: 8.00,
+        //   marginTop: 8.00,
+        // ),
         header: (context) {
           return Header(context);
         },
@@ -485,11 +616,29 @@ class Pdfgen_his_statusbill_TP9_Lao {
                                         pw.CrossAxisAlignment.start,
                                     children: [
                                       pw.Text(
-                                        (cname.toString() == '' ||
-                                                cname == null ||
-                                                cname.toString() == 'null')
-                                            ? 'ຊື່ /Name : ${(sname.toString() == '' || sname == null || sname.toString() == 'null') ? '-' : sname}'
-                                            : 'ຊື່ /Name : ${(sname.toString() == '' || sname == null || sname.toString() == 'null') ? '-' : sname} (${(cname.toString() == '' || cname == null || cname.toString() == 'null') ? '-' : cname})',
+                                        (cname != null &&
+                                                cname
+                                                    .toString()
+                                                    .trim()
+                                                    .isNotEmpty &&
+                                                cname.toString() != 'null' &&
+                                                cname.toString() != '-')
+                                            ? 'ຊື່ /Name : $cname'
+                                            : (sname != null &&
+                                                    sname
+                                                        .toString()
+                                                        .trim()
+                                                        .isNotEmpty &&
+                                                    sname.toString() !=
+                                                        'null' &&
+                                                    sname.toString() != '-')
+                                                ? 'ຊື່ /Name : $sname'
+                                                : 'ຊື່ /Name : -',
+                                        // (cname.toString() == '' ||
+                                        //         cname == null ||
+                                        //         cname.toString() == 'null')
+                                        //     ? 'ຊື່ /Name : ${(sname.toString() == '' || sname == null || sname.toString() == 'null') ? '-' : sname}'
+                                        //     : 'ຊື່ /Name : ${(sname.toString() == '' || sname == null || sname.toString() == 'null') ? '-' : sname} (${(cname.toString() == '' || cname == null || cname.toString() == 'null') ? '-' : cname})',
                                         // (sname.toString() == null ||
                                         //         sname.toString() == '' ||
                                         //         sname.toString() == 'null')
@@ -3199,38 +3348,32 @@ class Pdfgen_his_statusbill_TP9_Lao {
     if (Preview_ser.toString() == 'Folder') {
       final List<int> bytes = await pdf.save(); // Save the PDF as bytes
       final Uint8List data = Uint8List.fromList(bytes); // Convert to Uint8List
-      var name_1 = (numdoctax.toString() == '') ? '$numinvoice' : '$numdoctax';
+      var name_1 = (numdoctax.toString() == '')
+          ? 'ใบเสร็จรับเงิน-ໃບຮັບເງິນ$numinvoice'
+          : 'ใบเสร็จรับเงิน/ใบกำกับภาษี-ໃບຮັບເງິນ/ໃບເກັບພາສີ$numdoctax';
       // Upload the file
       await uploadFile(data, name_1);
     } else if (Preview_ser.toString() == 'File') {
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
-      // await FlutterFileDialog.saveFile(
-      //   params: SaveFileDialogParams(
-      //     data: data,
-      //     fileName: (numdoctax.toString() == '') ? '$numinvoice' : '$numdoctax',
-      //   ),
-      // );
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      final dir = await FileSaver.instance.saveFile(
-          name: (numdoctax.toString() == '') ? '$numinvoice' : '$numdoctax',
-          bytes: data,
-          ext: "pdf",
-          mimeType: MimeType.other);
+      // MimeType type = MimeType.PDF;
+      // final dir = await FileSaver.instance.saveFile(
+      //     (numdoctax.toString() == '')
+      //         ? 'ใบเสร็จรับเงิน-ໃບຮັບເງິນ$numinvoice'
+      //         : 'ใบเสร็จรับเงิน/ใบกำกับภาษี-ໃບຮັບເງິນ/ໃບເກັບພາສີ$numdoctax',
+      //     data,
+      //     "pdf",
+      //     mimeType: type);
     } else {
       Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => PreviewPdfgen_Billsplay(
+                selectedMode: _selectedMode,
                 doc: pdf,
-                title: (TitleType_Default_Receipt_Name == null)
-                    ? (numdoctax.toString() == '')
-                        ? '$numinvoice'
-                        : '$numdoctax'
-                    : (numdoctax.toString() == '')
-                        ? '[ $TitleType_Default_Receipt_Name ]$numinvoice'
-                        : '[ $TitleType_Default_Receipt_Name ]$numdoctax'),
+                title: (numdoctax.toString() == '')
+                    ? 'ใบเสร็จรับเงิน-ໃບຮັບເງິນ $numinvoice'
+                    : 'ใบเสร็จรับเงิน/ใบกำกับภาษี-ໃບຮັບເງິນ/ໃບເກັບພາສີ $numdoctax'),
           ));
     }
   }

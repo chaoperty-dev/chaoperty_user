@@ -177,6 +177,12 @@ class TransReBillHistoryModel {
   String? vat_original;
   String? amount_original;
   String? wht_original;
+  String? receipt_ser;
+  String? zn_code;
+  String? ln_code;
+  String? total_deposit;
+  String? approve_date;
+  String? admin_name;
 
   TransReBillHistoryModel({
     this.ser,
@@ -347,6 +353,12 @@ class TransReBillHistoryModel {
     this.vat_original,
     this.amount_original,
     this.wht_original,
+    this.receipt_ser,
+    this.zn_code,
+    this.ln_code,
+    this.total_deposit,
+    this.approve_date,
+    this.admin_name,
   });
 
   TransReBillHistoryModel.fromJson(Map<String, dynamic> json) {
@@ -524,6 +536,14 @@ class TransReBillHistoryModel {
     vat_original = json['vat_original'];
     amount_original = json['amount_original'];
     wht_original = json['wht_original'];
+    ///////-----------------------------> API ส่ง receipt_ser มาเป็น int (เช่น 14)
+    /// ถ้า assign ตรง ๆ ใส่ String? จะ throw แล้ว loop parse หยุดกลางคัน ข้อมูลหายยกก้อน
+    receipt_ser = json['receipt_ser']?.toString();
+    zn_code = json['zn_code'];
+    ln_code = json['ln_code'];
+    total_deposit = json['total_deposit'];
+    approve_date = json['approve_date']?.toString();
+    admin_name = json['admin_name']?.toString();
   }
 
   Map<String, dynamic> toJson() {
@@ -700,6 +720,12 @@ class TransReBillHistoryModel {
     data['vat_original'] = this.vat_original;
     data['amount_original'] = this.amount_original;
     data['wht_original'] = this.wht_original;
+    data['receipt_ser'] = this.receipt_ser;
+    data['zn_code'] = this.zn_code;
+    data['ln_code'] = this.ln_code;
+    data['total_deposit'] = this.total_deposit;
+    data['approve_date'] = this.approve_date;
+    data['admin_name'] = this.admin_name;
     return data;
   }
 }

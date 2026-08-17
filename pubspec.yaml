@@ -144,6 +144,7 @@ dependencies:
   qr_flutter: ^4.1.0
   chaoperty_floating_loader: ^0.1.9
   floating_bottom_navigation_bar: ^1.5.2
+  screenshot: ^3.0.0
   # mobile_scanner: ^5.2.3
   # syncfusion_flutter_pdfviewer: ^20.4.54
 

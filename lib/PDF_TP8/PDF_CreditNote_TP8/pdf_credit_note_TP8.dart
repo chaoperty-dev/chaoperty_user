@@ -1,3 +1,8 @@
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -6,15 +11,10 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+
 import '../../CRC_16_Prompay/generate_qrcode.dart';
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
 
 class Pdfgen_credit_note_TP8 {
 //////////---------------------------------------------------->(ใบลดหนี้)   ใช้  //
@@ -106,7 +106,9 @@ class Pdfgen_credit_note_TP8 {
             0.0,
             (double previousValue, element) =>
                 previousValue +
-                (element.total != null ? double.parse(element.total!) : 0),
+                (element.total != null
+                    ? double.parse(element.total ?? '0')
+                    : 0),
           )}',
     );
 
@@ -135,23 +137,23 @@ class Pdfgen_credit_note_TP8 {
     }); ///// เงินโอน , Online Standard QR , Online Payment
 ////////////////------------------------------->
     bool hasNonCashTransaction1 = finnancetransModels.any((transaction) {
-      return transaction.type.toString() == 'CASH' &&
-          transaction.dtype.toString() != 'FTA';
+      return transaction?.type.toString() == 'CASH' &&
+          transaction?.dtype.toString() != 'FTA';
     }); ///// เงินสด
 ////////////////------------------------------->
     bool hasNonCashTransaction2 = finnancetransModels.any((transaction) {
-      return transaction.ptser.toString() == '6' &&
-          transaction.dtype.toString() != 'FTA';
+      return transaction?.ptser.toString() == '6' &&
+          transaction?.dtype.toString() != 'FTA';
     }); //Online Standard QR
 ////////////////------------------------------->
     bool hasNonCashTransaction3 = finnancetransModels.any((transaction) {
-      return transaction.ptser.toString() == '2' &&
-          transaction.dtype.toString() != 'FTA';
+      return transaction?.ptser.toString() == '2' &&
+          transaction?.dtype.toString() != 'FTA';
     }); ///// เงินโอน
 ////////////////------------------------------->
     bool hasNonCashTransaction4 = finnancetransModels.any((transaction) {
-      return transaction.ptser.toString() == '5' &&
-          transaction.dtype.toString() != 'FTA';
+      return transaction?.ptser.toString() == '5' &&
+          transaction?.dtype.toString() != 'FTA';
     }); ///// Online Payment
 ////////////////------------------------------->
     bool hasNonCashTransaction5 = finnancetransModels.any((transaction) {
@@ -740,7 +742,7 @@ class Pdfgen_credit_note_TP8 {
                                                   ),
                                                 ),
                                                 pw.Text(
-                                                  '${DateFormat('dd/MM').format(DateTime.parse(date_Transaction!))}/${DateTime.parse('${date_Transaction}').year + 543}',
+                                                  '${DateFormat('dd/MM').format(DateTime.parse(date_Transaction ?? DateTime.now().toString()))}/${DateTime.parse('${date_Transaction ?? DateTime.now()}').year + 543}',
                                                   //'$date_Transaction',
                                                   textAlign:
                                                       pw.TextAlign.center,
@@ -1228,6 +1230,82 @@ class Pdfgen_credit_note_TP8 {
                     ),
                   ),
                   pw.Expanded(
+                    flex: 2,
+                    child: pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        // color: PdfColors.green100,
+                        border: pw.Border(
+                          right: pw.BorderSide(color: PdfColors.grey600),
+                          // top: pw.BorderSide(color: PdfColors.grey800),
+                          bottom: pw.BorderSide(color: PdfColors.grey600),
+                        ),
+                      ),
+                      height: 30,
+                      child: pw.Column(
+                        mainAxisAlignment: pw.MainAxisAlignment.center,
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Text(
+                            'เลขตั้งหนี้',
+                            maxLines: 1,
+                            textAlign: pw.TextAlign.left,
+                            style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                color: PdfColors.black),
+                          ),
+                          pw.Text(
+                            'Invoice ID',
+                            maxLines: 1,
+                            textAlign: pw.TextAlign.left,
+                            style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                color: PdfColors.black),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  pw.Expanded(
+                    flex: 3,
+                    child: pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        // color: PdfColors.green100,
+                        border: pw.Border(
+                          right: pw.BorderSide(color: PdfColors.grey600),
+                          // top: pw.BorderSide(color: PdfColors.grey800),
+                          bottom: pw.BorderSide(color: PdfColors.grey600),
+                        ),
+                      ),
+                      height: 30,
+                      child: pw.Column(
+                        mainAxisAlignment: pw.MainAxisAlignment.center,
+                        crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        children: [
+                          pw.Text(
+                            'รายการ',
+                            maxLines: 1,
+                            textAlign: pw.TextAlign.left,
+                            style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                color: PdfColors.black),
+                          ),
+                          pw.Text(
+                            'Items',
+                            maxLines: 1,
+                            textAlign: pw.TextAlign.left,
+                            style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                color: PdfColors.black),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  pw.Expanded(
                     flex: 1,
                     child: pw.Container(
                       decoration: const pw.BoxDecoration(
@@ -1244,7 +1322,7 @@ class Pdfgen_credit_note_TP8 {
                         crossAxisAlignment: pw.CrossAxisAlignment.center,
                         children: [
                           pw.Text(
-                            'รหัสสินค้า',
+                            'ก่อนVAT',
                             maxLines: 1,
                             textAlign: pw.TextAlign.left,
                             style: pw.TextStyle(
@@ -1253,83 +1331,7 @@ class Pdfgen_credit_note_TP8 {
                                 color: PdfColors.black),
                           ),
                           pw.Text(
-                            'Product Code',
-                            maxLines: 1,
-                            textAlign: pw.TextAlign.left,
-                            style: pw.TextStyle(
-                                fontSize: font_Size,
-                                font: ttf,
-                                color: PdfColors.black),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  pw.Expanded(
-                    flex: 4,
-                    child: pw.Container(
-                      decoration: const pw.BoxDecoration(
-                        // color: PdfColors.green100,
-                        border: pw.Border(
-                          right: pw.BorderSide(color: PdfColors.grey600),
-                          // top: pw.BorderSide(color: PdfColors.grey800),
-                          bottom: pw.BorderSide(color: PdfColors.grey600),
-                        ),
-                      ),
-                      height: 30,
-                      child: pw.Column(
-                        mainAxisAlignment: pw.MainAxisAlignment.center,
-                        crossAxisAlignment: pw.CrossAxisAlignment.center,
-                        children: [
-                          pw.Text(
-                            'รายละเอียด',
-                            maxLines: 1,
-                            textAlign: pw.TextAlign.left,
-                            style: pw.TextStyle(
-                                fontSize: font_Size,
-                                font: ttf,
-                                color: PdfColors.black),
-                          ),
-                          pw.Text(
-                            'Description',
-                            maxLines: 1,
-                            textAlign: pw.TextAlign.left,
-                            style: pw.TextStyle(
-                                fontSize: font_Size,
-                                font: ttf,
-                                color: PdfColors.black),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  pw.Expanded(
-                    flex: 1,
-                    child: pw.Container(
-                      decoration: const pw.BoxDecoration(
-                        // color: PdfColors.green100,
-                        border: pw.Border(
-                          right: pw.BorderSide(color: PdfColors.grey600),
-                          // top: pw.BorderSide(color: PdfColors.grey800),
-                          bottom: pw.BorderSide(color: PdfColors.grey600),
-                        ),
-                      ),
-                      height: 30,
-                      child: pw.Column(
-                        mainAxisAlignment: pw.MainAxisAlignment.center,
-                        crossAxisAlignment: pw.CrossAxisAlignment.center,
-                        children: [
-                          pw.Text(
-                            'จำนวน',
-                            maxLines: 1,
-                            textAlign: pw.TextAlign.left,
-                            style: pw.TextStyle(
-                                fontSize: font_Size,
-                                font: ttf,
-                                color: PdfColors.black),
-                          ),
-                          pw.Text(
-                            'Quantity',
+                            'Sub Total',
                             maxLines: 1,
                             textAlign: pw.TextAlign.left,
                             style: pw.TextStyle(
@@ -1358,7 +1360,7 @@ class Pdfgen_credit_note_TP8 {
                         crossAxisAlignment: pw.CrossAxisAlignment.center,
                         children: [
                           pw.Text(
-                            'หน่วยละ',
+                            'VAT',
                             maxLines: 1,
                             textAlign: pw.TextAlign.left,
                             style: pw.TextStyle(
@@ -1367,7 +1369,7 @@ class Pdfgen_credit_note_TP8 {
                                 color: PdfColors.black),
                           ),
                           pw.Text(
-                            'Unit',
+                            'VAT',
                             maxLines: 1,
                             textAlign: pw.TextAlign.left,
                             style: pw.TextStyle(
@@ -1396,7 +1398,7 @@ class Pdfgen_credit_note_TP8 {
                         crossAxisAlignment: pw.CrossAxisAlignment.center,
                         children: [
                           pw.Text(
-                            'ส่วนลด',
+                            'WHT',
                             maxLines: 1,
                             textAlign: pw.TextAlign.left,
                             style: pw.TextStyle(
@@ -1405,7 +1407,7 @@ class Pdfgen_credit_note_TP8 {
                                 color: PdfColors.black),
                           ),
                           pw.Text(
-                            'Dis',
+                            'WHT',
                             maxLines: 1,
                             textAlign: pw.TextAlign.left,
                             style: pw.TextStyle(
@@ -1421,9 +1423,7 @@ class Pdfgen_credit_note_TP8 {
                     flex: 2,
                     child: pw.Container(
                       decoration: const pw.BoxDecoration(
-                        // color: PdfColors.green100,
                         border: pw.Border(
-                          // left: pw.BorderSide(color: PdfColors.grey800),
                           right: pw.BorderSide(color: PdfColors.grey600),
                           top: pw.BorderSide(color: PdfColors.grey600),
                           bottom: pw.BorderSide(color: PdfColors.grey600),
@@ -1435,7 +1435,7 @@ class Pdfgen_credit_note_TP8 {
                         crossAxisAlignment: pw.CrossAxisAlignment.center,
                         children: [
                           pw.Text(
-                            'จำนวนเงิน',
+                            'ยอดสุทธิ',
                             maxLines: 1,
                             textAlign: pw.TextAlign.left,
                             style: pw.TextStyle(
@@ -1444,7 +1444,7 @@ class Pdfgen_credit_note_TP8 {
                                 color: PdfColors.black),
                           ),
                           pw.Text(
-                            'Amount',
+                            'Net Total',
                             maxLines: 1,
                             textAlign: pw.TextAlign.left,
                             style: pw.TextStyle(
@@ -1459,20 +1459,15 @@ class Pdfgen_credit_note_TP8 {
                 ],
               ),
             ),
-
             pw.Container(
-              // height: 800,
-              // color: PdfColors.green100,
               child: pw.Table(
-                border: pw.TableBorder(
-                    left: pw.BorderSide(color: PdfColors.grey600, width: 1),
-                    right: pw.BorderSide(color: PdfColors.grey600, width: 1),
-                    verticalInside: pw.BorderSide(
-                        width: 1,
-                        color: PdfColors.grey600,
-                        style: pw.BorderStyle.solid)),
+                border: pw.TableBorder.all(
+                  color: PdfColors.grey600,
+                  width: 0.3,
+                ),
                 children: [
-                  for (int index = 0; index < tableData00.length; index++)
+                  for (int index = 0; index < tableData00.length; index++) ...[
+                    // --- Row 1: Original Amount ---
                     pw.TableRow(children: [
                       pw.Container(
                         width: 30,
@@ -1481,61 +1476,43 @@ class Pdfgen_credit_note_TP8 {
                           alignment: pw.Alignment.topCenter,
                           child: pw.Text(
                             '${index + 1}',
-                            maxLines: 2,
-                            textAlign: pw.TextAlign.left,
-                            style: pw.TextStyle(
-                                fontSize: font_Size,
-                                font: ttf,
-                                color: PdfColors.grey800),
+                            style: pw.TextStyle(fontSize: font_Size, font: ttf),
                           ),
                         ),
                       ),
                       pw.Expanded(
-                        flex: 1,
+                        flex: 2,
                         child: pw.Container(
                           padding: const pw.EdgeInsets.all(2.0),
-                          child: pw.Align(
-                            alignment: (tableData00[index][11].toString() == '')
-                                ? pw.Alignment.topCenter
-                                : pw.Alignment.topLeft,
-                            child: pw.Text(
-                              (tableData00[index][18].toString() == 'INV')
-                                  ? '${tableData00[index][2]}'
-                                  : (tableData00[index][11].toString() == '' ||
-                                          tableData00[index][11] == null)
-                                      ? '-'
-                                      : '${tableData00[index][11]}',
-                              maxLines: 2,
-                              textAlign:
-                                  (tableData00[index][11].toString() == '')
-                                      ? pw.TextAlign.center
-                                      : pw.TextAlign.left,
-                              style: pw.TextStyle(
-                                  fontSize: font_Size,
-                                  font: ttf,
-                                  color: PdfColors.grey800),
-                            ),
+                          child: pw.Text(
+                            '${tableData00[index][11]}', // Invoice ID
+                            textAlign: pw.TextAlign.left,
+                            style: pw.TextStyle(fontSize: font_Size, font: ttf),
                           ),
                         ),
                       ),
                       pw.Expanded(
-                          flex: 4,
+                          flex: 3,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Text(
+                              '${tableData00[index][2]}', // Item Name
+                              style:
+                                  pw.TextStyle(fontSize: font_Size, font: ttf),
+                            ),
+                          )),
+                      pw.Expanded(
+                          flex: 1,
                           child: pw.Container(
                             padding: const pw.EdgeInsets.all(2.0),
                             child: pw.Align(
-                              alignment: pw.Alignment.topLeft,
+                              alignment: pw.Alignment.topRight,
                               child: pw.Text(
-                                (tableData00[index][18].toString() == 'INV')
-                                    ? '${tableData00[index][2]}'
-                                    : (tableData00[index][0].toString() == '6')
-                                        ? '${tableData00[index][2]}'
-                                        : '${tableData00[index][2]}',
-                                maxLines: 2,
-                                textAlign: pw.TextAlign.left,
+                                '${tableData00[index][25]}', // Ori Sub Total
                                 style: pw.TextStyle(
                                     fontSize: font_Size,
                                     font: ttf,
-                                    color: PdfColors.grey800),
+                                    decoration: pw.TextDecoration.lineThrough),
                               ),
                             ),
                           )),
@@ -1546,50 +1523,9 @@ class Pdfgen_credit_note_TP8 {
                             child: pw.Align(
                               alignment: pw.Alignment.topRight,
                               child: pw.Text(
-                                (tableData00[index][18].toString() == 'INV')
-                                    ? '1.00'
-                                    : (tableData00[index][10].toString() ==
-                                            '0.00')
-                                        ? '1.00'
-                                        : '${tableData00[index][10]}',
-                                maxLines: 2,
-                                textAlign: pw.TextAlign.right,
+                                '${tableData00[index][26]}', // Ori VAT
                                 style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    color: PdfColors.grey800),
-                              ),
-                            ),
-                          )),
-                      pw.Expanded(
-                          flex: 1,
-                          child: pw.Container(
-                            padding: const pw.EdgeInsets.all(2.0),
-                            child: pw.Align(
-                              alignment:
-                                  (tableData00[index][18].toString() == 'INV')
-                                      ? pw.Alignment.topCenter
-                                      : pw.Alignment.topRight,
-                              child: pw.Text(
-                                (tableData00[index][22] == null)
-                                    ? ''
-                                    : '${tableData00[index][22]}',
-                                // (tableData00[index][18].toString() == 'INV')
-                                //     ? '-'
-                                //     : (tableData00[index][14].toString() !=
-                                //                 '0' &&
-                                //             tableData00[index][14] != null)
-                                //         ? 'อัตราพิเศษ'
-                                //         : (tableData00[index][7].toString() ==
-                                //                 '0.00')
-                                //             ? '${tableData00[index][5]}'
-                                //             : '${tableData00[index][7]}',
-                                maxLines: 2,
-                                textAlign: pw.TextAlign.right,
-                                style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    color: PdfColors.grey800),
+                                    fontSize: font_Size, font: ttf),
                               ),
                             ),
                           )),
@@ -1600,14 +1536,9 @@ class Pdfgen_credit_note_TP8 {
                             child: pw.Align(
                               alignment: pw.Alignment.topRight,
                               child: pw.Text(
-                                '0.00',
-                                // '${tableData00[index][12]}',
-                                maxLines: 2,
-                                textAlign: pw.TextAlign.right,
+                                '${tableData00[index][27]}', // Ori WHT
                                 style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    color: PdfColors.grey800),
+                                    fontSize: font_Size, font: ttf),
                               ),
                             ),
                           )),
@@ -1618,19 +1549,173 @@ class Pdfgen_credit_note_TP8 {
                             child: pw.Align(
                               alignment: pw.Alignment.topRight,
                               child: pw.Text(
-                                (tableData00[index][20] == null)
-                                    ? '0.0'
-                                    : '${tableData00[index][20]}',
-                                maxLines: 2,
-                                textAlign: pw.TextAlign.right,
+                                '${tableData00[index][28]}', // Ori Net Total
                                 style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    color: PdfColors.grey800),
+                                    fontSize: font_Size, font: ttf),
                               ),
                             ),
                           )),
                     ]),
+                    // --- Row 2: Discount ---
+                    pw.TableRow(children: [
+                      pw.Container(width: 30),
+                      pw.Expanded(flex: 2, child: pw.Container()),
+                      pw.Expanded(
+                          flex: 3,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Text(
+                              '      - ส่วนลด',
+                              style: pw.TextStyle(
+                                  fontSize: font_Size - 1,
+                                  font: ttf,
+                                  color: PdfColors.grey600),
+                            ),
+                          )),
+                      pw.Expanded(
+                          flex: 1,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.topRight,
+                              child: pw.Text(
+                                '${tableData00[index][19]}', // Discount Before VAT
+                                style: pw.TextStyle(
+                                    fontSize: font_Size - 1,
+                                    font: ttf,
+                                    color: PdfColors.grey600),
+                              ),
+                            ),
+                          )),
+                      pw.Expanded(
+                          flex: 1,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.topRight,
+                              child: pw.Text(
+                                '${tableData00[index][21]}', // Discount VAT
+                                style: pw.TextStyle(
+                                    fontSize: font_Size - 1,
+                                    font: ttf,
+                                    color: PdfColors.grey600),
+                              ),
+                            ),
+                          )),
+                      pw.Expanded(
+                          flex: 1,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.topRight,
+                              child: pw.Text(
+                                '${tableData00[index][23]}', // Discount WHT
+                                style: pw.TextStyle(
+                                    fontSize: font_Size - 1,
+                                    font: ttf,
+                                    color: PdfColors.grey600),
+                              ),
+                            ),
+                          )),
+                      pw.Expanded(
+                          flex: 2,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.topRight,
+                              child: pw.Text(
+                                '${tableData00[index][20]}', // Discount Net Total
+                                style: pw.TextStyle(
+                                    fontSize: font_Size - 1,
+                                    font: ttf,
+                                    color: PdfColors.grey600),
+                              ),
+                            ),
+                          )),
+                    ]),
+                    // --- Row 3: Balance ---
+                    pw.TableRow(children: [
+                      pw.Container(width: 30),
+                      pw.Expanded(flex: 2, child: pw.Container()),
+                      pw.Expanded(
+                          flex: 3,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Text(
+                              '      - คงเหลือจริง',
+                              style: pw.TextStyle(
+                                  fontSize: font_Size - 1,
+                                  font: ttf,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: PdfColors.black),
+                            ),
+                          )),
+                      pw.Expanded(
+                          flex: 1,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.topRight,
+                              child: pw.Text(
+                                '${tableData00[index][30]}',
+                                style: pw.TextStyle(
+                                    fontSize: font_Size - 1,
+                                    font: ttf,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.black),
+                              ),
+                            ),
+                          )),
+                      pw.Expanded(
+                          flex: 1,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.topRight,
+                              child: pw.Text(
+                                '${tableData00[index][31]}',
+                                style: pw.TextStyle(
+                                    fontSize: font_Size - 1,
+                                    font: ttf,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.black),
+                              ),
+                            ),
+                          )),
+                      pw.Expanded(
+                          flex: 1,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.topRight,
+                              child: pw.Text(
+                                '${tableData00[index][32]}',
+                                style: pw.TextStyle(
+                                    fontSize: font_Size - 1,
+                                    font: ttf,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.black),
+                              ),
+                            ),
+                          )),
+                      pw.Expanded(
+                          flex: 2,
+                          child: pw.Container(
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.topRight,
+                              child: pw.Text(
+                                '${tableData00[index][29]}', // Balance Net Total
+                                style: pw.TextStyle(
+                                    fontSize: font_Size - 1,
+                                    font: ttf,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: PdfColors.black),
+                              ),
+                            ),
+                          )),
+                    ]),
+                  ],
                   for (int index = 0; index < tableData01.length; index++)
                     pw.TableRow(children: [
                       pw.Container(
@@ -1650,7 +1735,7 @@ class Pdfgen_credit_note_TP8 {
                         ),
                       ),
                       pw.Expanded(
-                        flex: 1,
+                        flex: 2,
                         child: pw.Container(
                           padding: const pw.EdgeInsets.all(2.0),
                           child: pw.Align(
@@ -1667,8 +1752,6 @@ class Pdfgen_credit_note_TP8 {
                                   (tableData01[index][11].toString() == '')
                                       ? pw.TextAlign.center
                                       : pw.TextAlign.left,
-                              // '${tableData01[index][11]}',
-
                               style: pw.TextStyle(
                                   fontSize: font_Size,
                                   font: ttf,
@@ -1678,7 +1761,7 @@ class Pdfgen_credit_note_TP8 {
                         ),
                       ),
                       pw.Expanded(
-                          flex: 4,
+                          flex: 3,
                           child: pw.Container(
                             padding: const pw.EdgeInsets.all(2.0),
                             child: pw.Align(
@@ -2652,6 +2735,32 @@ class Pdfgen_credit_note_TP8 {
             mainAxisSize: pw.MainAxisSize.min,
             children: [
               pw.Container(
+                  padding: const pw.EdgeInsets.fromLTRB(2, 2, 2, 2),
+                  child: pw.Row(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        'เหตุผลที่ออกใบลดหนี้ : ',
+                        style: pw.TextStyle(
+                          fontSize: font_Size,
+                          font: ttf,
+                          fontWeight: pw.FontWeight.bold,
+                          color: Colors_pd,
+                        ),
+                      ),
+                      pw.Expanded(
+                        child: pw.Text(
+                          '${com_ment ?? ''}',
+                          style: pw.TextStyle(
+                            fontSize: font_Size,
+                            font: ttf,
+                            color: Colors_pd,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )),
+              pw.Container(
                   decoration: pw.BoxDecoration(
                     border: pw.Border.all(color: PdfColors.grey, width: 1),
                   ),
@@ -3125,16 +3234,6 @@ class Pdfgen_credit_note_TP8 {
       // Upload the file
       await uploadFile(data, name_1);
     } else if (Preview_ser.toString() == 'File') {
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      await FlutterFileDialog.saveFile(
-        params: SaveFileDialogParams(
-          data: data,
-          fileName: (numdoctax.toString() == '')
-              ? 'ใบลดหนี้ $numinvoice'
-              : 'ใบลดหนี้/ใบกำกับภาษี $numdoctax',
-        ),
-      );
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
       // MimeType type = MimeType.PDF;

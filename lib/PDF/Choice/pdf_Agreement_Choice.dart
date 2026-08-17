@@ -12,23 +12,25 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 import '../../Constant/Myconstant.dart';
 import '../../Man_PDF/Preview_PDF/Preview_Agreement.dart';
 import '../../Model/GetC_Quot_Select_Model.dart';
-
 
 class RentGroup {
   final String startDate;
   final String endDate;
   final String amount;
   final String amountText;
+  final int startIndex; // 1-based month position
+  final int endIndex; // 1-based month position
 
   RentGroup({
     required this.startDate,
     required this.endDate,
     required this.amount,
     required this.amountText,
+    this.startIndex = 0,
+    this.endIndex = 0,
   });
 }
 
@@ -156,6 +158,28 @@ class Pdfgen_Agreement_Choice {
     String thaiDate = DateFormat('d เดือน MMM', 'th').format(date);
     var nFormat = NumberFormat("#,##0.00", "en_US");
     var nFormat2 = NumberFormat("###0.00", "en_US");
+    String _fmtDMY(dynamic val, {String locale = 'th'}) {
+      try {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty) return '-';
+        final dt = DateFormat("dd-MM-yyyy HH:mm:ss").parse('$s 00:00:00');
+        return '${DateFormat('dd MMM', locale).format(dt)} ${dt.year + 543}';
+      } catch (_) {
+        return '-';
+      }
+    }
+
+    String _fmtISO(dynamic val, {String locale = 'th'}) {
+      try {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty) return '-';
+        final dt = DateTime.parse(s);
+        return '${DateFormat('dd MMM', locale).format(dt)} ${dt.year + 543}';
+      } catch (_) {
+        return '-';
+      }
+    }
+
     final iconImage =
         (await rootBundle.load('images/LOGO.png')).buffer.asUint8List();
     final ByteData image = await rootBundle.load('images/image7-11.png');
@@ -247,33 +271,64 @@ class Pdfgen_Agreement_Choice {
     int pange = 1;
 
     List<double> data2 = [0.00, 0.00, 0.00];
-    String Rent_List = (quotxSelectModels
-                .where((e) =>
-                    e.expser.toString() == '$exp_check' &&
-                    // e.unitser.toString() == '1' &&
-                    e.amt_ty.toString() != '')
-                .length ==
-            0)
-        ? '0.00, 0.00, 0.00'
-        : quotxSelectModels
-            .where((e) =>
-                e.expser.toString() == '$exp_check' &&
-                // e.unitser.toString() == '1' &&
-                e.amt_ty.toString() != '')
-            .map((e) => e.amt_ty)
-            .toString();
+    List<double> rentList = [];
+    final targetModels = quotxSelectModels
+        .where((e) => e.expser.toString() == '$exp_check')
+        .toList();
 
-    // Step 1: Remove parentheses
-    Rent_List = Rent_List.replaceAll('(', '').replaceAll(')', '');
+    if (targetModels.isNotEmpty) {
+      // Prefer monthly rental model (unitser: '2') for calculations
+      final modelWithTrans = targetModels.any((e) =>
+              e.unitser.toString() == '2' &&
+              e.trans_array != null &&
+              e.trans_array!.isNotEmpty)
+          ? targetModels.firstWhere((e) =>
+              e.unitser.toString() == '2' &&
+              e.trans_array != null &&
+              e.trans_array!.isNotEmpty)
+          : targetModels.any(
+                  (e) => e.trans_array != null && e.trans_array!.isNotEmpty)
+              ? targetModels.firstWhere(
+                  (e) => e.trans_array != null && e.trans_array!.isNotEmpty)
+              : targetModels.any((e) => e.unitser.toString() == '2')
+                  ? targetModels.firstWhere((e) => e.unitser.toString() == '2')
+                  : targetModels.first;
 
-    // Step 2: Split the string by commas
-    List<String> rentStringList = Rent_List.split(',');
+      if (modelWithTrans.trans_array != null &&
+          modelWithTrans.trans_array!.isNotEmpty) {
+        try {
+          String cleanJson = modelWithTrans.trans_array!;
+          // Remove potential artifacts from the string if it's not pure JSON
+          if (cleanJson.startsWith('(') && cleanJson.endsWith(')')) {
+            cleanJson = cleanJson.substring(1, cleanJson.length - 1);
+          }
+          List<dynamic> trans = json.decode(cleanJson);
+          rentList = trans
+              .map((e) => double.tryParse(e['total'].toString()) ?? 0.0)
+              .toList();
+        } catch (e) {
+          print('Error parsing trans_array: $e');
+        }
+      }
+    }
 
-    // Step 3: Convert the list of strings to a list of doubles
-    List<double> rentList =
-        (rentStringList.map((e) => double.parse(e)).toList() == 0)
-            ? data2
-            : rentStringList.map((e) => double.parse(e)).toList();
+    // Fallback logic if trans_array failed or was empty
+    if (rentList.isEmpty) {
+      String Rent_List = (targetModels.isEmpty)
+          ? '0.00, 0.00, 0.00'
+          : targetModels
+              .where((e) => e.amt_ty.toString() != '')
+              .map((e) => e.amt_ty)
+              .toString();
+
+      Rent_List = Rent_List.replaceAll('(', '').replaceAll(')', '');
+      List<String> rentStringList = Rent_List.split(',');
+
+      rentList =
+          (rentStringList.map((e) => double.tryParse(e) ?? 0.0).toList() == 0)
+              ? data2
+              : rentStringList.map((e) => double.tryParse(e) ?? 0.0).toList();
+    }
 
 ///////////////////////------------------------------------------------->
     // List<RentGroup> rentGroup = [];
@@ -357,8 +412,10 @@ class Pdfgen_Agreement_Choice {
           .where((e) =>
               e.expser.toString() == '$exp_check' && e.amt_ty.toString() != '')
           .isNotEmpty) {
-        DateTime baseDate =
-            DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00');
+        DateTime baseDate = (Form_sdate != null &&
+                Form_sdate.toString().trim().isNotEmpty)
+            ? DateFormat("dd-MM-yyyy HH:mm:ss").parse('${Form_sdate} 00:00:00')
+            : DateTime.now();
 
         if (Form_rtname == 'รายวัน') {
           DateTime start = baseDate.add(Duration(days: index));
@@ -393,49 +450,32 @@ class Pdfgen_Agreement_Choice {
       final currentAmountText =
           convertToThaiBaht(double.parse(rentList[index].toString()));
 
-      // หาในกลุ่มที่มียอดเดียวกัน
-      final existing = rentGroup.indexWhere((e) => e.amount == currentAmount);
-
-      if (existing != -1) {
-        // ถ้ามีอยู่แล้ว ให้อัปเดต endDate ของรายการนั้น
-        rentGroup[existing] = RentGroup(
-          startDate: rentGroup[existing].startDate,
-          endDate: ldate, // ใช้ตัวใหม่
+      // หาในกลุ่มที่มียอดเดียวกัน และ CONSECUTIVE (ไม่มีค่าอื่นคั่น)
+      // ใช้ lastGroup เพื่อ check ว่า group ล่าสุดมียอดเดียวกันหรือไม่
+      if (rentGroup.isNotEmpty && rentGroup.last.amount == currentAmount) {
+        // ยอดเดียวกับ group ล่าสุด → อัปเดต endDate และ endIndex
+        final last = rentGroup.last;
+        rentGroup[rentGroup.length - 1] = RentGroup(
+          startDate: last.startDate,
+          endDate: ldate,
           amount: currentAmount,
           amountText: currentAmountText,
+          startIndex: last.startIndex,
+          endIndex: index + 1, // 1-based
         );
       } else {
-        // ยังไม่มีก็เพิ่มใหม่
+        // ยอดต่างหรือยังไม่มี group → เริ่ม group ใหม่
         rentGroup.add(
           RentGroup(
             startDate: sdate,
             endDate: ldate,
             amount: currentAmount,
             amountText: currentAmountText,
+            startIndex: index + 1, // 1-based
+            endIndex: index + 1,
           ),
         );
       }
-    }
-    for (int i = 0; i < rentGroup.length; i++) {
-      final g = rentGroup[i];
-      // นับลำดับเดือน
-      int startMonthIndex = 0;
-      int endMonthIndex = 0;
-
-      for (int j = 0, count = 0; j < rentList.length; j++) {
-        final amt = rentList[j].toStringAsFixed(2);
-        if (amt == g.amount) {
-          if (startMonthIndex == 0) {
-            startMonthIndex = j + 1; // เดือนแรกที่เจอ
-          }
-          endMonthIndex = j + 1; // เดือนสุดท้ายที่เจอ
-        }
-      }
-
-      // print(
-      //   'ลำดับที่ ${i + 1}. ตั้งแต่เดือนที่ $startMonthIndex ถึงเดือนที่ $endMonthIndex '
-      //   'ยอด ${g.amount} บาท (~${g.amountText}~)',
-      // );
     }
 
     // print('rentGroup.length');
@@ -756,7 +796,7 @@ class Pdfgen_Agreement_Choice {
                         children: [
                           pw.Text(
                             // 'วันที่ ${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}").year + 543}',
-                            'วันที่ ${DateFormat('dd MMM', 'TH').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('${Datex_text.text} 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('${Datex_text.text} 00:00:00')}").year + 543}',
+                            'วันที่ ${_fmtDMY(Datex_text.text, locale: 'TH')}',
                             //  'วันที่  ${Datex_text.text} ',
                             textAlign: pw.TextAlign.center,
                             style: pw.TextStyle(
@@ -1277,7 +1317,7 @@ class Pdfgen_Agreement_Choice {
                                 child: pw.Text(
                                   (Form_sdate == null)
                                       ? ''
-                                      : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}").year + 543}',
+                                      : '${_fmtDMY(Form_sdate)}',
                                   // "$Form_sdate",
                                   textAlign: pw.TextAlign.center,
                                   style: pw.TextStyle(
@@ -1309,7 +1349,7 @@ class Pdfgen_Agreement_Choice {
                                 child: pw.Text(
                                   (Form_ldate == null)
                                       ? ''
-                                      : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}").year + 543}',
+                                      : '${_fmtDMY(Form_ldate)}',
                                   // "$Form_ldate",
                                   textAlign: pw.TextAlign.center,
                                   style: pw.TextStyle(
@@ -1383,7 +1423,7 @@ class Pdfgen_Agreement_Choice {
                                 child: pw.Text(
                                   (DatexChoice_Sub2_3text == null)
                                       ? '-'
-                                      : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_3text 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_3text 00:00:00')}").year + 543}',
+                                      : '${_fmtDMY(DatexChoice_Sub2_3text)}',
                                   // : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_3text 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_3text 00:00:00')}").year + 543}',
                                   // (Form_ldate == null)
                                   //     ? ''
@@ -1435,12 +1475,12 @@ class Pdfgen_Agreement_Choice {
                       ),
                       pw.SizedBox(height: 1 * PdfPageFormat.mm),
                       ((quotxSelectModels
-                                  .where((e) =>
-                                      e.expser.toString() == '$exp_check' &&
-                                      // e.unitser.toString() == '1' &&
-                                      e.amt_ty.toString() == '')
-                                  .length !=
-                              0))
+                              .where((e) =>
+                                  e.expser.toString() == '$exp_check' &&
+                                  e.unitser.toString() ==
+                                      '2' && // เน้นเช็คที่รายเดือน
+                                  e.amt_ty.toString() == '')
+                              .isNotEmpty))
                           ? pw.Column(children: [
                               pw.SizedBox(
                                   child: pw.Column(
@@ -1530,7 +1570,7 @@ class Pdfgen_Agreement_Choice {
                                                         Form_sdate == '' ||
                                                         Form_sdate == null)
                                                     ? '-'
-                                                    : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}").year + 543}',
+                                                    : '${_fmtDMY(Form_sdate)}',
                                                 textAlign: pw.TextAlign.center,
                                                 style: pw.TextStyle(
                                                   color: Colors_pd,
@@ -1566,7 +1606,7 @@ class Pdfgen_Agreement_Choice {
                                                         Form_ldate == '' ||
                                                         Form_ldate == null)
                                                     ? '-'
-                                                    : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}").year + 543}',
+                                                    : '${_fmtDMY(Form_ldate)}',
                                                 textAlign: pw.TextAlign.center,
                                                 style: pw.TextStyle(
                                                   color: Colors_pd,
@@ -1751,18 +1791,9 @@ class Pdfgen_Agreement_Choice {
                                 final g = rentGroup[index];
 
                                 // ค้นหาลำดับเดือนที่เริ่มต้นและสิ้นสุด
-                                int startMonthIndex = 0;
-                                int endMonthIndex = 0;
-
-                                for (int j = 0; j < rentList.length; j++) {
-                                  final amt = rentList[j].toStringAsFixed(2);
-                                  if (amt == g.amount) {
-                                    if (startMonthIndex == 0) {
-                                      startMonthIndex = j + 1;
-                                    }
-                                    endMonthIndex = j + 1;
-                                  }
-                                }
+                                // ใช้ startIndex/endIndex ที่คำนวณไว้ตั้งแต่ตอน build rentGroup
+                                final int startMonthIndex = g.startIndex;
+                                final int endMonthIndex = g.endIndex;
 
                                 return pw.SizedBox(
                                     child: pw.Column(
@@ -2258,11 +2289,13 @@ class Pdfgen_Agreement_Choice {
                                 child: pw.Text(
                                   (quotxSelectModels
                                               .where((e) =>
-                                                  e.expser.toString() == '17')
+                                                  e.expser.toString() == '17' ||
+                                                  e.dtype.toString() == 'F' ||
+                                                  e.etype.toString() == 'F')
                                               .length ==
                                           0)
                                       ? '0.00 (~${convertToThaiBaht(0.00)}~)'
-                                      : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '17').map((e) => e.amt != null ? double.parse(e.amt.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท ',
+                                      : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '17' || e.dtype.toString() == 'F' || e.etype.toString() == 'F').map((e) => e.amt != null ? double.parse(e.amt.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท ',
                                   textAlign: pw.TextAlign.center,
                                   style: pw.TextStyle(
                                     color: Colors_pd,
@@ -4368,7 +4401,7 @@ class Pdfgen_Agreement_Choice {
             ////////////------------------->
 
             // Get_Value_NameShop_index: Get_Value_NameShop_index,
-            // Get_Value_cid: Get_Value_cid,
+            Get_Value_cid: Get_Value_cid,
             // verticalGroupValue: _verticalGroupValue,
             // Form_nameshop: Form_nameshop,
             // Form_typeshop: Form_typeshop,

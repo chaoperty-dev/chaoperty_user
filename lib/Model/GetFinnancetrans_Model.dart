@@ -52,6 +52,8 @@ class FinnancetransModel {
   String? inv;
   String? date_book;
 
+  String? remark_intens;
+
   FinnancetransModel(
       {this.ser,
       this.datex,
@@ -104,7 +106,8 @@ class FinnancetransModel {
       this.ref3,
       this.ref4,
       this.inv,
-      this.date_book});
+      this.date_book,
+      this.remark_intens});
 
   FinnancetransModel.fromJson(Map<String, dynamic> json) {
     ser = json['ser'];
@@ -159,6 +162,8 @@ class FinnancetransModel {
     ref4 = json['ref4'];
     inv = json['inv'];
     date_book = json['date_book'];
+
+    remark_intens = json['remark_intens'];
   }
 
   Map<String, dynamic> toJson() {
@@ -215,7 +220,9 @@ class FinnancetransModel {
     data['ref4'] = this.ref4;
     data['inv'] = this.inv;
     data['date_book'] = this.date_book;
-    ;
+
+    data['remark_intens'] = this.remark_intens;
+
     return data;
   }
 }

@@ -1,5 +1,6 @@
-import 'dart:convert';
-
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -8,17 +9,9 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
-import '../../CRC_16_Prompay/generate_qrcode.dart';
+
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../Model/GetInvoice_history_Model.dart';
-import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
 
 class PdfgenReceipt_PayPakan_TP8_Choice {
   //////////---------------------------------------------------->(ใบเสร็จรับเงินคืนเงินประกัน )
@@ -110,7 +103,7 @@ class PdfgenReceipt_PayPakan_TP8_Choice {
     var refid = 'LLJZX20241';
 
     final imageBytes_manager = await loadAndCacheImage(
-        '${MyConstant().domain}/gen_licence_img.php?isAdd=true&ren=106&ref_id=$refid&name_id=$licence_name1&doc_id=$docid&extension=.png');
+        '${MyConstant().domain_choice}/gen_licence_img.php?isAdd=true&ren=106&ref_id=$refid&name_id=$licence_name1&doc_id=$docid&extension=.png');
 
     // final imageBytes_manager = await loadAndCacheImage(
     //     '${MyConstant().domain}/gen_licence_img.php?isAdd=true&ren=50&ref_id=$refid&name_id=$licence_name1&doc_id=$docid&extension=.png');
@@ -141,7 +134,7 @@ class PdfgenReceipt_PayPakan_TP8_Choice {
         netImage_QR.add(iconImage);
       } else {
         netImage_QR.add(await networkImage(
-            '${MyConstant().domain_chao}/files/$foder/payment/${finnancetransModels[i].img}'));
+            '${MyConstant().domain_choice}/files/$foder/payment/${finnancetransModels[i].img}'));
       }
     }
 //////////---------------------------->
@@ -2357,7 +2350,7 @@ class PdfgenReceipt_PayPakan_TP8_Choice {
                                                           ),
                                                         ),
                                                         padding: const pw
-                                                                .EdgeInsets.all(
+                                                            .EdgeInsets.all(
                                                             8.0),
                                                         height: 30,
                                                       )
@@ -2374,7 +2367,7 @@ class PdfgenReceipt_PayPakan_TP8_Choice {
                                                           ),
                                                         ),
                                                         padding: const pw
-                                                                .EdgeInsets.all(
+                                                            .EdgeInsets.all(
                                                             8.0),
                                                         child: pw.Center(
                                                           child: pw.Image(

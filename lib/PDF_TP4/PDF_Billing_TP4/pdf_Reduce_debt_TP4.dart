@@ -1,5 +1,7 @@
-import 'dart:html' if (dart.library.io) 'package:chaoperty_user/fake_html.dart';
+import 'dart:html';
 
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 // import 'package:htmltopdfwidgets/htmltopdfwidgets.dart';
@@ -9,8 +11,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
 
 class Pdfgen_Reduce_debt_TP4 {
   static void exportPDF_Reduce_debt_TP4(

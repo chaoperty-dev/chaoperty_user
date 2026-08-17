@@ -2,7 +2,9 @@
 import 'dart:ui';
 
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/Model/GetPayMent_Model.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk-slip.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:flutter/material.dart';
@@ -21,6 +23,7 @@ import '../../../Model/Get_Image_text_model.dart';
 import '../../../color.dart';
 
 import '../../../Constant/app_markets.dart';
+import '../../../screen_Intents/bankCodeMap.dart';
 import '../../loginscreen.dart';
 import '../../market_select_screen.dart';
 import '../../market_service.dart';
@@ -30,6 +33,8 @@ import '../ui_view/body_measurement.dart';
 import '../ui_view/title_view.dart';
 import 'meals_list_view.dart';
 import 'package:http/http.dart' as http;
+
+import '../../../screen_Intents_V4/payment_subV4_InvAll.dart';
 
 class MyDiaryScreen extends StatefulWidget {
   const MyDiaryScreen({Key? key, this.animationController}) : super(key: key);
@@ -90,6 +95,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       cus_lintid,
       cus_lang;
   bool? _hasIntentsAuth;
+  List<PayMentModel> PayMentModels = [];
   @override
   void initState() {
     super.initState();
@@ -135,8 +141,39 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                 }
               });
             }));
+    red_payMent();
     _loadIntentsAuth();
     // red_Trans_bill();
+  }
+
+  Future<void> red_payMent() async {
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    final ren = preferences.getString('renTalSer');
+
+    if (ren == null || ren.isEmpty) return;
+
+    final url =
+        '${MyConstant().domain_chao}/GC_payMent.php?isAdd=true&ren=$ren';
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 500) return;
+
+      final result = json.decode(response.body);
+      if (result == null || result.toString() == 'null') return;
+
+      // แปลง json -> model
+      final all = <PayMentModel>[];
+      for (final map in result) {
+        all.add(PayMentModel.fromJson(map));
+      }
+      // ✅ FIX: populate PayMentModels จริง (เดิมล้างเป็น [] ทำให้ lookup ไม่เจอ)
+      setState(() => PayMentModels = List<PayMentModel>.from(all));
+      debugPrint('✅ red_payMent: loaded ${PayMentModels.length} banks');
+    } catch (e) {
+      // อย่างน้อย log ไว้ตอน dev
+      debugPrint('red_payMent error: $e');
+    }
   }
 
   Future<void> _loadIntentsAuth() async {
@@ -341,7 +378,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     }
 
     try {
-      final response = await postPaymentIntentsBillReferenceAvailableBulk(
+      final response = await postPaymentIntentsBillReferenceAvailableBulkSlip(
         cusno: custNo,
         propertyno: ren,
         billreference: docnos,
@@ -349,6 +386,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       if (response == null ||
           response.statusCode < 200 ||
           response.statusCode >= 300) {
+        debugPrint(
+            '_fetchBillAvailability failed: HTTP ${response?.statusCode} ${response?.body}');
         return result;
       }
 
@@ -427,15 +466,19 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         // แยกยอดเป็น 2 กลุ่ม:
         // - outstandingTotal : บิลที่ "ยังไม่มี payment intent" (ชำระได้/ค้างชำระ)
         // - paidOrPendingTotal : บิลที่ "มี payment intent อยู่แล้ว/ชำระไปแล้ว"
+        // ตาม API response: { docno: true } = มี intent แล้ว (paid/pending),
+        //                   { docno: false } = ยังไม่มี intent (outstanding)
         // หากเช็คไม่ได้ (ไม่มีใน map) ถือว่าเป็นบิลปกติ → นับเข้า outstanding
         double outstandingTotal = 0.00;
         double paidOrPendingTotal = 0.00;
         for (final inv in parsed) {
-          final isAvailable = availability[inv.docno?.toString()] ?? true;
-          if (isAvailable) {
-            outstandingTotal += _billAmount(inv);
-          } else {
+          final hasIntent = availability[inv.docno?.toString()] ?? false;
+          if (hasIntent) {
+            // ✅ มี payment intent อยู่แล้ว → บิลที่รอตรวจ/ชำระแล้ว
             paidOrPendingTotal += _billAmount(inv);
+          } else {
+            // ✅ ยังไม่มี intent → ค้างชำระ
+            outstandingTotal += _billAmount(inv);
           }
         }
 
@@ -516,6 +559,12 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
         setState(() {
           _transectionIntents = list;
         });
+        // ✅ Debug: log first 2 intents to inspect bank fields
+        for (var i = 0; i < list.length && i < 2; i++) {
+          debugPrint('🔍 intent[$i] bankmerchantid=${list[i].bankmerchantid} '
+              'accountName="${list[i].accountName}" '
+              'accountNumber="${list[i].accountNumber}"');
+        }
       }
     } catch (e, stack) {
       debugPrint('loadTransectionIntents error: $e');
@@ -710,7 +759,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                     child: Row(
                       children: [
                         Expanded(
-                          flex: 3,
+                          flex: 1,
                           child: Text(
                             isEN ? 'Payment No.' : 'เลขที่',
                             style: TextStyle(
@@ -724,8 +773,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                         Expanded(
                           flex: 2,
                           child: Text(
-                            isEN ? 'Status' : 'สถานะ',
-                            textAlign: TextAlign.center,
+                            isEN ? 'Date' : 'วันที่',
+                            textAlign: TextAlign.right,
                             style: TextStyle(
                               fontFamily: Font_.Fonts_T,
                               fontSize: 11,
@@ -748,10 +797,23 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                           ),
                         ),
                         Expanded(
-                          flex: 2,
+                          flex: 1,
                           child: Text(
-                            isEN ? 'Date' : 'วันที่',
-                            textAlign: TextAlign.right,
+                            isEN ? 'Bank' : 'ธนาคาร',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            isEN ? 'Status' : 'สถานะ',
+                            textAlign: TextAlign.center,
                             style: TextStyle(
                               fontFamily: Font_.Fonts_T,
                               fontSize: 11,
@@ -767,13 +829,40 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                   ...visible.asMap().entries.map((entry) {
                     final i = entry.key;
                     final t = entry.value;
-                    final statusColor = _statusColor(t.systemStatus);
-                    final dateText = t.createdAt.length >= 10
-                        ? t.createdAt.substring(0, 10)
-                        : t.createdAt;
+                    final dateText = _formatDateDdMmYyyy(t.createdAt);
                     final hasMeta = t.accountName.isNotEmpty ||
                         t.accountNumber.isNotEmpty ||
                         (t.attacheExists && t.attacheSlipNo != null);
+
+                    // ✅ map status → label/icon/color (แบบ V3)
+                    // - isWaitingReview && !isPaid → "แนบหลักฐานแล้ว" (เขียว)
+                    // - else → "กดเพื่อแนบหลักฐาน" (ม่วง)
+                    final statusStr = (t.status ?? '').toLowerCase();
+                    final isWaitingReview = statusStr.contains('ตรวจ') ||
+                        (statusStr.contains('รอ') &&
+                            !statusStr.contains('ชำระ')) ||
+                        statusStr.contains('review') ||
+                        statusStr.contains('pending');
+                    final isPaid = statusStr.contains('รอชำระเงิน') ||
+                        statusStr.contains('ชำระเงิน') ||
+                        statusStr.contains('awaiting') ||
+                        statusStr.contains('pay');
+
+                    String statusBadgeLabel;
+                    Color statusBadgeColor;
+                    IconData statusBadgeIcon;
+                    if (isWaitingReview && !isPaid) {
+                      statusBadgeLabel =
+                          isEN ? 'Slip attached' : 'แนบหลักฐานแล้ว';
+                      statusBadgeColor = Colors.green.shade600;
+                      statusBadgeIcon = Icons.check_circle;
+                    } else {
+                      statusBadgeLabel =
+                          isEN ? 'Tap to attach slip' : 'กดเพื่อแนบหลักฐาน';
+                      statusBadgeColor = Colors.indigo.shade600;
+                      statusBadgeIcon = Icons.upload_file_rounded;
+                    }
+                    final statusColor = statusBadgeColor;
 
                     return Container(
                       padding: const EdgeInsets.symmetric(
@@ -788,7 +877,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                       child: Row(
                         children: [
                           Expanded(
-                            flex: 3,
+                            flex: 1,
                             child: Text(
                               t.paymentIntentNo,
                               style: const TextStyle(
@@ -802,35 +891,13 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                           ),
                           Expanded(
                             flex: 2,
-                            // ✅ FIX: ลบ FittedBox ออก — Text ใช้ maxLines/ellipsis จัดการ overflow ได้
-                            // FittedBox + loose constraints จาก Column (unbounded height)
-                            // ใน ListView.builder item เป็นสาเหตุของ window.dart:99:12 assertion
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: statusColor.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: statusColor.withOpacity(0.4),
-                                    width: 0.5),
-                              ),
-                              child: Text(
-                                t.status.isNotEmpty
-                                    ? t.status
-                                    : (isEN
-                                        ? _statusLabelEN(t.systemStatus)
-                                        : _statusShortLabelTH(t.systemStatus)),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: statusColor,
-                                  fontFamily: Font_.Fonts_T,
-                                ),
+                            child: Text(
+                              dateText,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontFamily: Font_.Fonts_T,
+                                fontSize: 10,
+                                color: Colors.grey.shade700,
                               ),
                             ),
                           ),
@@ -848,14 +915,98 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                             ),
                           ),
                           Expanded(
-                            flex: 2,
+                            flex: 1,
+                            // ✅ Bank code badge (ดึงจาก accountName -> bankCodeMap)
                             child: Text(
-                              dateText,
-                              textAlign: TextAlign.right,
+                              // ✅ Resolve bank code: accountName → PayMentModels (ser→bcode) → fallback map
+                              _resolveBankCode(
+                                accountName: t.accountName,
+                                bankmerchantid: t.bankmerchantid,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.indigo.shade700,
                                 fontFamily: Font_.Fonts_T,
-                                fontSize: 11,
-                                color: Colors.grey.shade700,
+                              ),
+                            ),
+
+                            // Container(
+                            //   margin: const EdgeInsets.symmetric(horizontal: 2),
+                            //   padding: const EdgeInsets.symmetric(
+                            //       horizontal: 4, vertical: 2),
+                            //   decoration: BoxDecoration(
+                            //     color: Colors.indigo.shade50,
+                            //     borderRadius: BorderRadius.circular(6),
+                            //     border: Border.all(
+                            //         color: Colors.indigo.shade200, width: 0.5),
+                            //   ),
+                            //   child: Text(
+                            //     // ✅ Resolve bank code: accountName → PayMentModels (ser→bcode) → fallback map
+                            //     _resolveBankCode(
+                            //       accountName: t.accountName,
+                            //       bankmerchantid: t.bankmerchantid,
+                            //     ),
+                            //     textAlign: TextAlign.center,
+                            //     maxLines: 1,
+                            //     overflow: TextOverflow.ellipsis,
+                            //     style: TextStyle(
+                            //       fontSize: 9,
+                            //       fontWeight: FontWeight.w800,
+                            //       color: Colors.indigo.shade700,
+                            //       fontFamily: Font_.Fonts_T,
+                            //     ),
+                            //   ),
+                            // ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            // ✅ FIX: ลบ FittedBox ออก — Text ใช้ maxLines/ellipsis จัดการ overflow ได้
+                            // FittedBox + loose constraints จาก Column (unbounded height)
+                            // ใน ListView.builder item เป็นสาเหตุของ window.dart:99:12 assertion
+                            child: InkWell(
+                              onTap: isWaitingReview
+                                  ? null
+                                  : () => _openAttachSlipFlow(t),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: statusColor.withOpacity(0.4),
+                                      width: 0.5),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(statusBadgeIcon,
+                                        color: statusColor, size: 11),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        statusBadgeLabel,
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: statusColor,
+                                          fontFamily: Font_.Fonts_T,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -888,7 +1039,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                           flex: 2,
                           child: Text(
                             '${visible.length} ${isEN ? 'items' : 'รายการ'}',
-                            textAlign: TextAlign.center,
+                            textAlign: TextAlign.right,
                             style: TextStyle(
                               fontFamily: Font_.Fonts_T,
                               fontSize: 11,
@@ -910,6 +1061,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                             ),
                           ),
                         ),
+                        const Expanded(flex: 1, child: SizedBox()),
                         const Expanded(flex: 2, child: SizedBox()),
                       ],
                     ),
@@ -996,6 +1148,103 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       default:
         return status;
     }
+  }
+
+  // Short labels สำหรับ EN (1 คำ ไม่ wrap ใน badge)
+  String _statusShortLabelEN(String status) {
+    switch (status) {
+      case 'paid':
+        return 'Paid';
+      case 'verification':
+        return 'Verifying';
+      case 'pending':
+        return 'Pending';
+      case 'expired':
+        return 'Expired';
+      case 'failed':
+        return 'Failed';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status;
+    }
+  }
+
+  /// ✅ Resolve bank short code จากหลายแหล่ง (ตามลำดับ fallback):
+  /// 1) bankCodeMap[accountName]?['code']  (เช่น "ธนาคารกสิกรไทย" → "KBANK")
+  /// 2) PayMentModels: lookup ser (=bank_merchant_id) -> bcode (จาก API GC_payMent.php)
+  /// 3) bankMerchantIdToCode[bankmerchantid] (fallback map ใน bankCodeMap.dart)
+  /// 4) ถ้า bankmerchantid มีค่า → fallback "B{id}"  (placeholder ชั่วคราว)
+  /// 5) ไม่เจอเลย → "-"
+  String _resolveBankCode(
+      {required String? accountName, required int? bankmerchantid}) {
+    // 1) accountName -> bankCodeMap
+    if (accountName != null && accountName.isNotEmpty) {
+      final code = bankCodeMap[accountName]?['code'];
+      if (code != null && code.isNotEmpty) return code;
+    }
+    // 2) bankmerchantid -> PayMentModels (ดึง bcode ตรงจาก API GC_payMent.php)
+    if (bankmerchantid != null && bankmerchantid! > 0) {
+      try {
+        final match = PayMentModels.firstWhere(
+          (m) => m.ser == '$bankmerchantid',
+          orElse: () => PayMentModel(),
+        );
+        final bcode = match.bcode;
+        if (bcode != null && bcode.isNotEmpty) return bcode;
+      } catch (_) {
+        // fallback ถ้า PayMentModels ยังไม่ถูก populate
+      }
+    }
+    // 3) bankmerchantid -> bankMerchantIdToCode (fallback map)
+    if (bankmerchantid != null && bankmerchantid! > 0) {
+      final code = bankMerchantIdToCode[bankmerchantid];
+      if (code != null && code.isNotEmpty) return code;
+    }
+    // 4) fallback "B{id}" เพื่อให้เห็นชัดเจนว่ามีค่า
+    if (bankmerchantid != null && bankmerchantid! > 0) {
+      return 'B$bankmerchantid';
+    }
+    // 5) ไม่มีข้อมูล
+    return '-';
+  }
+
+  /// ✅ Navigate ไป payment_subV4_InvAll เพื่อแนบหลักฐาน (เหมือน flow ใน V4 แท็บ 2)
+  /// ส่ง selectedDocNos = billReferences ของ intent นี้ (เพื่อให้ V4 filter bill ตรง)
+  /// ถ้า API ไม่ได้ส่ง invoices มา → fallback ใช้ [paymentIntentNo]
+  Future<void> _openAttachSlipFlow(TransectionIntent t) async {
+    // 1. resolve docNos ที่จะส่งให้ V4
+    final List<String> docNos = t.billReferences.isNotEmpty
+        ? List<String>.from(t.billReferences)
+        : [t.paymentIntentNo];
+
+    // 2. resolve serPayment (bank id) — ถ้าไม่มีใน model ให้ลอง fallback ว่าง
+    //    (V4 จะไม่ filter intent ถ้าไม่เจอ serPayment — แต่ selectedDocNos จะถูกใช้แทน)
+    final serPayment = (t.bankmerchantid ?? 0).toString();
+
+    debugPrint('🔗 _openAttachSlipFlow → V4');
+    debugPrint('   paymentIntentNo: ${t.paymentIntentNo}');
+    debugPrint('   intentUuid: ${t.intentUuid}');
+    debugPrint('   bankmerchantid: ${t.bankmerchantid}');
+    debugPrint('   selectedDocNos: $docNos');
+
+    if (!mounted) return;
+
+    // 3. navigate — ใช้ MaterialPageRoute ตรงๆ (ไม่ผ่าน V3 wrapper)
+    //    ส่ง fromIntent: true เพื่อให้ V4 รู้ว่ามาจาก card/intent card
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => paymentSubV4InvAll(
+          teNantModel: teNantModels.isEmpty ? null : teNantModels,
+          cuslang: cus_lang,
+          serPayment: serPayment,
+          serptPayment: null,
+          selectedDocNos: docNos,
+          fromIntent: true,
+        ),
+      ),
+    );
   }
 
   /// Filter row ใหม่: ใช้ Dropdown สำหรับสถานะ (ลดรก ประหยัดพื้นที่)
@@ -1254,6 +1503,14 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     }
   }
 
+  /// Format ISO-8601 string as dd-MM-yyyy (e.g. 04-08-2026).
+  /// Falls back to the raw string if it cannot be parsed.
+  String _formatDateDdMmYyyy(String iso) {
+    final d = _parseIsoDate(iso);
+    if (d == null) return iso;
+    return DateFormat('dd-MM-yyyy').format(d);
+  }
+
   Widget _buildTransectionCard(TransectionIntent t) {
     Color statusColor;
     switch (t.systemStatus) {
@@ -1274,8 +1531,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       default:
         statusColor = Colors.grey[600]!;
     }
-    final dateText =
-        t.createdAt.length >= 10 ? t.createdAt.substring(0, 10) : t.createdAt;
+    final dateText = _formatDateDdMmYyyy(t.createdAt);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
@@ -3089,6 +3345,10 @@ class TransectionIntent {
   final bool attacheExists;
   final String accountName;
   final String accountNumber;
+  // ✅ เพิ่มเพื่อใช้ navigate ไป payment_subV4_InvAll
+  final int? bankmerchantid;
+  final String? intentUuid;
+  final List<String> billReferences;
 
   TransectionIntent({
     required this.uuid,
@@ -3108,10 +3368,25 @@ class TransectionIntent {
     required this.attacheExists,
     required this.accountName,
     required this.accountNumber,
+    this.bankmerchantid,
+    this.intentUuid,
+    this.billReferences = const [],
   });
 
   factory TransectionIntent.fromJson(Map<String, dynamic> json) {
     final recv = json['receiving_account'] as Map<String, dynamic>?;
+    // ✅ parse invoices[].bill_reference สำหรับ navigate ไป V4
+    final invoicesRaw = json['invoices'];
+    final billRefs = <String>[];
+    if (invoicesRaw is List) {
+      for (final inv in invoicesRaw) {
+        if (inv is Map) {
+          final ref = inv['bill_reference']?.toString();
+          if (ref != null && ref.isNotEmpty) billRefs.add(ref);
+        }
+      }
+    }
+    final bm = json['bank_merchant_id'];
     return TransectionIntent(
       uuid: json['uuid']?.toString() ?? '',
       paymentIntentNo: json['payment_intent_no']?.toString() ?? '',
@@ -3130,6 +3405,9 @@ class TransectionIntent {
       attacheExists: json['attache_exists'] == true,
       accountName: recv?['account_name_th']?.toString() ?? '',
       accountNumber: recv?['account_number']?.toString() ?? '',
+      bankmerchantid: bm is int ? bm : int.tryParse('$bm'),
+      intentUuid: (json['intent_uuid'] ?? json['uuid'])?.toString(),
+      billReferences: billRefs,
     );
   }
 }

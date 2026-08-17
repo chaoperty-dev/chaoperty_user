@@ -1,5 +1,6 @@
 import 'package:auto_size_text/auto_size_text.dart';
-
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -10,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../PDF/ThaiBaht.dart';
+
 
 class Pdfgen_his_statusbill_TP2 {
 //////////---------------------------------------------------->(ใบเสร็จรับเงิน/ใบกำกับภาษี)   ใช้  //

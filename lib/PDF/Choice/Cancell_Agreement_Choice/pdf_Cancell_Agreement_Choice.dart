@@ -6,111 +6,224 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-import 'package:printing/printing.dart';
-
 import '../../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
 
 class Pdfgen_Cancell_Agreement_Choice {
   static void exportPDF_Cancell_Agreement_Choice(
       context,
       foder,
-      renTal_name,
-      bill_addr,
-      bill_email,
-      bill_tel,
-      bill_tax,
-      bill_name,
-      TeNant_nameshop,
-      TeNant_typeshop,
-      TeNant_bussshop,
-      TeNant_bussscontact,
-      TeNant_address,
-      TeNant_tel,
-      TeNant_email,
-      TeNant_rental_count,
-      TeNant_area,
-      TeNant_ln,
-      TeNant_sdate,
-      TeNant_ldate,
-      TeNant_period,
-      TeNant_rtname,
-      TeNant_docno,
-      TeNant_zn,
-      TeNant_aser,
-      TeNant_qty,
-      TeNant_cdate,
-      TeNant_tax,
-      TeNant_ctype,
-      TeNant_custno,
-      TeNant_ciddoc,
-      TeNant_qutser,
-      TeNant_verticalGroupValue,
-      TeNant_sname,
-      TeNant_room_number,
+      rentalName,
+      billAddr,
+      billEmail,
+      billTel,
+      billTax,
+      billName,
+      tenantNameshop,
+      tenantTypeshop,
+      tenantBussshop,
+      tenantBussscontact,
+      tenantAddress,
+      tenantTel,
+      tenantEmail,
+      tenantRentalCount,
+      tenantArea,
+      tenantLn,
+      tenantSdate,
+      tenantLdate,
+      tenantPeriod,
+      tenantRtname,
+      tenantDocno,
+      tenantZn,
+      tenantAser,
+      tenantQty,
+      tenantCdate,
+      tenantTax,
+      tenantCtype,
+      tenantCustno,
+      tenantCiddoc,
+      tenantQutser,
+      tenantVerticalgroupvalue,
+      tenantSname,
+      tenantRoomNumber,
       newValuePDFimg,
-      Formbecause_cancel,
+      formbecauseCancel,
       quotxSelectModels,
       transKonModels,
-      TitleType_Default_Receipt_Name,
+      titletypeDefaultReceiptName,
       cc_date,
       w1_date,
-      Form_expserPakan,
-      Form_PakanAll_pvat,
-      fonts_pdf) async {
+      formExpserpakan,
+      formPakanallPvat,
+      fontsPdf,
+      ucancel,
+      datex_cc_date,
+      cc_date_remark,
+      [Map<String, dynamic>? refundPayload]) async {
     final pdf = pw.Document();
     final font = await rootBundle.load('fonts/THSarabunNew.ttf');
     final fontBold = await rootBundle.load('fonts/SarabunBold.ttf');
-    var Colors_pd = PdfColors.black;
+    var colorsPd = PdfColors.black;
     final ttf = pw.Font.ttf(font);
     final ttfBold = pw.Font.ttf(fontBold);
-    double font_Size = 13.0;
+    double fontSize = 13.0;
 
-    final bool isServiceDeposit = (Form_expserPakan?.toString() == '25');
+    // final bool isServiceDeposit = (Form_expserPakan?.toString() == '25');
+    // final numberFormat = NumberFormat('#,##0.00');
+    // final double pakanAmountValue = double.tryParse((Form_PakanAll_pvat ?? '0')
+    //         .toString()
+    //         .trim()
+    //         .replaceAll(',', '')) ??
+    //     0.00;
+    // final bool hasDepositAmount = pakanAmountValue > 0;
+    // final String pakanAmount =
+    //     hasDepositAmount ? numberFormat.format(pakanAmountValue) : '';
+
+    // final String depositRentAmountText =
+    //     checkDepositRent ? pakanAmount : '0.00';
+    // final String depositServiceAmountText =
+    //     checkDepositService ? pakanAmount : '0.00';
+    // final String depositTotalAmountText =
+    //     hasDepositAmount ? pakanAmount : '0.00';
+    // final String depositThaiBahtText =
+    //     hasDepositAmount ? convertToThaiBaht(pakanAmountValue) : '';
+
     final numberFormat = NumberFormat('#,##0.00');
-    final double pakanAmountValue = double.tryParse((Form_PakanAll_pvat ?? '0')
-            .toString()
-            .trim()
-            .replaceAll(',', '')) ??
-        0.00;
-    final bool hasDepositAmount = pakanAmountValue > 0;
-    final String pakanAmount =
-        hasDepositAmount ? numberFormat.format(pakanAmountValue) : '';
 
-    final bool checkDepositRent = hasDepositAmount && !isServiceDeposit;
-    final bool checkDepositService = hasDepositAmount && isServiceDeposit;
+    double _parseAmount(dynamic raw) {
+      if (raw == null) return 0.0;
+      final cleaned = raw.toString().trim().replaceAll(',', '');
+      return double.tryParse(cleaned) ?? 0.0;
+    }
 
+    bool _parseBool01(dynamic raw) {
+      if (raw == null) return false;
+      final s = raw.toString().trim();
+      return s == '1' || s.toLowerCase() == 'true';
+    }
+
+// 1. ประกาศตัวแปรรับยอดเงิน (ต้องอยู่ก่อน Loop)
+    double depositRentAmountValue = 0.0;
+    double depositServiceAmountValue = 0.0;
+
+// 2. ลูปหาค่าจาก quotxSelectModels (แบบ Object)
+    if (quotxSelectModels != null && quotxSelectModels.isNotEmpty) {
+      for (var item in quotxSelectModels) {
+        final String expser = item.expser?.toString() ?? '';
+
+        final String pvatString =
+            item.pvat?.toString().trim().replaceAll(',', '') ?? '0';
+        final double pvatValue = double.tryParse(pvatString) ?? 0.0;
+
+        if (expser == '2') {
+          depositRentAmountValue += pvatValue;
+        } else if (expser == '25') {
+          depositServiceAmountValue += pvatValue;
+        }
+      }
+    }
+
+    // Override from dialog payload (if provided)
+    bool checkDepositRentOverride = false;
+    bool checkDepositServiceOverride = false;
+    String? depositThaiBahtTextOverride;
+    if (refundPayload != null) {
+      checkDepositRentOverride = _parseBool01(refundPayload['is_dep_rental']);
+      checkDepositServiceOverride =
+          _parseBool01(refundPayload['is_dep_service']);
+
+      final depRentalAmt = _parseAmount(refundPayload['dep_rental_amt']);
+      final depServiceAmt = _parseAmount(refundPayload['dep_service_amt']);
+
+      depositRentAmountValue = checkDepositRentOverride ? depRentalAmt : 0.0;
+      depositServiceAmountValue =
+          checkDepositServiceOverride ? depServiceAmt : 0.0;
+      final totalAmt = _parseAmount(refundPayload['total_dep_amt']);
+      final totalText = refundPayload['total_dep_text']?.toString() ?? '';
+      depositThaiBahtTextOverride =
+          totalText.trim().isNotEmpty ? totalText.trim() : null;
+
+      // if dialog didn't send total, compute from components
+      if (totalAmt > 0) {
+        depositThaiBahtTextOverride ??= convertToThaiBaht(totalAmt);
+      }
+    }
+
+// 3. คำนวณยอดรวมและสถานะ Checkbox
+    final double totalDepositAmountValue =
+        depositRentAmountValue + depositServiceAmountValue;
+    final bool hasDepositAmount = totalDepositAmountValue > 0;
+
+    final bool checkDepositRent = refundPayload != null
+        ? checkDepositRentOverride
+        : depositRentAmountValue > 0;
+    final bool checkDepositService = refundPayload != null
+        ? checkDepositServiceOverride
+        : depositServiceAmountValue > 0;
+
+// 4. จัด Format สำหรับแสดงใน PDF
     final String depositRentAmountText =
-        checkDepositRent ? pakanAmount : '0.00';
+        numberFormat.format(depositRentAmountValue);
     final String depositServiceAmountText =
-        checkDepositService ? pakanAmount : '0.00';
+        numberFormat.format(depositServiceAmountValue);
     final String depositTotalAmountText =
-        hasDepositAmount ? pakanAmount : '0.00';
-    final String depositThaiBahtText =
-        hasDepositAmount ? convertToThaiBaht(pakanAmountValue) : '';
-
-    var licence_name1 = 'สิริกร พรหมปัญญา';
+        numberFormat.format(totalDepositAmountValue);
+    final String depositThaiBahtText = hasDepositAmount
+        ? (refundPayload != null && depositThaiBahtTextOverride != null
+            ? depositThaiBahtTextOverride
+            : convertToThaiBaht(totalDepositAmountValue))
+        : '';
 
     final logoImage = await rootBundle.load('images/choice_logo2.png');
     final logoData = logoImage.buffer.asUint8List();
     final resizedLogo = logoData; // Defined resizedLogo
-    var Colors_pd3 = PdfColors.black; // Defined Colors_pd3
+    var colorsPd3 = PdfColors.black; // Defined Colors_pd3
     final iconImage =
         (await rootBundle.load('images/LOGO.png')).buffer.asUint8List();
     final ByteData image = await rootBundle.load('images/image7-11.png');
-    final ByteData BG_PDF = await rootBundle.load('images/Choice_BG_PDF.png');
-    final ByteData LG_PDF = await rootBundle.load('images/choice_logo2.png');
+    final ByteData bgPdf = await rootBundle.load('images/Choice_BG_PDF.png');
+    final ByteData lgPdf = await rootBundle.load('images/choice_logo2.png');
     Uint8List imageData = (image).buffer.asUint8List();
-    Uint8List imageBG = (BG_PDF).buffer.asUint8List();
-    Uint8List imageLG = (LG_PDF).buffer.asUint8List();
+    Uint8List imageBG = (bgPdf).buffer.asUint8List();
+    Uint8List imageLG = (lgPdf).buffer.asUint8List();
+    int cbCount = 0;
     DateTime now = DateTime.now();
     String dateNowStr =
         '${now.day} ${DateFormat('MMMM', 'th').format(now)} ${now.year + 543}';
 
-    String ccDateStr = '-';
-    if (cc_date != null && cc_date.toString() != '0000-00-00') {
-      DateTime ccDate = DateTime.parse(cc_date.toString());
-      ccDateStr =
-          '${ccDate.day} ${DateFormat('MMMM', 'th').format(ccDate)} ${ccDate.year + 543}';
+    String strCcDate = '-';
+    String strCcxdate = '-';
+
+    DateTime? parseDateRobust(String? dateStr) {
+      if (dateStr == null ||
+          dateStr.trim() == '0000-00-00' ||
+          dateStr.trim() == '-' ||
+          dateStr.trim().isEmpty) return null;
+      dateStr = dateStr.trim();
+      try {
+        return DateTime.parse(dateStr);
+      } catch (e) {
+        try {
+          return DateFormat('dd-MM-yyyy').parse(dateStr);
+        } catch (e2) {
+          try {
+            return DateFormat('dd/MM/yyyy').parse(dateStr);
+          } catch (e3) {
+            return null;
+          }
+        }
+      }
+    }
+
+    final parsedCcDate = parseDateRobust(cc_date?.toString());
+    if (parsedCcDate != null) {
+      strCcDate =
+          '${parsedCcDate.day} ${DateFormat('MMMM', 'th').format(parsedCcDate)} ${parsedCcDate.year + 543}';
+    }
+
+    final parsedCcxdate = parseDateRobust(datex_cc_date?.toString());
+    if (parsedCcxdate != null) {
+      strCcxdate =
+          '${parsedCcxdate.day} ${DateFormat('MMMM', 'th').format(parsedCcxdate)} ${parsedCcxdate.year + 543}';
     }
     double widths = PdfPageFormat.a4.width;
 
@@ -152,7 +265,7 @@ class Pdfgen_Cancell_Agreement_Choice {
       required int flex,
       PdfColor? color,
     }) {
-      var Colors_pd = PdfColors.black;
+      var colorsPd = PdfColors.black;
 
       return pw.Expanded(
           flex: flex,
@@ -160,7 +273,7 @@ class Pdfgen_Cancell_Agreement_Choice {
             decoration: pw.BoxDecoration(
               border: pw.Border(
                 bottom: pw.BorderSide(
-                  color: Colors_pd,
+                  color: colorsPd,
                   width: 0.3,
                 ),
               ),
@@ -184,21 +297,35 @@ class Pdfgen_Cancell_Agreement_Choice {
         width: 12,
         height: 12,
         decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.black, width: 1),
+          border: pw.Border.all(
+            color: PdfColors.black,
+            width: 1,
+          ),
         ),
-        alignment: pw.Alignment.center,
         child: checked
-            ? pw.Text(
-                '/',
-                style: pw.TextStyle(
-                  font: ttf,
-                  fontSize: 10,
-                  fontWeight: pw.FontWeight.bold,
+            ? pw.Center(
+                child: pw.Text(
+                  '/',
+                  style: pw.TextStyle(
+                    color: PdfColors.black,
+                    fontSize: 10,
+                  ),
                 ),
               )
             : null,
       );
     }
+
+    //   pw.Widget boxX(bool checked) {
+    //   return pw.Checkbox(
+    //     name: 'cb_${++cbCount}',
+    //     value: checked,
+    //     width: 12,
+    //     height: 12,
+    //     checkColor: PdfColors.black,
+    //     activeColor: PdfColors.white,
+    //   );
+    // }
 
     pdf.addPage(
       pw.MultiPage(
@@ -268,22 +395,22 @@ class Pdfgen_Cancell_Agreement_Choice {
                       crossAxisAlignment: pw.CrossAxisAlignment.start,
                       children: [
                         Textx(
-                          value: bill_name.toString().trim(),
+                          value: billName.toString().trim(),
                           font: ttf,
                         ), //   maxLines: 2,
                         Textx(
-                            value: bill_addr.toString().trim(),
+                            value: billAddr.toString().trim(),
                             font: ttf), //   maxLines: 3,
                         Textx(
-                            value: 'เลขประจำตัวผู้เสียภาษี : $bill_tax',
+                            value: 'เลขประจำตัวผู้เสียภาษี : $billTax',
                             font: ttf), //   maxLines: 2,
                       ],
                     ),
                   ),
                   pw.Spacer(),
-                  if (TitleType_Default_Receipt_Name != null &&
-                      TitleType_Default_Receipt_Name.toString().trim() != '' &&
-                      TitleType_Default_Receipt_Name.toString().trim() !=
+                  if (titletypeDefaultReceiptName != null &&
+                      titletypeDefaultReceiptName.toString().trim() != '' &&
+                      titletypeDefaultReceiptName.toString().trim() !=
                           'ไม่ระบุ')
                     pw.Padding(
                       padding: const pw.EdgeInsets.fromLTRB(0, 0, 10, 0),
@@ -296,23 +423,23 @@ class Pdfgen_Cancell_Agreement_Choice {
                               topRight: pw.Radius.circular(10),
                               bottomLeft: pw.Radius.circular(10),
                               bottomRight: pw.Radius.circular(10)),
-                          border: pw.Border.all(color: Colors_pd3, width: 1),
+                          border: pw.Border.all(color: colorsPd3, width: 1),
                         ),
                         padding: const pw.EdgeInsets.all(8),
                         child: pw.Center(
                           child: Textx(
-                            value: '$TitleType_Default_Receipt_Name',
+                            value: '$titletypeDefaultReceiptName',
                             // maxLines: 1, // Textx doesn't support maxLines yet, but existing code had it
                             fontSize: 20,
                             font: ttf,
-                            color: Colors_pd3,
+                            color: colorsPd3,
                           ),
                         ),
                       ),
                     ),
-                  if (TitleType_Default_Receipt_Name != null &&
-                      TitleType_Default_Receipt_Name.toString().trim() != '' &&
-                      TitleType_Default_Receipt_Name.toString().trim() !=
+                  if (titletypeDefaultReceiptName != null &&
+                      titletypeDefaultReceiptName.toString().trim() != '' &&
+                      titletypeDefaultReceiptName.toString().trim() !=
                           'ไม่ระบุ')
                     pw.Spacer(),
                 ],
@@ -321,14 +448,17 @@ class Pdfgen_Cancell_Agreement_Choice {
                 child: Textx(
                     value: 'แบบฟอร์มยกเลิกสัญญา',
                     font: ttf, //  ttf, // ttfBold,,
-                    fontSize: font_Size),
+                    fontSize: fontSize),
               ),
               pw.SizedBox(height: 10),
               pw.Row(mainAxisAlignment: pw.MainAxisAlignment.end, children: [
-                Textx(value: 'วันที่แจ้ง ', font: ttf, fontSize: font_Size),
+                Textx(value: 'วันที่แจ้ง ', font: ttf, fontSize: fontSize),
                 pw.Container(
                   width: 100,
-                  child: labeledLine(value: dateNowStr, font: ttf, flex: 1),
+                  child: labeledLine(
+                      value: strCcxdate,
+                      font: ttf,
+                      flex: 1), // cc_date ตอนที่กดบันทึก
                 ),
                 pw.Container(width: 50)
               ]),
@@ -337,11 +467,14 @@ class Pdfgen_Cancell_Agreement_Choice {
                 Textx(
                     value: 'เรื่อง     ยกเลิกสัญญา   วันที่ยกเลิกสัญญา',
                     font: ttf, // ttfBold,,
-                    fontSize: font_Size),
+                    fontSize: fontSize),
                 pw.SizedBox(width: 14),
                 pw.Container(
                   width: 100,
-                  child: labeledLine(value: ccDateStr, font: ttf, flex: 1),
+                  child: labeledLine(
+                      value: strCcDate,
+                      font: ttf,
+                      flex: 1), // cc_datex กำหนดล่วงหน้า
                 ),
               ]),
               // pw.SizedBox(height: 5),
@@ -353,114 +486,136 @@ class Pdfgen_Cancell_Agreement_Choice {
           // --- Body ---
           pw.SizedBox(height: 15),
           pw.Row(children: [
-            Textx(value: 'ชื่อผู้เช่า    ', font: ttf, fontSize: font_Size),
+            Textx(value: 'ชื่อผู้เช่า    ', font: ttf, fontSize: fontSize),
             labeledLine(
               flex: 1,
-              value: '${TeNant_bussscontact ?? "-"}',
+              value: '${tenantBussscontact ?? "-"}',
               font: ttf, // ttfBold,,
-              fontSize: font_Size,
+              fontSize: fontSize,
             ),
             Textx(
-                value: 'จำหน่ายสินค้า/ธุรกิจ  ',
-                font: ttf,
-                fontSize: font_Size),
+                value: 'จำหน่ายสินค้า/ธุรกิจ  ', font: ttf, fontSize: fontSize),
             labeledLine(
               flex: 1,
-              value: '${TeNant_typeshop ?? "-"}',
+              value: '${tenantTypeshop ?? "-"}',
               font: ttf, // ttfBold,,
-              fontSize: font_Size,
+              fontSize: fontSize,
             ),
-            Textx(value: '   เลขที่สัญญา   ', font: ttf, fontSize: font_Size),
+            Textx(value: '   เลขที่สัญญา   ', font: ttf, fontSize: fontSize),
             labeledLine(
               flex: 1,
-              value: '${TeNant_ciddoc ?? "-"}',
+              value: '${tenantCiddoc ?? "-"}',
               font: ttf, // ttfBold,,
-              fontSize: font_Size,
+              fontSize: fontSize,
             ),
           ]),
           pw.SizedBox(height: 5),
           pw.Row(children: [
-            Textx(value: 'ประเภทการเช่า    ', font: ttf, fontSize: font_Size),
-            boxX(TeNant_typeshop == 'พื้นที่หน้าร้าน'),
+            Textx(value: 'ประเภทการเช่า    ', font: ttf, fontSize: fontSize),
+            boxX(refundPayload != null
+                ? _parseBool01(refundPayload['is_type_storefront'])
+                : tenantTypeshop == 'พื้นที่หน้าร้าน'),
+            Textx(value: ' พื้นที่หน้าร้าน    ', font: ttf, fontSize: fontSize),
+            boxX(refundPayload != null
+                ? _parseBool01(refundPayload['is_type_outside_eaves'])
+                : tenantTypeshop == 'พื้นที่นอกชายคา'),
+            Textx(value: ' พื้นที่นอกชายคา    ', font: ttf, fontSize: fontSize),
+            boxX(refundPayload != null
+                ? _parseBool01(refundPayload['is_type_room'])
+                : tenantTypeshop == 'ห้องเช่า'),
+            Textx(value: ' ห้องเช่า    ', font: ttf, fontSize: fontSize),
+            boxX(refundPayload != null
+                ? _parseBool01(refundPayload['is_type_vending'])
+                : tenantTypeshop == 'เครื่องไข่หยอดเหรียญ'),
             Textx(
-                value: ' พื้นที่หน้าร้าน    ', font: ttf, fontSize: font_Size),
-            boxX(TeNant_typeshop == 'พื้นที่นอกชายคา'),
-            Textx(
-                value: ' พื้นที่นอกชายคา    ', font: ttf, fontSize: font_Size),
-            boxX(TeNant_typeshop == 'ห้องเช่า'),
-            Textx(value: ' ห้องเช่า    ', font: ttf, fontSize: font_Size),
-            boxX(TeNant_typeshop == 'เครื่องใช้หยอดเหรียญ'),
-            Textx(
-                value: ' เครื่องใช้หยอดเหรียญ    ',
+                value: ' เครื่องไข่หยอดเหรียญ    ',
                 font: ttf,
-                fontSize: font_Size),
-            boxX(TeNant_typeshop == 'เครื่องชั่งน้ำหนัก'),
+                fontSize: fontSize),
+            boxX(refundPayload != null
+                ? _parseBool01(refundPayload['is_type_scale'])
+                : tenantTypeshop == 'เครื่องชั่งน้ำหนัก'),
             Textx(
                 value: ' เครื่องชั่งน้ำหนัก    ',
                 font: ttf,
-                fontSize: font_Size),
-            // boxX(![
-            //   'พื้นที่หน้าร้าน',
-            //   'พื้นที่นอกชายคา',
-            //   'ห้องเช่า',
-            //   'เครื่องใช้หยอดเหรียญ',
-            //   'เครื่องชั่งน้ำหนัก'
-            // ].contains(TeNant_typeshop)),
-            boxX(false),
-            Textx(value: ' อื่นๆ', font: ttf, fontSize: font_Size),
-            Textx(
-                value: ' _____________________',
-                font: ttf,
-                fontSize: font_Size),
-            labeledLine(value: '-', font: ttf, flex: 1, color: PdfColors.white),
+                fontSize: fontSize),
+            boxX(refundPayload != null
+                ? (refundPayload['type_other_detail']
+                        ?.toString()
+                        .trim()
+                        .isNotEmpty ??
+                    false)
+                : false),
+            Textx(value: ' อื่นๆ', font: ttf, fontSize: fontSize),
+            labeledLine(
+              value: refundPayload != null
+                  ? (refundPayload['type_other_detail']
+                              ?.toString()
+                              .trim()
+                              .isNotEmpty ??
+                          false)
+                      ? refundPayload['type_other_detail'].toString().trim()
+                      : '-'
+                  : '-',
+              font: ttf,
+              flex: 1,
+              color: refundPayload != null
+                  ? (refundPayload['type_other_detail']
+                              ?.toString()
+                              .trim()
+                              .isNotEmpty ??
+                          false)
+                      ? PdfColors.black // ✅ มีข้อมูล = สีดำ
+                      : PdfColors.white // ✅ ไม่มีข้อมูล = สีขาว
+                  : PdfColors.white, // ✅ null = ไม่มีข้อมูล
+            ),
           ]),
           pw.SizedBox(height: 5),
           pw.Row(children: [
             Textx(
                 value: 'สถานที่เช่าร้านเซเว่น-อีเลฟเว่น สาขา   ',
                 font: ttf,
-                fontSize: font_Size),
+                fontSize: fontSize),
             labeledLine(
               flex: 1,
-              value: '${TeNant_zn ?? "-"}',
+              value: '${tenantZn ?? "-"}',
               font: ttf, // ttfBold,,
-              fontSize: font_Size,
+              fontSize: fontSize,
             ),
           ]),
           pw.SizedBox(height: 5),
           pw.Row(children: [
             pw.SizedBox(width: 50),
-            Textx(value: 'ล็อคที่   ', font: ttf, fontSize: font_Size),
+            Textx(value: 'ล็อคที่   ', font: ttf, fontSize: fontSize),
             pw.Container(
               width: 100,
               child: labeledLine(
                 flex: 1,
-                value: '${TeNant_ln ?? "-"}',
+                value: '${tenantLn ?? "-"}',
                 font: ttf, // ttfBold,,
-                fontSize: font_Size,
+                fontSize: fontSize,
               ),
             ),
-            Textx(value: '   เนื้อที่   ', font: ttf, fontSize: font_Size),
+            Textx(value: '   เนื้อที่   ', font: ttf, fontSize: fontSize),
             pw.Container(
               width: 100,
               child: labeledLine(
                 flex: 1,
-                value: '${TeNant_area ?? "-"}',
+                value: '${tenantArea ?? "-"}',
                 font: ttf, // ttfBold,,
-                fontSize: font_Size,
+                fontSize: fontSize,
               ),
             ),
-            Textx(value: '   ตร.ม.', font: ttf, fontSize: font_Size),
+            Textx(value: '   ตร.ม.', font: ttf, fontSize: fontSize),
           ]),
           pw.SizedBox(height: 5),
           pw.Row(children: [
             pw.SizedBox(width: 50),
-            Textx(value: 'อาคารเลขที่   ', font: ttf, fontSize: font_Size),
+            Textx(value: 'อาคารเลขที่   ', font: ttf, fontSize: fontSize),
             labeledLine(
               flex: 1,
-              value: '${TeNant_room_number ?? "-"}',
+              value: '${tenantRoomNumber ?? "-"}',
               font: ttf, // ttfBold,,
-              fontSize: font_Size,
+              fontSize: fontSize,
             ),
           ]),
           pw.SizedBox(height: 10),
@@ -468,12 +623,13 @@ class Pdfgen_Cancell_Agreement_Choice {
             Textx(
                 value: 'สาเหตุการยกเลิก    ',
                 font: ttf, // ttfBold,,
-                fontSize: font_Size),
+                fontSize: fontSize),
             labeledLine(
               flex: 1,
-              value: '${Formbecause_cancel ?? "-"}',
+              value:
+                  '${(cc_date_remark ?? "-").replaceAll(RegExp(r'\[.*?\]'), '')}',
               font: ttf, // ttfBold,,
-              fontSize: font_Size,
+              fontSize: fontSize,
             ),
           ]),
 
@@ -483,7 +639,7 @@ class Pdfgen_Cancell_Agreement_Choice {
               child: Textx(
                   value: 'รายละเอียดเงินประกัน',
                   font: ttf, // ttfBold,,
-                  fontSize: font_Size,
+                  fontSize: fontSize,
                   decoration: pw.TextDecoration.underline)),
           pw.SizedBox(height: 5),
 
@@ -497,32 +653,32 @@ class Pdfgen_Cancell_Agreement_Choice {
                       width: 1,
                       style: pw.BorderStyle.solid),
                   columnWidths: {
-                    0: pw.FlexColumnWidth(3),
-                    1: pw.FlexColumnWidth(2),
+                    0: const pw.FlexColumnWidth(3),
+                    1: const pw.FlexColumnWidth(2),
                   },
                   children: [
                     pw.TableRow(children: [
                       pw.Padding(
-                        padding: pw.EdgeInsets.all(4),
+                        padding: const pw.EdgeInsets.all(4),
                         child: pw.Center(
                             child: Textx(
                                 value: 'รายการ',
                                 font: ttf,
-                                fontSize: font_Size)),
+                                fontSize: fontSize)),
                       ),
                       pw.Padding(
-                        padding: pw.EdgeInsets.all(4),
+                        padding: const pw.EdgeInsets.all(4),
                         child: pw.Center(
                             child: Textx(
                                 value: 'จำนวนเงิน (ไม่รวมภาษี)',
                                 font: ttf,
-                                fontSize: font_Size)),
+                                fontSize: fontSize)),
                       ),
                     ]),
                     pw.TableRow(children: [
                       pw.Padding(
-                          padding:
-                              pw.EdgeInsets.only(left: 5, top: 4, bottom: 4),
+                          padding: const pw.EdgeInsets.only(
+                              left: 5, top: 4, bottom: 4),
                           child: pw.Row(children: [
                             // pw.Checkbox(
                             //     height: 12,
@@ -534,21 +690,21 @@ class Pdfgen_Cancell_Agreement_Choice {
                             Textx(
                                 value: ' เงินประกันการเช่า',
                                 font: ttf,
-                                fontSize: font_Size)
+                                fontSize: fontSize)
                           ])),
                       pw.Padding(
-                          padding: pw.EdgeInsets.only(top: 4, bottom: 4),
+                          padding: const pw.EdgeInsets.only(top: 4, bottom: 4),
                           child: pw.Center(
                               child: Textx(
                                   value: depositRentAmountText,
                                   align: pw.TextAlign.center,
                                   font: ttf,
-                                  fontSize: font_Size)))
+                                  fontSize: fontSize)))
                     ]),
                     pw.TableRow(children: [
                       pw.Padding(
-                          padding:
-                              pw.EdgeInsets.only(left: 5, top: 4, bottom: 4),
+                          padding: const pw.EdgeInsets.only(
+                              left: 5, top: 4, bottom: 4),
                           child: pw.Row(children: [
                             // pw.Checkbox(
                             //     height: 12,
@@ -560,51 +716,51 @@ class Pdfgen_Cancell_Agreement_Choice {
                             Textx(
                                 value: ' เงินประกันการบริการ',
                                 font: ttf,
-                                fontSize: font_Size)
+                                fontSize: fontSize)
                           ])),
                       pw.Padding(
-                          padding: pw.EdgeInsets.only(top: 4, bottom: 4),
+                          padding: const pw.EdgeInsets.only(top: 4, bottom: 4),
                           child: pw.Center(
                               child: Textx(
                                   value: depositServiceAmountText,
                                   align: pw.TextAlign.center,
                                   font: ttf,
-                                  fontSize: font_Size)))
+                                  fontSize: fontSize)))
                     ]),
                     pw.TableRow(children: [
                       pw.Padding(
-                        padding: pw.EdgeInsets.all(4),
+                        padding: const pw.EdgeInsets.all(4),
                         child: pw.Center(
                             child: Textx(
                                 value: 'รวมเงินประกันทั้งสิ้น',
                                 font: ttf,
-                                fontSize: font_Size)),
+                                fontSize: fontSize)),
                       ),
                       pw.Padding(
-                        padding: pw.EdgeInsets.all(4),
+                        padding: const pw.EdgeInsets.all(4),
                         child: pw.Center(
                             child: Textx(
                                 value: depositTotalAmountText,
                                 align: pw.TextAlign.center,
                                 font: ttf,
-                                fontSize: font_Size)),
+                                fontSize: fontSize)),
                       ),
                     ]),
                   ]),
             ),
+            // thaibaht
             pw.Expanded(
-              child: pw.Padding(
-                padding: pw.EdgeInsets.only(left: 8, bottom: 2),
-                child: pw.Align(
-                  alignment: pw.Alignment.centerLeft,
-                  child: Textx(
-                    value: depositThaiBahtText,
-                    font: ttf,
-                    fontSize: font_Size,
-                  ),
+                child: pw.Padding(
+              padding: const pw.EdgeInsets.only(left: 8, bottom: 2),
+              child: pw.Align(
+                alignment: pw.Alignment.centerLeft,
+                child: Textx(
+                  value: depositThaiBahtText,
+                  font: ttf,
+                  fontSize: fontSize,
                 ),
               ),
-            ),
+            )),
           ]),
 
           // --- Refund Options ---
@@ -612,7 +768,7 @@ class Pdfgen_Cancell_Agreement_Choice {
           Textx(
               value: 'ขอให้ทางบริษัทฯ คืนเงินประกันการเช่า โดย',
               font: ttf, // ttfBold,,
-              fontSize: font_Size),
+              fontSize: fontSize),
           pw.SizedBox(height: 5),
           pw.Row(children: [
             // pw.Checkbox(
@@ -621,13 +777,15 @@ class Pdfgen_Cancell_Agreement_Choice {
             //     activeColor: PdfColors.white,
             //     name: 'r1',
             //     value: true),
-            boxX(true),
+            boxX(refundPayload != null
+                ? _parseBool01(refundPayload['refund_cond_full'])
+                : true),
             pw.Expanded(
                 child: Textx(
                     value:
                         ' คืนเงินประกันการเช่า (กรณีผู้เช่าไม่มีค่าใช้จ่ายค้างชำระ และทำการแจ้งยกเลิกกล่าวหน้า 60 วัน)',
                     font: ttf,
-                    fontSize: font_Size)),
+                    fontSize: fontSize)),
           ]),
           pw.Row(children: [
             // pw.Checkbox(
@@ -636,13 +794,15 @@ class Pdfgen_Cancell_Agreement_Choice {
             //     activeColor: PdfColors.white,
             //     name: 'r2',
             //     value: false),
-            boxX(false),
+            boxX(refundPayload != null
+                ? _parseBool01(refundPayload['refund_cond_deduct'])
+                : false),
             pw.Expanded(
                 child: Textx(
                     value:
                         " เงินประกันหักค่าใช้จ่ายคงค้างชำระต่างๆ ทั้งหมด (ส่วนที่เหลือคืนให้กับผู้เช่า / ผู้เช่าชำระเงินส่วนเพิ่ม กรณีเงินประกัน)",
                     font: ttf,
-                    fontSize: font_Size)),
+                    fontSize: fontSize)),
           ]),
           pw.Row(children: [
             // pw.Checkbox(
@@ -651,14 +811,16 @@ class Pdfgen_Cancell_Agreement_Choice {
             //     activeColor: PdfColors.white,
             //     name: 'r3',
             //     value: false),
-            boxX(false),
+            boxX(refundPayload != null
+                ? _parseBool01(refundPayload['refund_cond_none'])
+                : false),
             Textx(
                 value: ' ไม่คืนเงินประกัน (กรณีผิดสัญญาเช่า)',
                 font: ttf,
-                fontSize: font_Size),
+                fontSize: fontSize),
           ]),
           pw.Padding(
-              padding: pw.EdgeInsets.only(left: 30),
+              padding: const pw.EdgeInsets.only(left: 30),
               child: pw.Row(children: [
                 // pw.Checkbox(
                 //     height: 12,
@@ -666,16 +828,18 @@ class Pdfgen_Cancell_Agreement_Choice {
                 //     activeColor: PdfColors.white,
                 //     name: 'r3_1',
                 //     value: false),
-                boxX(false),
+                boxX(refundPayload != null
+                    ? _parseBool01(refundPayload['reason_short_notice'])
+                    : false),
                 pw.Expanded(
                     child: Textx(
                         value:
                             ' เนื่องจาก ผู้เช่าไม่ได้ทำการแจ้งยกเลิกสัญญาล่วงหน้า 60 วัน (ตามเงื่อนไขสัญญา)',
                         font: ttf,
-                        fontSize: font_Size)),
+                        fontSize: fontSize)),
               ])),
           pw.Padding(
-              padding: pw.EdgeInsets.only(left: 30),
+              padding: const pw.EdgeInsets.only(left: 30),
               child: pw.Row(children: [
                 // pw.Checkbox(
                 //     checkColor: PdfColors.grey,
@@ -683,33 +847,35 @@ class Pdfgen_Cancell_Agreement_Choice {
                 //     height: 12,
                 //     name: 'r3_2',
                 //     value: false),
-                boxX(false),
+                boxX(refundPayload != null
+                    ? _parseBool01(refundPayload['reason_late_payment'])
+                    : false),
                 pw.Expanded(
                     child: Textx(
                         value:
                             ' เนื่องจาก ผู้เช่าชำระค่าเช่าเกินกำหนด (ตามเงื่อนไขสัญญา)',
                         font: ttf,
-                        fontSize: font_Size)),
+                        fontSize: fontSize)),
               ])),
-          pw.Row(children: [
-            // pw.Checkbox(
-            //     activeColor: PdfColors.grey, // Color when checked
-            //     checkColor: PdfColors.white, // Color of the check icon
-            //     height: 12,
-            //     name: 'r3_3',
-            //     value: false),
-            boxX(false),
-            Textx(value: ' อื่นๆ ', font: ttf, fontSize: font_Size),
-            pw.Container(
-              width: 350,
-              child: labeledLine(
-                flex: 1,
-                value: '${Formbecause_cancel ?? "-"}',
-                font: ttf, // ttfBold,,
-                fontSize: font_Size,
-              ),
-            )
-          ]),
+          // pw.Row(children: [
+          //   // pw.Checkbox(
+          //   //     activeColor: PdfColors.grey, // Color when checked
+          //   //     checkColor: PdfColors.white, // Color of the check icon
+          //   //     height: 12,
+          //   //     name: 'r3_3',
+          //   //     value: false),
+          //   boxX(false),
+          //   Textx(value: ' อื่นๆ ', font: ttf, fontSize: font_Size),
+          //   pw.Container(
+          //     width: 350,
+          //     child: labeledLine(
+          //       flex: 1,
+          //       value: '${Formbecause_cancel ?? "-"}',
+          //       font: ttf, // ttfBold,,
+          //       fontSize: font_Size,
+          //     ),
+          //   )
+          // ]),
 
           pw.SizedBox(height: 10),
           Textx(
@@ -727,9 +893,9 @@ class Pdfgen_Cancell_Agreement_Choice {
           pw.SizedBox(height: 20),
           pw.Table(
               columnWidths: {
-                0: pw.FlexColumnWidth(1),
-                1: pw.FlexColumnWidth(1),
-                2: pw.FlexColumnWidth(1),
+                0: const pw.FlexColumnWidth(1),
+                1: const pw.FlexColumnWidth(1),
+                2: const pw.FlexColumnWidth(1),
               },
               border: pw.TableBorder.all(
                   color: PdfColors.black,
@@ -739,13 +905,13 @@ class Pdfgen_Cancell_Agreement_Choice {
                 pw.TableRow(children: [
                   // -- 1. ผู้เช่า --
                   pw.Container(
-                      padding:
-                          pw.EdgeInsets.symmetric(horizontal: 25, vertical: 5),
+                      padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 25, vertical: 5),
                       child: pw.Column(children: [
                         Textx(
                             value: 'ผู้เช่า',
                             font: ttf,
-                            fontSize: font_Size,
+                            fontSize: fontSize,
                             decoration: pw.TextDecoration.underline),
                         pw.SizedBox(height: 30),
                         // pw.Divider(thickness: 0.5, color: PdfColors.black),
@@ -753,7 +919,7 @@ class Pdfgen_Cancell_Agreement_Choice {
                           Textx(
                             value: 'ลงชื่อ ',
                             font: ttf,
-                            fontSize: font_Size,
+                            fontSize: fontSize,
                           ),
                           pw.Expanded(
                             child: labeledLine(
@@ -769,33 +935,33 @@ class Pdfgen_Cancell_Agreement_Choice {
                             mainAxisAlignment: pw.MainAxisAlignment.center,
                             children: [
                               Textx(
-                                  value: '( ${TeNant_bussscontact ?? "-"} )',
+                                  value: '( ${tenantBussscontact ?? "-"} )',
                                   font: ttf,
-                                  fontSize: font_Size),
+                                  fontSize: fontSize),
                             ]),
-                        Textx(value: 'ผู้เช่า', font: ttf, fontSize: font_Size),
+                        Textx(value: 'ผู้เช่า', font: ttf, fontSize: fontSize),
                         Textx(
                             value: '........../........../..........',
                             font: ttf,
-                            fontSize: font_Size),
+                            fontSize: fontSize),
                       ])),
 
                   // -- 2. เสนอโดย --
                   pw.Container(
-                      padding:
-                          pw.EdgeInsets.symmetric(horizontal: 25, vertical: 5),
+                      padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 25, vertical: 5),
                       child: pw.Column(children: [
                         Textx(
                             value: 'เสนอโดย',
                             font: ttf,
-                            fontSize: font_Size,
+                            fontSize: fontSize,
                             decoration: pw.TextDecoration.underline),
                         pw.SizedBox(height: 30),
                         pw.Row(children: [
                           Textx(
                             value: 'ลงชื่อ ',
                             font: ttf,
-                            fontSize: font_Size,
+                            fontSize: fontSize,
                           ),
                           pw.Expanded(
                             child: labeledLine(
@@ -811,38 +977,38 @@ class Pdfgen_Cancell_Agreement_Choice {
                             mainAxisAlignment: pw.MainAxisAlignment.center,
                             children: [
                               Textx(
-                                  value: '( ${licence_name1 ?? "-"} )',
+                                  value: '( ${ucancel ?? "-"} )',
                                   font: ttf,
-                                  fontSize: font_Size),
+                                  fontSize: fontSize),
                             ]),
                         Textx(
                             value: 'แผนกบริหารพื้นที่เช่า',
                             font: ttf,
-                            fontSize: font_Size,
+                            fontSize: fontSize,
                             fontWeight: pw.FontWeight.normal),
                         Textx(
                             value: '........../........../..........',
                             font: ttf,
-                            fontSize: font_Size,
+                            fontSize: fontSize,
                             fontWeight: pw.FontWeight.normal),
                       ])),
 
                   // -- 3. อนุมัติโดย --
                   pw.Container(
-                      padding:
-                          pw.EdgeInsets.symmetric(horizontal: 25, vertical: 5),
+                      padding: const pw.EdgeInsets.symmetric(
+                          horizontal: 25, vertical: 5),
                       child: pw.Column(children: [
                         Textx(
                             value: 'อนุมัติโดย',
                             font: ttf,
-                            fontSize: font_Size,
+                            fontSize: fontSize,
                             decoration: pw.TextDecoration.underline),
                         pw.SizedBox(height: 30),
                         pw.Row(children: [
                           Textx(
                             value: 'ลงชื่อ ',
                             font: ttf,
-                            fontSize: font_Size,
+                            fontSize: fontSize,
                           ),
                           pw.Expanded(
                             child: labeledLine(
@@ -860,17 +1026,17 @@ class Pdfgen_Cancell_Agreement_Choice {
                               Textx(
                                   value: '( เกศแก้ว สุภา )',
                                   font: ttf,
-                                  fontSize: font_Size),
+                                  fontSize: fontSize),
                               // pw.Spacer(),
                             ]),
                         Textx(
                             value: 'ผู้จัดการทั่วไป สายงานพัฒนาธุรกิจ',
                             font: ttf,
-                            fontSize: font_Size),
+                            fontSize: fontSize),
                         Textx(
                             value: '........../........../..........',
                             font: ttf,
-                            fontSize: font_Size),
+                            fontSize: fontSize),
                       ])),
                 ]),
               ]),
@@ -1018,8 +1184,8 @@ class Pdfgen_Cancell_Agreement_Choice {
                         "CHOICE MINI STORE CO., LTD. 7/11 VILLAGE NO.5, THA SALA SUB-DISTRICT, MUEANG CHIANG MAI DISTRICT, CHIANG MAI PROVINCE 50000",
                         textAlign: pw.TextAlign.left,
                         style: pw.TextStyle(
-                          color: Colors_pd,
-                          fontSize: font_Size - 4,
+                          color: colorsPd,
+                          fontSize: fontSize - 4,
                           fontWeight: pw.FontWeight.bold,
                           font: ttf,
                         ),
@@ -1036,8 +1202,8 @@ class Pdfgen_Cancell_Agreement_Choice {
                       textAlign: pw.TextAlign.center,
                       style: pw.TextStyle(
                         fontWeight: pw.FontWeight.bold,
-                        color: Colors_pd,
-                        fontSize: font_Size - 4,
+                        color: colorsPd,
+                        fontSize: fontSize - 4,
                         font: ttf,
                       ),
                     ),
@@ -1053,7 +1219,7 @@ class Pdfgen_Cancell_Agreement_Choice {
         context,
         MaterialPageRoute(
           builder: (context) => PreviewPdfgen_Billsplay(
-              doc: pdf, title: 'ใบยกเลิกสัญญาเช่า($TeNant_ciddoc)'),
+              doc: pdf, title: 'ใบยกเลิกสัญญาเช่า($tenantCiddoc)'),
         ));
     // Printing.layoutPdf(
     //   onLayout: (PdfPageFormat format) async => pdf.save(),
