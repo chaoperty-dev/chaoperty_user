@@ -286,9 +286,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (url.isEmpty) {
       url = Uri.decodeFull(Uri.base.toString());
     }
-
+     int index = url.indexOf('userWeb=');
     try {
-      int index = url.indexOf('userWeb=');
+ 
       int index2 = url.indexOf('username=');
       int index3 = url.indexOf('passwd=');
       int index4 = url.indexOf('serrental=');

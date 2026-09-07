@@ -6422,8 +6422,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       'paymentNote': Form_paymentNote.text.trim(),
     };
 
-    var uri = Uri.parse('${MyConstant().domain_chao}/In_tran_financet_User.php')
-        .replace(queryParameters: queryParams);
+    var uri =
+        Uri.parse('${MyConstant().domain_chao}/In_tran_financet_UserTest.php')
+            .replace(queryParameters: queryParams);
 
     // print('Generated URL: $uri');
     return uri.toString();
@@ -6537,8 +6538,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       'paymentnote': Form_paymentNote.text.trim(),
     };
 
-    var uri = Uri.parse('${MyConstant().domain_chao}/In_tran_financet_User.php')
-        .replace(queryParameters: queryParams);
+    var uri =
+        Uri.parse('${MyConstant().domain_chao}/In_tran_financet_UserTest.php')
+            .replace(queryParameters: queryParams);
     // print(queryParams);
     print('paybyselect url $uri ');
 
