@@ -82,6 +82,21 @@ class _PaymentSubV4View extends StatelessWidget {
       );
     }
 
+    // ฟัง UI Event เพื่อแสดง SnackBar อัตโนมัติ (Consume ครั้งเดียว)
+    if (state.uiEvent != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(state.uiEvent!.message),
+            backgroundColor:
+                state.uiEvent!.isError ? Colors.red : Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        vm.consumeEvent(state.uiEvent!.id);
+      });
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
