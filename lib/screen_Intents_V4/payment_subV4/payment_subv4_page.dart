@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chaoperty_user/Model/GetTeNant_Model.dart';
 import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
+import 'package:chaoperty_user/color.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/payment_subv4_view_model.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_header.dart';
@@ -143,6 +144,32 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
                 qrState: state.qrState,
                 totalSeconds: vm.sessionTotalSecs,
                 isEn: isEn,
+              ),
+            if (state.qrState.status == QrStatus.active)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: state.operation == PaymentOperation.none
+                          ? () => _confirmCancelPayment(isEn)
+                          : null,
+                      icon: const Icon(Icons.cancel_outlined, size: 16),
+                      label: Text(
+                        isEn ? 'Cancel payment' : 'ยกเลิกรายการชำระ',
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red.shade700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             Expanded(
               child: SingleChildScrollView(
@@ -313,6 +340,21 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
       slip: vm.state.slipState,
       onConfirm: () async {
         await vm.uploadSlip();
+      },
+    );
+  }
+
+  /// ยืนยันยกเลิกรายการชำระเงิน
+  Future<void> _confirmCancelPayment(bool isEn) async {
+    final vm = context.read<PaymentSubV4ViewModel>();
+    final hasSlip = vm.state.slipState.slipBytes != null;
+
+    await PaymentSubV4Dialogs.showCancelPayment(
+      context,
+      isEn: isEn,
+      hasSlip: hasSlip,
+      onConfirmCancel: () async {
+        await vm.cancelPayment();
       },
     );
   }

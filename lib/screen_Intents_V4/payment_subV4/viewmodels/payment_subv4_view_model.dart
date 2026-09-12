@@ -35,6 +35,39 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// resolve intent ที่ caller ต้องการเปิด
+  /// ลำดับ: intentUuid → paymentIntentNo → selectedDocNos เทียบ billReference
+  /// คืน list ว่าง = ไม่ได้มาจาก intent card
+  List<PaymentIntent> _resolveTargetIntents(List<PaymentIntent> intents) {
+    final wantUuid = (params.targetIntentUuid ?? '').trim();
+    if (wantUuid.isNotEmpty) {
+      final hit = intents
+          .where((p) => (p.intentUuid ?? '').trim() == wantUuid)
+          .toList();
+      if (hit.isNotEmpty) return hit;
+    }
+
+    final wantNo = (params.targetPaymentIntentNo ?? '').trim();
+    if (wantNo.isNotEmpty) {
+      final hit = intents
+          .where((p) => (p.paymentIntentNo ?? '').trim() == wantNo)
+          .toList();
+      if (hit.isNotEmpty) return hit;
+    }
+
+    final docNos = params.selectedDocNos;
+    if (docNos != null && docNos.isNotEmpty) {
+      return intents.where((p) {
+        return p.invoices.any((inv) {
+          final ref = (inv.billReference ?? '').trim();
+          return ref.isNotEmpty && docNos.contains(ref);
+        });
+      }).toList();
+    }
+
+    return const [];
+  }
+
   /// Initial Load
   Future<void> initialize() async {
     _updateState(_state.copyWith(
@@ -140,20 +173,24 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       // 7. คำนวณยอดเงินรวม
       final summary = _calculateSummary(payableInvoices, selectedPay);
 
-      // 8. Auto-Switch แท็บ
+      // 8. Auto-Switch แท็บ (ใช้เฉพาะ intent ที่ caller ระบุ เมื่อมี)
+      final targetIntents = _resolveTargetIntents(intents);
+      final cameFromIntent = targetIntents.isNotEmpty;
+
       int targetTab = _state.selectedTab;
       if (!_state.hasAutoSwitched) {
-        if (params.fromIntent) {
-          final awaitingVerify = intents.any((p) =>
+        if (cameFromIntent) {
+          // ลำดับความสำคัญ: สถานะ intent มาก่อน เพราะผู้ใช้กดมาจาก intent card
+          final hasVerify = targetIntents.any((p) =>
               PaymentSubV4State.classifyIntentStatus(p) ==
               NormalizedIntentStatus.awaitingVerification);
-          final awaitingSlip = intents.any((p) =>
+          final hasSlip = targetIntents.any((p) =>
               PaymentSubV4State.classifyIntentStatus(p) ==
               NormalizedIntentStatus.awaitingSlip);
 
-          if (awaitingVerify) {
+          if (hasVerify) {
             targetTab = 3;
-          } else if (awaitingSlip) {
+          } else if (hasSlip) {
             targetTab = 2;
           } else {
             targetTab = 1;
@@ -178,6 +215,9 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         }
       }
 
+      // ผูก intent เป้าหมายไว้ล่วงหน้า เพื่อให้แนบสลิปถูกใบ
+      final preTarget = targetIntents.length == 1 ? targetIntents.first : null;
+
       _updateState(_state.copyWith(
         pageStatus: PageStatus.ready,
         authValid: isAuthOk,
@@ -192,6 +232,10 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         summary: summary,
         selectedTab: targetTab,
         hasAutoSwitched: true,
+        uploadTargetUuid: preTarget?.intentUuid,
+        uploadTargetAmount: preTarget == null
+            ? null
+            : Money.fromDouble(preTarget.amount ?? preTarget.requestedAmount),
       ));
     } catch (e) {
       debugPrint('❌ initialize error: $e');
@@ -524,16 +568,32 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
 
   /// ยกเลิกการชำระเงิน Intent
   Future<bool> cancelPayment() async {
-    final uuid = _state.qrState.intentUuid;
-    if (uuid == null || uuid.isEmpty) return false;
+    final uuid = _state.uploadTargetUuid ?? _state.qrState.intentUuid;
+    if (uuid == null || uuid.isEmpty) {
+      _updateState(_state.copyWith(
+        uiEvent: const PaymentUiEvent(
+          id: 'cancel_no_target',
+          message: 'ไม่พบรายการชำระเงินที่ต้องการยกเลิก',
+          isError: true,
+        ),
+      ));
+      return false;
+    }
 
     _updateState(_state.copyWith(operation: PaymentOperation.cancelling));
 
     final prefs = await SharedPreferences.getInstance();
     final ren = (prefs.getString('renTalSer') ?? '').trim();
     final custno = (prefs.getString('custno') ?? '').trim();
-    final bankId =
-        int.tryParse(_state.selectedPaymentModel?.ser ?? '') ?? 0;
+
+    // ใช้ bank id จาก intent ที่กำลังยกเลิก ถ้าหาไม่ได้จึง fallback เป็นบัญชีที่เลือก
+    var bankId = int.tryParse(_state.selectedPaymentModel?.ser ?? '') ?? 0;
+    try {
+      final target = _state.paymentIntents.firstWhere(
+        (p) => (p.intentUuid ?? '') == uuid,
+      );
+      bankId = target.bankmerchantid ?? bankId;
+    } catch (_) {}
 
     final success = await _service.cancelPaymentIntent(
       cusNo: custno,
@@ -542,19 +602,30 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       bankMerchantId: bankId,
     );
 
+    if (success) {
+      _updateState(_state.copyWith(
+        operation: PaymentOperation.none,
+        clearUploadTarget: true,
+        qrState: const PaymentQrState(),
+        slipState: const PaymentSlipState(),
+        uiEvent: const PaymentUiEvent(
+          id: 'cancel_intent_success',
+          message: 'ยกเลิกรายการชำระเงินสำเร็จ',
+        ),
+      ));
+      await initialize();
+      return true;
+    }
+
     _updateState(_state.copyWith(
       operation: PaymentOperation.none,
-      uiEvent: PaymentUiEvent(
-        id: 'cancel_intent',
-        message: success ? 'ยกเลิกรายการสำเร็จ' : 'ยกเลิกรายการไม่สำเร็จ',
-        isError: !success,
+      uiEvent: const PaymentUiEvent(
+        id: 'cancel_intent_fail',
+        message: 'ยกเลิกรายการไม่สำเร็จ กรุณาลองใหม่',
+        isError: true,
       ),
     ));
-
-    if (success) {
-      await initialize();
-    }
-    return success;
+    return false;
   }
 
   /// เคลียร์ UI Event เมื่อแสดงผลแล้ว
