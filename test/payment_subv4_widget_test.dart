@@ -5,6 +5,7 @@ import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/payment_subv4_page.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/payment_subv4_view_model.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_instructions_card.dart';
 
 const _params = PaymentSubV4Params(customerLanguage: 'TH', paymentSerial: '1');
 
@@ -266,8 +267,18 @@ void main() {
       await tester.pump();
 
       expect(find.text('วิธีชำระเงินง่ายๆ 4 ขั้นตอน'), findsOneWidget);
+
+      // scope ให้อยู่ใน instructions card เท่านั้น
+      // เพราะเลขขั้นตอนชนกับ badge ของแท็บได้ (เช่น "1" ของ "ที่ต้องชำระ")
+      final card = find.byType(PaymentSubV4InstructionsCard);
+      expect(card, findsOneWidget);
+
       for (final n in ['1', '2', '3', '4']) {
-        expect(find.text(n), findsOneWidget);
+        expect(
+          find.descendant(of: card, matching: find.text(n)),
+          findsOneWidget,
+          reason: 'step $n should appear exactly once inside the card',
+        );
       }
     });
   });
