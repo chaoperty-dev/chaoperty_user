@@ -50,6 +50,7 @@ IntentsInvoiceHistoryModel _hist({
   String? aser,
   String? ln,
   String? date,
+  String? disendbill,
 }) {
   final m = IntentsInvoiceHistoryModel();
   m.refno = refno;
@@ -70,6 +71,7 @@ IntentsInvoiceHistoryModel _hist({
   m.aser = aser;
   m.ln = ln;
   m.date = date;
+  m.disendbill = disendbill;
   return m;
 }
 
@@ -363,6 +365,33 @@ void main() {
         disSumPakan: 0,
       );
       expect(total, 0.3);
+    });
+
+    test('legacySumDisIn is always zero', () {
+      expect(PaymentIntentPayload.legacySumDisIn, 0.0);
+    });
+  });
+
+  group('legacyLastDiscount', () {
+    test('returns the last row discount, not the sum', () {
+      // ต้นแบบใช้ assignment จึงได้ค่าของแถวสุดท้าย (=100) ไม่ใช่ 50+100
+      final v = PaymentIntentPayload.legacyLastDiscount([
+        _hist(refno: 'R1', disendbill: '50'),
+        _hist(refno: 'R2', disendbill: '100'),
+      ]);
+      expect(v, 100.0);
+    });
+
+    test('empty history yields zero', () {
+      expect(PaymentIntentPayload.legacyLastDiscount([]), 0.0);
+    });
+
+    test('null discount on last row yields zero', () {
+      final v = PaymentIntentPayload.legacyLastDiscount([
+        _hist(refno: 'R1', disendbill: '50'),
+        _hist(refno: 'R2'),
+      ]);
+      expect(v, 0.0);
     });
   });
 

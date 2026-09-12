@@ -36,7 +36,15 @@ class PaymentIntentPayload {
   }
 
   /// ยอดรวมปลายทางตามสูตรต้นแบบ
-  /// sumPvat + sumTranFine + sumAmtIn + sumTranFineIn - sumDiscount - fineTotal
+  ///
+  /// `sumPvat + sumTranFine - disSumPakan - (sumDiscount + sumDisIn)
+  ///  + (sumAmtIn + sumTranFineIn) + fineTotal`
+  ///
+  /// หมายเหตุความต่างจากต้นแบบ (ตั้งใจ ไม่ replicate):
+  /// - ต้นแบบใช้ `sum_disamt = disendbill` เป็น **assignment** (บิลสุดท้ายทับ) ซึ่งเป็น bug
+  ///   เมื่อมีหลายใบ ที่นี่รับค่าที่ผู้เรียกเตรียมมาแล้ว จึงคิดเป็นยอดรวมได้ตรงจริง
+  /// - ต้นแบบบวก `sum_pvat + sum_tran_fine` ใน setState ที่เรียก async โดยไม่ await
+  ///   ค่าจึงขึ้นกับ race ที่อ่านไม่ซ้ำได้ ที่นี่บวกทั้งสองก้อนตรง ๆ แบบ deterministic
   static double requestedTotal({
     required double sumPvat,
     required double sumTranFine,
@@ -55,6 +63,19 @@ class PaymentIntentPayload {
         fineTotal;
     return _d2(v);
   }
+
+  /// ค่าที่ต้องใช้คิด `sumDiscount` ตามความหมายของต้นแบบ
+  ///
+  /// ต้นแบบเขียน `sum_disamt = double.parse(disendbill)` ในลูป จึงได้ค่าของ
+  /// invoice history แถว **สุดท้าย** ไม่ใช่ผลรวม — ฟังก์ชันนี้ทำแบบเดียวกัน
+  /// เพื่อให้ยอดตรงกับที่ server เคยเห็น แต่ระบุชัดว่าเป็นพฤติกรรมที่สืบทอดมา
+  static double legacyLastDiscount(List<IntentsInvoiceHistoryModel> history) {
+    if (history.isEmpty) return 0.0;
+    return _d(history.last.disendbill);
+  }
+
+  /// `sum_disamt_in` ในต้นแบบไม่เคยถูกกำหนดค่านอกการ reset จึงเป็น 0 เสมอ
+  static const double legacySumDisIn = 0.0;
 
   /// metadata ต่อ invoice — สร้างจาก invoice history ของบิลนั้น
   static List<Map<String, dynamic>> buildMetadata({

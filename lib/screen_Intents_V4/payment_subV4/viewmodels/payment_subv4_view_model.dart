@@ -514,13 +514,15 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       }
       sumTranFineIn = sumInvoiceFine;
 
+      // sumDisIn / disSumPakan เป็น 0 ในต้นแบบตลอด (ดูหมายเหตุใน payment_intent_payload)
+      // sumDiscount ใช้ค่าตามความหมายเดิมของต้นแบบ คือ disendbill ของ history แถวสุดท้าย
       final requestedTotal = PaymentIntentPayload.requestedTotal(
         sumPvat: sumPvat,
         sumTranFine: sumTranFine,
         sumAmtIn: sumAmtIn,
         sumTranFineIn: sumTranFineIn,
-        sumDiscount: _state.summary.discountTotal.toDouble(),
-        sumDisIn: 0,
+        sumDiscount: PaymentIntentPayload.legacyLastDiscount(allTrans),
+        sumDisIn: PaymentIntentPayload.legacySumDisIn,
         fineTotal: _state.summary.fineTotal.toDouble(),
         disSumPakan: 0,
       );
