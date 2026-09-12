@@ -6,7 +6,9 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/paymen
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_header.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_tabs.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_payment_card.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_qr_box.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/platform/payment_subv4_slip_picker.dart';
 
 /// Entry page รองรับทั้ง Parameter เก่าและใหม่ เพื่อ Parity
 class PaymentSubV4Page extends StatelessWidget {
@@ -105,6 +107,40 @@ class _PaymentSubV4View extends StatelessWidget {
                       summary: state.summary,
                       qrState: state.qrState,
                     ),
+                    if (state.qrState.status == QrStatus.active)
+                      PaymentSubV4QrBox(
+                        qrState: state.qrState,
+                        summary: state.summary,
+                        onRenewQr: () => vm.createPaymentIntent(),
+                      ),
+                    if (state.slipState.slipBytes != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Colors.green),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                state.slipState.fileName ?? 'แนบสลิปแล้ว',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: () => vm.clearSlip(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
                     if (state.selectedTab == 1) ...[
                       if (state.invoices.isEmpty)
@@ -147,8 +183,23 @@ class _PaymentSubV4View extends StatelessWidget {
               PaymentSubV4BottomAction(
                 summary: state.summary,
                 operation: state.operation,
-                onActionPressed: () {
-                  // Action trigger
+                label: state.qrState.status == QrStatus.active
+                    ? 'กดเพื่อ "แนบหลักฐานและยืนยัน"'
+                    : 'กดเพื่อ "เริ่มการชำระ"',
+                onActionPressed: () async {
+                  if (state.qrState.status == QrStatus.active) {
+                    final slip = await PaymentSubV4SlipPicker.pickAndCompressImage();
+                    if (slip != null) {
+                      vm.setSlip(
+                        bytes: slip.bytes,
+                        fileName: slip.fileName,
+                        mimeType: slip.mimeType,
+                      );
+                      await vm.uploadSlip();
+                    }
+                  } else {
+                    await vm.createPaymentIntent();
+                  }
                 },
               ),
           ],

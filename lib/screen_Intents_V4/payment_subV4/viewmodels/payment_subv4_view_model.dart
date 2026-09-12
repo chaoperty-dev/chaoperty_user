@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:chaoperty_user/CRC_16_Prompay/generate_qrcode.dart';
+import 'package:chaoperty_user/CRC_16_Prompay/generate_Ewallet_qrcode.dart';
 import 'package:chaoperty_user/Model/GetInvoice_Model.dart';
 import 'package:chaoperty_user/Model/GetPayMent_Model.dart';
 import 'package:chaoperty_user/Model/GetRenTal_Model.dart';
@@ -230,6 +232,140 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       fineTotal: Money(fineSatang),
       grandTotal: Money(grandTotalSatang > 0 ? grandTotalSatang : 0),
     );
+  }
+
+  /// สร้าง Payment Intent และเริ่ม QR Code
+  Future<bool> createPaymentIntent() async {
+    if (_state.summary.grandTotal.isZero || _state.summary.grandTotal.isNegative) {
+      _updateState(_state.copyWith(
+        uiEvent: const PaymentUiEvent(
+          id: 'invalid_amount',
+          message: 'ยอดเงินไม่ถูกต้อง',
+          isError: true,
+        ),
+      ));
+      return false;
+    }
+
+    final payModel = _state.selectedPaymentModel;
+    if (payModel == null) {
+      _updateState(_state.copyWith(
+        uiEvent: const PaymentUiEvent(
+          id: 'no_payment_method',
+          message: 'กรุณาเลือกช่องทางการชำระเงิน',
+          isError: true,
+        ),
+      ));
+      return false;
+    }
+
+    _updateState(_state.copyWith(operation: PaymentOperation.creatingIntent));
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ren = (prefs.getString('renTalSer') ?? '').trim();
+      final custno = (prefs.getString('custno') ?? '').trim();
+      final payser = int.tryParse(payModel.ser ?? '') ?? 0;
+      final typepayser = int.tryParse(payModel.ptser ?? '') ?? 0;
+
+      final List<Map<String, dynamic>> inVoicesPayload = [];
+      for (final inv in _state.invoices) {
+        final docno = inv.docno ?? '';
+        final amt = Money.parse(inv.amtall).toDouble();
+        final dis = Money.parse(inv.disendbill).toDouble();
+
+        inVoicesPayload.add({
+          "invoice_id": 0,
+          "bill_reference": docno,
+          "amount": amt,
+          "late_fee": 0.0,
+          "discount_amount": dis,
+          "deposit_amount": 0.0,
+          "insurance_amount": 0.0,
+          "withholding_amount": 0.0,
+          "total": amt,
+          "list_fee": [],
+          "metadata": [],
+        });
+      }
+
+      final res = await _service.createPaymentIntent(
+        cusNo: custno,
+        propertyNo: ren,
+        payser: payser,
+        typepayser: typepayser,
+        requestedTotal: _state.summary.grandTotal.toDouble(),
+        lateFee: _state.summary.fineTotal.toDouble(),
+        discountAmount: _state.summary.discountTotal.toDouble(),
+        inVoices: inVoicesPayload,
+        transSelect: [],
+        payBno: payModel.bno ?? '',
+        payBname: payModel.bname ?? '',
+        payBnameEn: payModel.bnameEn ?? '',
+        payBankNcode: payModel.bankNcode ?? '',
+        payPaytypeNcode: payModel.paytypeNcode ?? '',
+        customerData: [],
+      );
+
+      if (res != null) {
+        final uuid = (res['uuid'] ?? res['intent_uuid'] ?? '').toString();
+        final ref1 = (res['ref1'] ?? '').toString();
+        final ref2 = (res['ref2'] ?? '').toString();
+        final ref3 = (res['ref3'] ?? '').toString();
+        final softExpireAt = (res['soft_expire_at'] ?? '').toString();
+
+        // คำนวณ Payload QR Code
+        final ptser = payModel.ptser ?? '';
+        final bno = payModel.bno ?? '';
+        final amtVal = _state.summary.grandTotal.toDouble();
+        final amtRaw = amtVal.toStringAsFixed(2);
+
+        String qrPayload = '';
+        if (ptser == '7') {
+          qrPayload = (res['payload'] ?? '').toString();
+        } else if (ptser == '6') {
+          qrPayload = '|$bno\r$ref1\r$ref2\r${amtRaw.replaceAll('.', '')}';
+        } else if (ptser == '5') {
+          qrPayload = generateQRCode(promptPayID: bno, amount: amtVal);
+        } else if (ptser == '11') {
+          qrPayload = generateEwalletQRCode(promptPayID: bno, amount: amtVal);
+        } else if (ptser == '2') {
+          qrPayload = payModel.img ?? '';
+        }
+
+        startQrCountdown(softExpireAt);
+
+        _updateState(_state.copyWith(
+          operation: PaymentOperation.none,
+          qrState: PaymentQrState(
+            status: QrStatus.active,
+            intentUuid: uuid,
+            ref1: ref1,
+            ref2: ref2,
+            ref3: ref3,
+            qrPayload: qrPayload,
+            softExpireAt: softExpireAt,
+          ),
+          uiEvent: const PaymentUiEvent(
+            id: 'create_intent_success',
+            message: 'สร้าง QR Code สำเร็จ',
+          ),
+        ));
+        return true;
+      }
+    } catch (e) {
+      debugPrint('❌ createPaymentIntent error: $e');
+    }
+
+    _updateState(_state.copyWith(
+      operation: PaymentOperation.none,
+      uiEvent: const PaymentUiEvent(
+        id: 'create_intent_fail',
+        message: 'สร้าง QR Code ล้มเหลว กรุณาลองใหม่อีกครั้ง',
+        isError: true,
+      ),
+    ));
+    return false;
   }
 
   /// สลับแท็บ
