@@ -1,0 +1,159 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:chaoperty_user/Model/GetTeNant_Model.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/payment_subv4_view_model.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_header.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_tabs.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_payment_card.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
+
+/// Entry page รองรับทั้ง Parameter เก่าและใหม่ เพื่อ Parity
+class PaymentSubV4Page extends StatelessWidget {
+  const PaymentSubV4Page({
+    Key? key,
+    this.mainScreenAnimationController,
+    this.mainScreenAnimation,
+    this.teNantModel,
+    this.cuslang,
+    this.serPayment,
+    this.serptPayment,
+    this.selectedDocNos,
+    this.fromIntent = false,
+    this.targetIntentUuid,
+    this.targetPaymentIntentNo,
+  }) : super(key: key);
+
+  final AnimationController? mainScreenAnimationController;
+  final Animation<double>? mainScreenAnimation;
+  final List<TeNantModel>? teNantModel;
+  final String? cuslang;
+  final String? serPayment;
+  final String? serptPayment;
+  final List<String>? selectedDocNos;
+  final bool fromIntent;
+  final String? targetIntentUuid;
+  final String? targetPaymentIntentNo;
+
+  @override
+  Widget build(BuildContext context) {
+    final params = PaymentSubV4Params(
+      tenants: teNantModel,
+      customerLanguage: cuslang,
+      paymentSerial: serPayment,
+      paymentTypeSerial: serptPayment,
+      selectedDocNos: selectedDocNos,
+      fromIntent: fromIntent,
+      targetIntentUuid: targetIntentUuid,
+      targetPaymentIntentNo: targetPaymentIntentNo,
+    );
+
+    return ChangeNotifierProvider(
+      create: (_) => PaymentSubV4ViewModel(params: params)..initialize(),
+      child: const _PaymentSubV4View(),
+    );
+  }
+}
+
+class _PaymentSubV4View extends StatelessWidget {
+  const _PaymentSubV4View();
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<PaymentSubV4ViewModel>();
+    final state = vm.state;
+
+    if (state.pageStatus == PageStatus.loading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFF2F3F8),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (state.pageStatus == PageStatus.error) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('ข้อผิดพลาด')),
+        body: Center(
+          child: Text(state.errorMessage ?? 'เกิดข้อผิดพลาดในการโหลดข้อมูล'),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF1F5F9),
+      body: SafeArea(
+        child: Column(
+          children: [
+            PaymentSubV4Header(
+              title: vm.params.customerLanguage == 'EN' ? 'Payment' : 'การชำระ',
+              onBack: () => Navigator.of(context).pop(),
+            ),
+            PaymentSubV4Tabs(
+              selectedTab: state.selectedTab,
+              countPayable: state.invoices.length,
+              countAwaitingSlip: state.countAwaitingSlip,
+              countAwaitingVerify: state.countAwaitingVerify,
+              onTabSelected: (tab) => vm.selectTab(tab),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    PaymentSubV4PaymentCard(
+                      paymentModel: state.selectedPaymentModel,
+                      summary: state.summary,
+                      qrState: state.qrState,
+                    ),
+                    const SizedBox(height: 16),
+                    if (state.selectedTab == 1) ...[
+                      if (state.invoices.isEmpty)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Text('ไม่มีรายการที่ต้องชำระ'),
+                          ),
+                        )
+                      else
+                        ...state.invoices.map(
+                          (inv) => Card(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            child: ListTile(
+                              title: Text(inv.docno ?? '-'),
+                              trailing: Text('${inv.amtall ?? 0} บาท'),
+                            ),
+                          ),
+                        ),
+                    ] else if (state.selectedTab == 2) ...[
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32),
+                          child: Text('รายการรอแนบหลักฐาน'),
+                        ),
+                      ),
+                    ] else if (state.selectedTab == 3) ...[
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32),
+                          child: Text('รายการรอระบบตรวจสอบ'),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            if (state.selectedTab == 1 && state.invoices.isNotEmpty)
+              PaymentSubV4BottomAction(
+                summary: state.summary,
+                operation: state.operation,
+                onActionPressed: () {
+                  // Action trigger
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
