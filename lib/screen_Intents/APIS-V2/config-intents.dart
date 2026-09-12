@@ -74,8 +74,6 @@ class MyHeadersIntents {
     debugPrint('🔑 Refreshing token before API call...');
     final token = await _refreshCustomerToken() ?? ApiSession.bearerToken;
     debugPrint('🔑 MyHeadersIntents.build() - Token length: ${token.length}');
-    debugPrint(
-        '🔑 Token starts with: ${token.isNotEmpty ? token.substring(0, min(50, token.length)) : "EMPTY"}...');
 
     final headers = {
       'Accept': 'application/json',
@@ -84,7 +82,7 @@ class MyHeadersIntents {
       'Authorization': 'Bearer $token',
     };
 
-    debugPrint('📤 Headers: $headers');
+    debugPrint('📤 Headers prepared (Auth token attached)');
     return headers;
   }
 

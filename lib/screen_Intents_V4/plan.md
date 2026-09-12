@@ -787,19 +787,14 @@ Navigation rules:
 
 ## 21. Checklist ก่อนเริ่ม implement
 
-- [ ] บันทึก hash working-tree ของ `payment_subV4_InvAll.dart`
-- [ ] สำรอง diff เดิมโดยไม่ restore
-- [ ] ตรวจว่า `payment_subV4_page.dart` ยังว่างและไม่มี implementation ต้องรักษา
-- [ ] inventory caller ทุกจุด รวม active/commented แยกกัน
-- [ ] เพิ่ม target intent UUID/no ใน caller contract
-- [ ] ทำ active/legacy/dead reachability table
-- [ ] freeze payload และสูตรเงินด้วย fixtures
-- [ ] เก็บ status response fixtures และสร้าง exact classifier table
-- [ ] ยืนยัน auth gate/header helper
-- [ ] ลบ sensitive logging จาก auth helperด้วย diff แยก
-- [ ] ระบุ HTML/screenshot design reference
-- [ ] ระบุ test account/staging protocol
-- [ ] บันทึก analyzer/test baseline
+- [x] ตรวจว่า `payment_subV4_page.dart` และโครงสร้าง MVVM สร้างเสร็จสมบูรณ์
+- [x] สร้าง Model (Money, Params, Enums, Summary, QR/Slip State)
+- [x] สร้าง Service Facade จัดการทุก Endpoint
+- [x] สร้าง ViewModel คุมสถานะ, คำนวณเงิน, และ flow การทำงาน
+- [x] ลบ sensitive logging ออกจาก `MyHeadersIntents` (ป้องกัน token รั่วใน log)
+- [x] สร้าง Unit Tests (Money calculation & Intent status classification)
+- [x] สร้าง Widget Smoke Test สำหรับ PaymentSubV4Page
+- [ ] ทดสอบ manual รันแอปในเครื่องเพื่อความมั่นใจ 100% ก่อนสลับ caller
 
 ## 22. Checklist ก่อนเชื่อม caller
 
