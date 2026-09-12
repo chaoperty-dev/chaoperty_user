@@ -262,8 +262,36 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     }
   }
 
+  /// คำนวณค่าปรับตามกติกาเดิมของต้นแบบ
+  /// - fine != '1' → ไม่มีค่าปรับ
+  /// - fine_c เป็น '0.00'/null → ใช้ยอดคงที่จาก fine_a
+  /// - ไม่เช่นนั้น → คิดเป็นเปอร์เซ็นต์ของ (ยอดรวม - ส่วนลด)
+  static Money calculateFine({
+    required Money subTotal,
+    required Money discount,
+    required PayMentModel? payModel,
+  }) {
+    if (payModel == null || payModel.fine != '1') {
+      return const Money(0);
+    }
+
+    final rateRaw = payModel.fine_c;
+    if (rateRaw == null || rateRaw.isEmpty || rateRaw == '0.00') {
+      return Money.parse(payModel.fine_a);
+    }
+
+    final rate = double.tryParse(rateRaw) ?? 0.0;
+    if (rate <= 0) {
+      return Money.parse(payModel.fine_a);
+    }
+
+    final base = subTotal.satang - discount.satang;
+    if (base <= 0) return const Money(0);
+    return Money(((base * rate) / 100).round());
+  }
+
   /// คำนวณสรุปยอดเงินทั้งหมด (Canonical Numeric)
-  PaymentSummary _calculateSummary(
+  static PaymentSummary calculateSummary(
     List<InvoiceModel> invoices,
     PayMentModel? payModel,
   ) {
@@ -271,32 +299,34 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     var discountSatang = 0;
 
     for (final inv in invoices) {
-      final amt = Money.parse(inv.amtall);
-      final dis = Money.parse(inv.disendbill);
-      subTotalSatang += amt.satang;
-      discountSatang += dis.satang;
+      subTotalSatang += Money.parse(inv.amtall).satang;
+      discountSatang += Money.parse(inv.disendbill).satang;
     }
 
-    var fineSatang = 0;
-    if (payModel != null && payModel.fine == '1') {
-      if (payModel.fine_c == '0.00' || payModel.fine_c == null) {
-        fineSatang = Money.parse(payModel.fine_a).satang;
-      } else {
-        final rate = double.tryParse(payModel.fine_c ?? '0') ?? 0.0;
-        final base = subTotalSatang - discountSatang;
-        fineSatang = ((base * rate) / 100).round();
-      }
-    }
+    final subTotal = Money(subTotalSatang);
+    final discount = Money(discountSatang);
+    final fine = calculateFine(
+      subTotal: subTotal,
+      discount: discount,
+      payModel: payModel,
+    );
 
-    final grandTotalSatang = subTotalSatang - discountSatang + fineSatang;
+    final grandTotalSatang = subTotalSatang - discountSatang + fine.satang;
 
     return PaymentSummary(
-      subTotal: Money(subTotalSatang),
-      discountTotal: Money(discountSatang),
-      fineTotal: Money(fineSatang),
+      subTotal: subTotal,
+      discountTotal: discount,
+      fineTotal: fine,
       grandTotal: Money(grandTotalSatang > 0 ? grandTotalSatang : 0),
     );
   }
+
+  /// wrapper ให้ ViewModel เรียกใช้และเทสต์ static ได้
+  PaymentSummary _calculateSummary(
+    List<InvoiceModel> invoices,
+    PayMentModel? payModel,
+  ) =>
+      calculateSummary(invoices, payModel);
 
   /// สร้าง Payment Intent และเริ่ม QR Code
   Future<bool> createPaymentIntent() async {

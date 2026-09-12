@@ -502,7 +502,7 @@ class PaymentSubV4Service {
       }
 
       // HTTP 200 อย่างเดียวไม่พอ ต้องตรวจ body ด้วย
-      return _bodyIndicatesSuccess(response.body);
+      return bodyIndicatesSuccess(response.body);
     } catch (e) {
       debugPrint('❌ uploadSlip error: $e');
       return false;
@@ -510,26 +510,39 @@ class PaymentSubV4Service {
   }
 
   /// ตรวจ body ว่าไม่ได้ระบุ failure
-  bool _bodyIndicatesSuccess(String body) {
+  ///
+  /// HTTP 2xx อย่างเดียวไม่พอ — บาง endpoint ตอบ 200 พร้อม body ที่บอกว่าล้มเหลว
+  /// static เพื่อให้ unit test ตรวจได้โดยไม่ต้องยิง network
+  static bool bodyIndicatesSuccess(String body) {
     if (body.trim().isEmpty) return true;
     try {
       final decoded = json.decode(body);
       if (decoded is Map<String, dynamic>) {
         if (decoded['success'] == false) return false;
+        if (decoded['ok'] == false) return false;
+
         final status = decoded['status'];
         if (status is String) {
           final s = status.toLowerCase();
-          if (s == 'failed' || s == 'error' || s == 'rejected') return false;
+          if (s == 'failed' ||
+              s == 'error' ||
+              s == 'rejected' ||
+              s == 'fail') {
+            return false;
+          }
         }
+
         final message = decoded['message'];
         if (message is String) {
           final m = message.toLowerCase();
-          if (m.contains('fail') || m.contains('error')) return false;
+          if (m.contains('fail') || m.contains('error') || m.contains('ไม่สำเร็จ')) {
+            return false;
+          }
         }
       }
       return true;
     } catch (_) {
-      // body ไม่ใช่ JSON (เช่น HTML error page) — ให้ผ่านเฉพาะที่ขึ้นต้นด้วย { เท่านั้น
+      // body ไม่ใช่ JSON (เช่น HTML error page) — ให้ผ่านเฉพาะที่ดูเหมือน JSON object
       return body.trimLeft().startsWith('{');
     }
   }
