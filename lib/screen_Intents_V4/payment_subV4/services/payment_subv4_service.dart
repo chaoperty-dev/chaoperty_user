@@ -10,8 +10,6 @@ import 'package:chaoperty_user/Model/GetInvoice_Model.dart';
 import 'package:chaoperty_user/Model/GetPayMent_Model.dart';
 import 'package:chaoperty_user/Model/GetRenTal_Model.dart';
 import 'package:chaoperty_user/Model/GetTeNant_Model.dart';
-import 'package:chaoperty_user/Model/GetTrans_Model.dart';
-import 'package:chaoperty_user/Model/GetTrans_fine_Model.dart';
 import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
@@ -595,88 +593,6 @@ class PaymentSubV4Service {
       // body ไม่ใช่ JSON (เช่น HTML error page) — ให้ผ่านเฉพาะที่ดูเหมือน JSON object
       return body.trimLeft().startsWith('{');
     }
-  }
-
-  /// โหลดค่าปรับ transaction (GC_tran_select_fin.php)
-  ///
-  /// ใช้คิดยอด sum_tran_fine ในสูตร requestedTotal ของต้นแบบ
-  Future<List<TransFineModel>> loadTransFines({
-    required String ren,
-    required List<String> cids,
-    required String user,
-  }) async {
-    final all = <TransFineModel>[];
-    var failed = 0;
-
-    for (final cid in cids) {
-      final uri = Uri.parse('${MyConstant().domain_chao}/GC_tran_select_fin.php')
-          .replace(queryParameters: {
-        'isAdd': 'true',
-        'ren': ren,
-        'user': user,
-        'ciddoc': cid,
-      });
-      try {
-        final response = await _client.get(uri).timeout(requestTimeout);
-        if (response.statusCode != 200) {
-          failed++;
-          continue;
-        }
-        final result = json.decode(response.body);
-        if (result is List) {
-          all.addAll(result.map((m) => TransFineModel.fromJson(m)));
-        }
-      } catch (e) {
-        debugPrint('❌ loadTransFines for $cid error: $e');
-        failed++;
-      }
-    }
-
-    if (failed > 0 && all.isEmpty && cids.isNotEmpty) {
-      throw Exception('โหลดค่าปรับรายการไม่สำเร็จ');
-    }
-    return all;
-  }
-
-  /// โหลด transaction รวม (GC_tran_select.php)
-  ///
-  /// ใช้คิดยอด sum_pvat / sum_vat / sum_wht / sum_amt ในสูตรต้นแบบ
-  Future<List<TransModel>> loadTransactions({
-    required String ren,
-    required List<String> cids,
-    required String user,
-  }) async {
-    final all = <TransModel>[];
-    var failed = 0;
-
-    for (final cid in cids) {
-      final uri = Uri.parse('${MyConstant().domain_chao}/GC_tran_select.php')
-          .replace(queryParameters: {
-        'isAdd': 'true',
-        'ren': ren,
-        'user': user,
-        'ciddoc': cid,
-      });
-      try {
-        final response = await _client.get(uri).timeout(requestTimeout);
-        if (response.statusCode != 200) {
-          failed++;
-          continue;
-        }
-        final result = json.decode(response.body);
-        if (result is List) {
-          all.addAll(result.map((m) => TransModel.fromJson(m)));
-        }
-      } catch (e) {
-        debugPrint('❌ loadTransactions for $cid error: $e');
-        failed++;
-      }
-    }
-
-    if (failed > 0 && all.isEmpty && cids.isNotEmpty) {
-      throw Exception('โหลดรายการไม่สำเร็จ');
-    }
-    return all;
   }
 
   /// ยกเลิกรายการชำระเงิน

@@ -64,15 +64,6 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     return double.tryParse(s) ?? 0;
   }
 
-  /// cids ที่ใช้ยิง API — จาก tenantModels ถ้ามี ไม่งั้นใช้ usercid
-  List<String> _cidsFromState(String fallbackUsercid) {
-    final fromTenants = _state.tenantModels
-        .map((t) => t.cid ?? '')
-        .where((c) => c.isNotEmpty)
-        .toList();
-    return fromTenants.isNotEmpty ? fromTenants : [fallbackUsercid];
-  }
-
   void _updateState(PaymentSubV4State newState) {
     if (_isDisposed) return;
     _state = newState;
@@ -472,53 +463,27 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       final customerData =
           PaymentIntentPayload.buildCustomerData(trans: allTrans);
 
-      // 2) คิดยอดตามสูตรต้นแบบ ซึ่งอิง transaction-level ไม่ใช่ invoice-level
-      //    ยอดจาก GC_tran_select (sum_pvat/sum_amt) + GC_tran_select_fin (sum_tran_fine)
-      //    บวกยอดที่คิดจาก invoice history (sum_amt_in/sum_tran_fine_in)
-      var sumPvat = 0.0;
-      var sumTranFine = 0.0;
+      // 2) คิดยอดตามสูตรต้นแบบ
+      //
+      //    สูตร: sum_pvat + sum_tran_fine - dis_sum_Pakan
+      //          - (sum_disamt + sum_disamt_in) + (sum_amt_in + sum_tran_fine_in) + fine_total
+      //
+      //    ค่าที่เป็น 0 ในเส้นทางใช้งานจริงของต้นแบบ (ตรวจ call site แล้ว):
+      //    - sum_pvat / sum_tran_fine: มาจาก red_Trans_select2 ซึ่งเรียกผ่าน
+      //      in_Trans_select แต่ไม่มี call site ที่ актив (ถูก comment ทั้งหมด)
+      //    - sum_disamt_in: ไม่เคยถูกกำหนดค่า
+      //    - dis_sum_Pakan: ประกาศเป็น 0.00 และไม่เคยถูกกำหนดค่า
+      //
+      //    จึงเหลือเฉพาะก้อนที่มาจาก invoice history + ค่าปรับ
       var sumAmtIn = 0.0;
-      var sumTranFineIn = 0.0;
-
-      final cids = _cidsFromState(usercid);
-
-      try {
-        final txs = await _service.loadTransactions(
-          ren: ren,
-          cids: cids,
-          user: user,
-        );
-        for (final t in txs) {
-          sumPvat += _d(t.pvat);
-        }
-      } catch (e) {
-        debugPrint('⚠️ loadTransactions failed, using invoice totals: $e');
-      }
-
-      try {
-        final fines = await _service.loadTransFines(
-          ren: ren,
-          cids: cids,
-          user: user,
-        );
-        for (final f in fines) {
-          sumTranFine += _d(f.total);
-        }
-      } catch (e) {
-        debugPrint('⚠️ loadTransFines failed: $e');
-      }
-
-      // ยอดจาก invoice history ของบิลที่เลือก
       for (final h in allTrans) {
         sumAmtIn += _d(h.total_t);
       }
-      sumTranFineIn = sumInvoiceFine;
+      final sumTranFineIn = sumInvoiceFine;
 
-      // sumDisIn / disSumPakan เป็น 0 ในต้นแบบตลอด (ดูหมายเหตุใน payment_intent_payload)
-      // sumDiscount ใช้ค่าตามความหมายเดิมของต้นแบบ คือ disendbill ของ history แถวสุดท้าย
       final requestedTotal = PaymentIntentPayload.requestedTotal(
-        sumPvat: sumPvat,
-        sumTranFine: sumTranFine,
+        sumPvat: 0,
+        sumTranFine: 0,
         sumAmtIn: sumAmtIn,
         sumTranFineIn: sumTranFineIn,
         sumDiscount: PaymentIntentPayload.legacyLastDiscount(allTrans),
