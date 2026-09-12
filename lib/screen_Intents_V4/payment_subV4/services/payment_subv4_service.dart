@@ -303,6 +303,54 @@ class PaymentSubV4Service {
     return {'ok': false};
   }
 
+  /// โหลดค่าปรับราย invoice (In_tran_select_fine_inv.php)
+  ///
+  /// endpoint นี้ตอบเป็น string "ชื่อค่าปรับ,ยอดเงิน" ไม่ใช่ JSON
+  /// จึงต้อง parse เอง — แยกเป็น static เพื่อ unit test ได้
+  static double parseFineInvResponse(String body) {
+    final s = body.trim();
+    if (s.isEmpty || s == 'null' || s == 'false') return 0.0;
+
+    final idx = s.indexOf(',');
+    if (idx == -1) return 0.0;
+
+    final amountPart = s.substring(idx + 1).trim();
+    if (amountPart.isEmpty) return 0.0;
+
+    return double.tryParse(amountPart.replaceAll(',', '')) ?? 0.0;
+  }
+
+  /// โหลดค่าปรับของ invoice หนึ่งใบ คืนยอดค่าปรับ (0 ถ้าไม่มี/ผิดพลาด)
+  Future<double> loadInvoiceFineAmount({
+    required String ren,
+    required String cidDoc,
+    required String tser,
+    required String tdocno,
+    required String user,
+  }) async {
+    final uri =
+        Uri.parse('${MyConstant().domain_chao}/In_tran_select_fine_inv.php')
+            .replace(
+      queryParameters: {
+        'isAdd': 'true',
+        'ren': ren,
+        'ciddoc': cidDoc,
+        'qutser': '1',
+        'tser': tser,
+        'tdocno': tdocno,
+        'user': user,
+      },
+    );
+    try {
+      final response = await _client.get(uri).timeout(requestTimeout);
+      if (response.statusCode != 200) return 0.0;
+      return parseFineInvResponse(response.body);
+    } catch (e) {
+      debugPrint('❌ loadInvoiceFineAmount error: $e');
+      return 0.0;
+    }
+  }
+
   /// โหลด History รายละเอียดบิลย่อย
   Future<PaymentFetchResult<List<IntentsInvoiceHistoryModel>>>
       loadInvoiceHistory({

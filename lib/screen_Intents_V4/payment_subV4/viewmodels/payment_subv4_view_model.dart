@@ -3,11 +3,13 @@ import 'package:flutter/foundation.dart';
 import 'package:chaoperty_user/CRC_16_Prompay/generate_qrcode.dart';
 import 'package:chaoperty_user/CRC_16_Prompay/generate_Ewallet_qrcode.dart';
 import 'package:chaoperty_user/Model/GetInvoice_Model.dart';
+import 'package:chaoperty_user/Model/GetInvoice_pay_Model.dart';
 import 'package:chaoperty_user/Model/GetPayMent_Model.dart';
 import 'package:chaoperty_user/Model/GetTeNant_Model.dart';
 import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsContractx_Fine_Model.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsInv_history_Model.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_intent_payload.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/services/payment_subv4_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -384,46 +386,93 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final ren = (prefs.getString('renTalSer') ?? '').trim();
       final custno = (prefs.getString('custno') ?? '').trim();
+      final user = (prefs.getString('ser') ?? '').trim();
+      final usercid = (prefs.getString('usercid') ?? '').trim();
       final payser = int.tryParse(payModel.ser ?? '') ?? 0;
       final typepayser = int.tryParse(payModel.ptser ?? '') ?? 0;
 
-      final List<Map<String, dynamic>> inVoicesPayload = [];
-      for (final inv in _state.invoices) {
-        final docno = inv.docno ?? '';
-        final amt = Money.parse(inv.amtall).toDouble();
-        final dis = Money.parse(inv.disendbill).toDouble();
+      // 1) โหลด invoice history + fine ราย invoice + ค่าปรับจาก payment method
+      //    ต้องได้ครบก่อน ไม่งั้น metadata/trans/customer_data/list_fee จะว่าง
+      final allTrans = <IntentsInvoiceHistoryModel>[];
+      final invoicePayloads = <Map<String, dynamic>>[];
+      final payModels = <InvoicePayModel>[];
+      var sumInvoiceFine = 0.0;
 
-        inVoicesPayload.add({
-          "invoice_id": 0,
-          "bill_reference": docno,
-          "amount": amt,
-          "late_fee": 0.0,
-          "discount_amount": dis,
-          "deposit_amount": 0.0,
-          "insurance_amount": 0.0,
-          "withholding_amount": 0.0,
-          "total": amt,
-          "list_fee": [],
-          "metadata": [],
-        });
+      for (final inv in _state.invoices) {
+        final docno = (inv.docno ?? '').trim();
+
+        final historyRes = await _service.loadInvoiceHistory(
+          ren: ren,
+          user: user,
+          cidDoc: usercid,
+          docno: docno,
+        );
+        final history = historyRes.isSuccess
+            ? historyRes.valueOr
+            : <IntentsInvoiceHistoryModel>[];
+        allTrans.addAll(history);
+
+        final fineMap = await _service.loadInvoiceFine(ren: ren, docno: docno);
+
+        // ค่าปรับราย invoice มาจาก In_tran_select_fine_inv (string "ชื่อ,ยอด")
+        final invoiceFine = await _service.loadInvoiceFineAmount(
+          ren: ren,
+          cidDoc: usercid,
+          tser: inv.ser ?? '',
+          tdocno: docno,
+          user: user,
+        );
+        sumInvoiceFine += invoiceFine;
+
+        // เก็บลง invoicePayModels เพื่อให้ fineForDocno ใช้ค่าจริง
+        payModels.add(
+          InvoicePayModel.fromJson({
+            'ser': inv.ser,
+            'docno': docno,
+            'amtall': inv.amtall,
+            'fine': invoiceFine.toString(),
+            'discount': inv.disendbill?.toString() ?? '0',
+            'fine_book': invoiceFine.toString(),
+            'discount_book': inv.disendbill?.toString() ?? '0',
+          }),
+        );
+
+        invoicePayloads.add(
+          PaymentIntentPayload.buildInvoiceEntry(
+            inv: inv,
+            history: history,
+            fine: fineMap,
+            invoiceFine: invoiceFine,
+            payser: payser,
+          ),
+        );
       }
+
+      // เก็บค่าปรับที่คำนวณได้ เพื่อให้ create ครั้งถัดไปใช้ค่าเดียวกัน
+      _updateState(_state.copyWith(invoicePayModels: payModels));
+
+      final customerData =
+          PaymentIntentPayload.buildCustomerData(trans: allTrans);
+
+      // 2) ยอดที่ส่ง — late_fee คือผลรวมค่าปรับราย invoice ไม่ใช่ fine_total
+      final requestedTotal = _state.summary.grandTotal.toDouble();
 
       final res = await _service.createPaymentIntent(
         cusNo: custno,
         propertyNo: ren,
         payser: payser,
         typepayser: typepayser,
-        requestedTotal: _state.summary.grandTotal.toDouble(),
-        lateFee: _state.summary.fineTotal.toDouble(),
+        requestedTotal: requestedTotal,
+        lateFee: sumInvoiceFine,
         discountAmount: _state.summary.discountTotal.toDouble(),
-        inVoices: inVoicesPayload,
-        transSelect: [],
+        inVoices: invoicePayloads,
+        transSelect: allTrans.map((e) => e.toJson()).toList(),
         payBno: payModel.bno ?? '',
         payBname: payModel.bname ?? '',
         payBnameEn: payModel.bnameEn ?? '',
         payBankNcode: payModel.bankNcode ?? '',
         payPaytypeNcode: payModel.paytypeNcode ?? '',
-        customerData: [],
+        customerData: customerData,
       );
 
       if (res != null) {
