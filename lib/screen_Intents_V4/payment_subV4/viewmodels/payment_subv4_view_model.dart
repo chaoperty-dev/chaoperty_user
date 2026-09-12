@@ -16,12 +16,22 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   PaymentSubV4ViewModel({
     required this.params,
     PaymentSubV4Service? service,
-  }) : _service = service ?? PaymentSubV4Service();
+  })  : _service = service ?? PaymentSubV4Service(),
+        _state = const PaymentSubV4State();
+
+  /// สำหรับ test — seed state เริ่มต้นได้โดยไม่ต้องยิง network
+  @visibleForTesting
+  PaymentSubV4ViewModel.withState({
+    required this.params,
+    required PaymentSubV4State initialState,
+    PaymentSubV4Service? service,
+  })  : _service = service ?? PaymentSubV4Service(),
+        _state = initialState;
 
   final PaymentSubV4Params params;
   final PaymentSubV4Service _service;
 
-  PaymentSubV4State _state = const PaymentSubV4State();
+  PaymentSubV4State _state;
   PaymentSubV4State get state => _state;
 
   StreamSubscription<int>? _timerSub;

@@ -31,6 +31,7 @@ class PaymentSubV4Page extends StatelessWidget {
     this.fromIntent = false,
     this.targetIntentUuid,
     this.targetPaymentIntentNo,
+    this.viewModelOverride,
   });
 
   final AnimationController? mainScreenAnimationController;
@@ -44,8 +45,19 @@ class PaymentSubV4Page extends StatelessWidget {
   final String? targetIntentUuid;
   final String? targetPaymentIntentNo;
 
+  /// สำหรับ test — เมื่อส่งมา จะไม่สร้าง ViewModel เองและไม่เรียก initialize()
+  final PaymentSubV4ViewModel? viewModelOverride;
+
   @override
   Widget build(BuildContext context) {
+    final override = viewModelOverride;
+    if (override != null) {
+      return ChangeNotifierProvider<PaymentSubV4ViewModel>.value(
+        value: override,
+        child: const _PaymentSubV4View(),
+      );
+    }
+
     final params = PaymentSubV4Params(
       tenants: teNantModel,
       customerLanguage: cuslang,
