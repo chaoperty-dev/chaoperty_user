@@ -10,6 +10,7 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_s
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_payment_card.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_qr_box.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_intent_card.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_invoice_row.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_dialogs.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_instructions_card.dart';
@@ -268,15 +269,19 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
                           ),
                         )
                       else ...[
-                        ...state.invoices.map(
-                          (inv) => Card(
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            child: ListTile(
-                              title: Text(inv.docno ?? '-'),
-                              trailing: Text('${inv.amtall ?? 0} บาท'),
-                            ),
-                          ),
-                        ),
+                        ...state.invoices.map((inv) {
+                          final docno = (inv.docno ?? '').trim();
+                          return PaymentSubV4InvoiceRow(
+                            invoice: inv,
+                            isEn: isEn,
+                            history: state.invoiceHistoryByDocno[docno] ??
+                                const [],
+                            fine: state.invoiceFineByDocno[docno],
+                            isLoadingDetail:
+                                state.detailLoadingDocno == docno,
+                            onExpand: (d) => vm.loadInvoiceDetail(d),
+                          );
+                        }),
                         const SizedBox(height: 16),
                         PaymentSubV4InstructionsCard(
                           isEn: isEn,

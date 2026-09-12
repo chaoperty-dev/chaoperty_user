@@ -242,6 +242,9 @@ class PaymentSubV4State {
     this.uploadTargetUuid,
     this.uploadTargetAmount,
     this.sectionErrors = const <String>[],
+    this.invoiceHistoryByDocno = const {},
+    this.invoiceFineByDocno = const {},
+    this.detailLoadingDocno,
   });
 
   final PageStatus pageStatus;
@@ -276,6 +279,15 @@ class PaymentSubV4State {
 
   /// error ของแต่ละ section ที่โหลดไม่สำเร็จ (ไม่ล้างข้อมูล section อื่นที่สำเร็จ)
   final List<String> sectionErrors;
+
+  /// รายละเอียดบิลย่อยต่อ invoice/docno (โหลดเมื่อผู้ใช้กางรายการ)
+  final Map<String, List<IntentsInvoiceHistoryModel>> invoiceHistoryByDocno;
+
+  /// ค่าปรับราย invoice จาก GC_selectFine_inv
+  final Map<String, Map<String, dynamic>> invoiceFineByDocno;
+
+  /// docno ที่กำลังโหลดรายละเอียด (แสดง loading เฉพาะแถวนั้น)
+  final String? detailLoadingDocno;
 
   // Tab Count Getters
   int get countAwaitingSlip => paymentIntents
@@ -313,6 +325,10 @@ class PaymentSubV4State {
     Money? uploadTargetAmount,
     bool clearUploadTarget = false,
     List<String>? sectionErrors,
+    Map<String, List<IntentsInvoiceHistoryModel>>? invoiceHistoryByDocno,
+    Map<String, Map<String, dynamic>>? invoiceFineByDocno,
+    String? detailLoadingDocno,
+    bool clearDetailLoading = false,
   }) {
     return PaymentSubV4State(
       pageStatus: pageStatus ?? this.pageStatus,
@@ -342,6 +358,11 @@ class PaymentSubV4State {
           ? null
           : (uploadTargetAmount ?? this.uploadTargetAmount),
       sectionErrors: sectionErrors ?? this.sectionErrors,
+      invoiceHistoryByDocno:
+          invoiceHistoryByDocno ?? this.invoiceHistoryByDocno,
+      invoiceFineByDocno: invoiceFineByDocno ?? this.invoiceFineByDocno,
+      detailLoadingDocno:
+          clearDetailLoading ? null : (detailLoadingDocno ?? this.detailLoadingDocno),
     );
   }
 

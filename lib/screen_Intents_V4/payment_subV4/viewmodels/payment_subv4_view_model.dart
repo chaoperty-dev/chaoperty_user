@@ -7,6 +7,7 @@ import 'package:chaoperty_user/Model/GetPayMent_Model.dart';
 import 'package:chaoperty_user/Model/GetTeNant_Model.dart';
 import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsContractx_Fine_Model.dart';
+import 'package:chaoperty_user/screen_Intents/Model/IntentsInv_history_Model.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/services/payment_subv4_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -429,6 +430,54 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       ),
     ));
     return false;
+  }
+
+  /// โหลดรายละเอียดบิลย่อย + ค่าปรับ ของ invoice ที่ผู้ใช้กาง
+  /// โหลดครั้งเดียวต่อ docno แล้ว cache ไว้
+  Future<void> loadInvoiceDetail(String docno) async {
+    if (docno.isEmpty) return;
+    if (_state.invoiceHistoryByDocno.containsKey(docno)) return;
+    if (_state.detailLoadingDocno == docno) return;
+
+    _updateState(_state.copyWith(detailLoadingDocno: docno));
+
+    final prefs = await SharedPreferences.getInstance();
+    final ren = (prefs.getString('renTalSer') ?? '').trim();
+    final user = (prefs.getString('ser') ?? '').trim();
+    final usercid = (prefs.getString('usercid') ?? '').trim();
+
+    final historyRes = await _service.loadInvoiceHistory(
+      ren: ren,
+      user: user,
+      cidDoc: usercid,
+      docno: docno,
+    );
+    final fineMap = await _service.loadInvoiceFine(ren: ren, docno: docno);
+
+    if (_isDisposed) return;
+
+    final historyMap = Map<String, List<IntentsInvoiceHistoryModel>>.from(
+      _state.invoiceHistoryByDocno,
+    );
+    historyMap[docno] =
+        historyRes.isSuccess ? historyRes.valueOr : <IntentsInvoiceHistoryModel>[];
+
+    final fineByDoc = Map<String, Map<String, dynamic>>.from(
+      _state.invoiceFineByDocno,
+    );
+    fineByDoc[docno] = fineMap;
+
+    _updateState(_state.copyWith(
+      invoiceHistoryByDocno: historyMap,
+      invoiceFineByDocno: fineByDoc,
+      clearDetailLoading: true,
+      sectionErrors: historyRes.isSuccess
+          ? _state.sectionErrors
+          : [
+              ..._state.sectionErrors,
+              historyRes.error!,
+            ],
+    ));
   }
 
   /// สลับแท็บ
