@@ -239,6 +239,8 @@ class PaymentSubV4State {
     this.qrState = const PaymentQrState(),
     this.slipState = const PaymentSlipState(),
     this.authValid = true,
+    this.uploadTargetUuid,
+    this.uploadTargetAmount,
   });
 
   final PageStatus pageStatus;
@@ -266,6 +268,11 @@ class PaymentSubV4State {
   final PaymentSlipState slipState;
   final bool authValid;
 
+  /// Intent เป้าหมายของ upload ที่กดมาจาก intent card (แท็บ 2)
+  /// null = ใช้ intent ที่สร้างในแท็บ 1
+  final String? uploadTargetUuid;
+  final Money? uploadTargetAmount;
+
   // Tab Count Getters
   int get countAwaitingSlip => paymentIntents
       .where((p) => classifyIntentStatus(p) == NormalizedIntentStatus.awaitingSlip)
@@ -281,6 +288,7 @@ class PaymentSubV4State {
     PaymentOperation? operation,
     String? errorMessage,
     PaymentUiEvent? uiEvent,
+    bool clearUiEvent = false,
     int? selectedTab,
     bool? hasAutoSwitched,
     List<InvoiceModel>? invoices,
@@ -297,12 +305,16 @@ class PaymentSubV4State {
     PaymentQrState? qrState,
     PaymentSlipState? slipState,
     bool? authValid,
+    String? uploadTargetUuid,
+    Money? uploadTargetAmount,
+    bool clearUploadTarget = false,
   }) {
     return PaymentSubV4State(
       pageStatus: pageStatus ?? this.pageStatus,
       operation: operation ?? this.operation,
       errorMessage: errorMessage ?? this.errorMessage,
-      uiEvent: uiEvent,
+      // คง event เดิมไว้จนกว่าจะสั่ง clear หรือส่ง event ใหม่
+      uiEvent: clearUiEvent ? null : (uiEvent ?? this.uiEvent),
       selectedTab: selectedTab ?? this.selectedTab,
       hasAutoSwitched: hasAutoSwitched ?? this.hasAutoSwitched,
       invoices: invoices ?? this.invoices,
@@ -319,6 +331,11 @@ class PaymentSubV4State {
       qrState: qrState ?? this.qrState,
       slipState: slipState ?? this.slipState,
       authValid: authValid ?? this.authValid,
+      uploadTargetUuid:
+          clearUploadTarget ? null : (uploadTargetUuid ?? this.uploadTargetUuid),
+      uploadTargetAmount: clearUploadTarget
+          ? null
+          : (uploadTargetAmount ?? this.uploadTargetAmount),
     );
   }
 

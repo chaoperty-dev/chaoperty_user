@@ -5,12 +5,12 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_su
 
 class PaymentSubV4BottomAction extends StatelessWidget {
   const PaymentSubV4BottomAction({
-    Key? key,
+    super.key,
     required this.summary,
     required this.operation,
     required this.onActionPressed,
     this.label = 'กดเพื่อ "เริ่มการชำระ"',
-  }) : super(key: key);
+  });
 
   final PaymentSummary summary;
   final PaymentOperation operation;
@@ -28,7 +28,7 @@ class PaymentSubV4BottomAction extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 16,
             offset: const Offset(0, -4),
           ),

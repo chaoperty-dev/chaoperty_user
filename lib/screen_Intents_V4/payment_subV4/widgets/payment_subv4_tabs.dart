@@ -2,13 +2,13 @@ import 'package:flutter/material.dart';
 
 class PaymentSubV4Tabs extends StatelessWidget {
   const PaymentSubV4Tabs({
-    Key? key,
+    super.key,
     required this.selectedTab,
     required this.countPayable,
     required this.countAwaitingSlip,
     required this.countAwaitingVerify,
     required this.onTabSelected,
-  }) : super(key: key);
+  });
 
   final int selectedTab;
   final int countPayable;

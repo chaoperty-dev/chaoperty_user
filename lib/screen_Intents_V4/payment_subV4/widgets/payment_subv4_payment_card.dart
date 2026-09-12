@@ -6,12 +6,12 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_su
 
 class PaymentSubV4PaymentCard extends StatelessWidget {
   const PaymentSubV4PaymentCard({
-    Key? key,
+    super.key,
     required this.paymentModel,
     required this.summary,
     required this.qrState,
     this.onSaveQr,
-  }) : super(key: key);
+  });
 
   final PayMentModel? paymentModel;
   final PaymentSummary summary;

@@ -6,12 +6,12 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_su
 
 class PaymentSubV4IntentCard extends StatelessWidget {
   const PaymentSubV4IntentCard({
-    Key? key,
+    super.key,
     required this.intent,
     required this.isVerifyTab,
     this.onAttachSlip,
     this.onViewDetail,
-  }) : super(key: key);
+  });
 
   final PaymentIntent intent;
   final bool isVerifyTab;

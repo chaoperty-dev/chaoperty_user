@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:chaoperty_user/Model/GetTeNant_Model.dart';
+import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/payment_subv4_view_model.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_header.dart';
@@ -9,12 +10,15 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_s
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_qr_box.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_intent_card.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_dialogs.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_instructions_card.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_countdown_bar.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/platform/payment_subv4_slip_picker.dart';
 
 /// Entry page รองรับทั้ง Parameter เก่าและใหม่ เพื่อ Parity
 class PaymentSubV4Page extends StatelessWidget {
   const PaymentSubV4Page({
-    Key? key,
+    super.key,
     this.mainScreenAnimationController,
     this.mainScreenAnimation,
     this.teNantModel,
@@ -25,7 +29,7 @@ class PaymentSubV4Page extends StatelessWidget {
     this.fromIntent = false,
     this.targetIntentUuid,
     this.targetPaymentIntentNo,
-  }) : super(key: key);
+  });
 
   final AnimationController? mainScreenAnimationController;
   final Animation<double>? mainScreenAnimation;
@@ -58,13 +62,31 @@ class PaymentSubV4Page extends StatelessWidget {
   }
 }
 
-class _PaymentSubV4View extends StatelessWidget {
+class _PaymentSubV4View extends StatefulWidget {
   const _PaymentSubV4View();
+
+  @override
+  State<_PaymentSubV4View> createState() => _PaymentSubV4ViewState();
+}
+
+class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
+  bool _noticeShown = false;
+  String? _handledEventId;
 
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<PaymentSubV4ViewModel>();
     final state = vm.state;
+    final isEn = vm.params.customerLanguage == 'EN';
+
+    // แจ้งเตือนให้แนบหลักฐานครั้งแรกที่เข้าหน้า
+    if (!_noticeShown && state.pageStatus == PageStatus.ready) {
+      _noticeShown = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        PaymentSubV4Dialogs.showAttachSlipNotice(context, isEn: isEn);
+      });
+    }
 
     if (state.pageStatus == PageStatus.loading) {
       return const Scaffold(
@@ -82,18 +104,20 @@ class _PaymentSubV4View extends StatelessWidget {
       );
     }
 
-    // ฟัง UI Event เพื่อแสดง SnackBar อัตโนมัติ (Consume ครั้งเดียว)
-    if (state.uiEvent != null) {
+    // ฟัง UI Event เพื่อแสดง SnackBar อัตโนมัติ (กันแสดงซ้ำด้วย event id)
+    final event = state.uiEvent;
+    if (event != null && _handledEventId != event.id) {
+      _handledEventId = event.id;
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(state.uiEvent!.message),
-            backgroundColor:
-                state.uiEvent!.isError ? Colors.red : Colors.green,
+            content: Text(event.message),
+            backgroundColor: event.isError ? Colors.red : Colors.green,
             duration: const Duration(seconds: 3),
           ),
         );
-        vm.consumeEvent(state.uiEvent!.id);
+        vm.consumeEvent(event.id);
       });
     }
 
@@ -113,6 +137,13 @@ class _PaymentSubV4View extends StatelessWidget {
               countAwaitingVerify: state.countAwaitingVerify,
               onTabSelected: (tab) => vm.selectTab(tab),
             ),
+            if (state.qrState.status == QrStatus.active ||
+                state.qrState.isSessionExpired)
+              PaymentSubV4CountdownBar(
+                qrState: state.qrState,
+                totalSeconds: vm.sessionTotalSecs,
+                isEn: isEn,
+              ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(12),
@@ -166,7 +197,7 @@ class _PaymentSubV4View extends StatelessWidget {
                             child: Text('ไม่มีรายการที่ต้องชำระ'),
                           ),
                         )
-                      else
+                      else ...[
                         ...state.invoices.map(
                           (inv) => Card(
                             margin: const EdgeInsets.symmetric(vertical: 4),
@@ -176,6 +207,13 @@ class _PaymentSubV4View extends StatelessWidget {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        PaymentSubV4InstructionsCard(
+                          isEn: isEn,
+                          isBankTransfer:
+                              state.selectedPaymentModel?.ptser == '2',
+                        ),
+                      ],
                     ] else if (state.selectedTab == 2) ...[
                       if (state.countAwaitingSlip == 0)
                         const Center(
@@ -193,18 +231,8 @@ class _PaymentSubV4View extends StatelessWidget {
                               (intent) => PaymentSubV4IntentCard(
                                 intent: intent,
                                 isVerifyTab: false,
-                                onAttachSlip: () async {
-                                  final slip =
-                                      await PaymentSubV4SlipPicker.pickAndCompressImage();
-                                  if (slip != null) {
-                                    vm.setSlip(
-                                      bytes: slip.bytes,
-                                      fileName: slip.fileName,
-                                      mimeType: slip.mimeType,
-                                    );
-                                    await vm.uploadSlip();
-                                  }
-                                },
+                                onAttachSlip: () =>
+                                    _confirmAndUploadSlip(intent, isEn),
                               ),
                             ),
                     ] else if (state.selectedTab == 3) ...[
@@ -236,20 +264,18 @@ class _PaymentSubV4View extends StatelessWidget {
                 summary: state.summary,
                 operation: state.operation,
                 label: state.qrState.status == QrStatus.active
-                    ? 'กดเพื่อ "แนบหลักฐานและยืนยัน"'
-                    : 'กดเพื่อ "เริ่มการชำระ"',
+                    ? (isEn
+                        ? 'Attach slip and confirm'
+                        : 'กดเพื่อ "แนบหลักฐานและยืนยัน"')
+                    : (isEn
+                        ? 'Start payment'
+                        : 'กดเพื่อ "เริ่มการชำระ"'),
                 onActionPressed: () async {
-                  if (state.qrState.status == QrStatus.active) {
-                    final slip = await PaymentSubV4SlipPicker.pickAndCompressImage();
-                    if (slip != null) {
-                      vm.setSlip(
-                        bytes: slip.bytes,
-                        fileName: slip.fileName,
-                        mimeType: slip.mimeType,
-                      );
-                      await vm.uploadSlip();
-                    }
+                  if (vm.state.qrState.status == QrStatus.active) {
+                    await _confirmAndUploadSlip(null, isEn);
                   } else {
+                    // ยังไม่มี QR → สร้าง intent + QR
+                    // หากล้มเหลว ViewModel จะส่ง uiEvent ให้แสดง SnackBar เอง
                     await vm.createPaymentIntent();
                   }
                 },
@@ -257,6 +283,37 @@ class _PaymentSubV4View extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  /// เลือกสลิป → preview → ยืนยันด้วย slide → upload
+  /// [intent] ไม่ null = แนบให้ intent ที่กดมาจากแท็บ 2
+  Future<void> _confirmAndUploadSlip(PaymentIntent? intent, bool isEn) async {
+    final vm = context.read<PaymentSubV4ViewModel>();
+
+    if (intent != null) {
+      vm.openIntent(intent);
+    }
+
+    final slip = await PaymentSubV4SlipPicker.pickAndCompressImage();
+    if (!mounted) return;
+    if (slip == null) return;
+
+    vm.setSlip(
+      bytes: slip.bytes,
+      fileName: slip.fileName,
+      mimeType: slip.mimeType,
+    );
+
+    if (!mounted) return;
+    await PaymentSubV4Dialogs.showPaymentConfirmation(
+      context,
+      isEn: isEn,
+      summary: vm.state.summary,
+      slip: vm.state.slipState,
+      onConfirm: () async {
+        await vm.uploadSlip();
+      },
     );
   }
 }

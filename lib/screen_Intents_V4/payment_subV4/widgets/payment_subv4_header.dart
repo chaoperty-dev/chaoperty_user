@@ -3,10 +3,10 @@ import 'package:chaoperty_user/color.dart';
 
 class PaymentSubV4Header extends StatelessWidget {
   const PaymentSubV4Header({
-    Key? key,
+    super.key,
     required this.title,
     required this.onBack,
-  }) : super(key: key);
+  });
 
   final String title;
   final VoidCallback onBack;

@@ -25,6 +25,10 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   StreamSubscription<int>? _timerSub;
   bool _isDisposed = false;
 
+  /// อายุเต็มของ session (วินาที) ใช้คำนวณ progress bar
+  int _sessionTotalSecs = 0;
+  int get sessionTotalSecs => _sessionTotalSecs;
+
   void _updateState(PaymentSubV4State newState) {
     if (_isDisposed) return;
     _state = newState;
@@ -377,10 +381,31 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   /// ปรับปรุงเวลา Countdown QR Code
   void startQrCountdown(String? expireIso) {
     _timerSub?.cancel();
+    _sessionTotalSecs = 0;
     if (expireIso == null || expireIso.isEmpty) return;
 
     final expiry = DateTime.tryParse(expireIso);
     if (expiry == null) return;
+
+    final initial = expiry.difference(DateTime.now()).inSeconds;
+    _sessionTotalSecs = initial > 0 ? initial : 0;
+
+    if (_sessionTotalSecs == 0) {
+      _updateState(_state.copyWith(
+        qrState: _state.qrState.copyWith(
+          secondsRemaining: 0,
+          isSessionExpired: true,
+        ),
+      ));
+      return;
+    }
+
+    _updateState(_state.copyWith(
+      qrState: _state.qrState.copyWith(
+        secondsRemaining: _sessionTotalSecs,
+        isSessionExpired: false,
+      ),
+    ));
 
     _timerSub = Stream.periodic(const Duration(seconds: 1), (_) {
       final now = DateTime.now();
@@ -395,6 +420,19 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         ),
       ));
     });
+  }
+
+  /// เลือก Intent ที่ต้องการดำเนินการ (ใช้กับแท็บ 2 ที่กดแนบสลิปจาก intent card)
+  void openIntent(PaymentIntent intent) {
+    final uuid = intent.intentUuid;
+    if (uuid == null || uuid.isEmpty) return;
+
+    final amt = Money.fromDouble(intent.amount ?? intent.requestedAmount);
+
+    _updateState(_state.copyWith(
+      uploadTargetUuid: uuid,
+      uploadTargetAmount: amt,
+    ));
   }
 
   /// ตั้งค่ารูปสลิปจาก View
@@ -422,12 +460,22 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   /// อัปโหลดสลิป
   Future<bool> uploadSlip() async {
     final slip = _state.slipState;
-    final uuid = _state.qrState.intentUuid;
+
+    // ใช้ intent จากแท็บ 2 ถ้ามี ไม่งั้นใช้ intent ที่สร้างในแท็บ 1
+    final uuid = _state.uploadTargetUuid ?? _state.qrState.intentUuid;
+    final amount = _state.uploadTargetAmount ?? _state.summary.grandTotal;
 
     if (slip.slipBytes == null ||
         slip.fileName == null ||
         uuid == null ||
         uuid.isEmpty) {
+      _updateState(_state.copyWith(
+        uiEvent: const PaymentUiEvent(
+          id: 'upload_no_target',
+          message: 'ไม่พบรายการชำระเงินสำหรับแนบสลิป',
+          isError: true,
+        ),
+      ));
       return false;
     }
 
@@ -440,13 +488,14 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       intentUuid: uuid,
       slipBytes: slip.slipBytes!,
       fileName: slip.fileName!,
-      amount: _state.summary.grandTotal.toFixed2(),
+      amount: amount.toFixed2(),
       ref3: _state.qrState.ref3,
     );
 
     if (success) {
       _updateState(_state.copyWith(
         operation: PaymentOperation.none,
+        clearUploadTarget: true,
         slipState: slip.copyWith(
           isUploading: false,
           uploadSuccess: true,
@@ -456,7 +505,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
           message: 'อัปโหลดสลิปสำเร็จ',
         ),
       ));
-      // Reload intents เพื่อปรับปรุงแท็บ
+      // Reload intents เพื่อปรับปรุงสถานะแท็บ
       await initialize();
       return true;
     } else {
@@ -511,7 +560,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   /// เคลียร์ UI Event เมื่อแสดงผลแล้ว
   void consumeEvent(String id) {
     if (_state.uiEvent?.id == id) {
-      _updateState(_state.copyWith(uiEvent: null));
+      _updateState(_state.copyWith(clearUiEvent: true));
     }
   }
 

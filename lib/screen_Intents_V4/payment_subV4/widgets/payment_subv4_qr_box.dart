@@ -6,12 +6,12 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_su
 
 class PaymentSubV4QrBox extends StatelessWidget {
   const PaymentSubV4QrBox({
-    Key? key,
+    super.key,
     required this.qrState,
     required this.summary,
     this.onSaveQr,
     this.onRenewQr,
-  }) : super(key: key);
+  });
 
   final PaymentQrState qrState;
   final PaymentSummary summary;
