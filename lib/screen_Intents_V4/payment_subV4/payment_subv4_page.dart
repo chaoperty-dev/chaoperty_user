@@ -138,6 +138,49 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
               countAwaitingVerify: state.countAwaitingVerify,
               onTabSelected: (tab) => vm.selectTab(tab),
             ),
+            if (state.sectionErrors.isNotEmpty)
+              Container(
+                width: double.infinity,
+                color: Colors.orange.shade50,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 16, color: Colors.orange.shade800),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final msg in state.sectionErrors)
+                            Text(
+                              msg,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontFamily: Font_.Fonts_T,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () => vm.initialize(),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: const Size(0, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        isEn ? 'Retry' : 'ลองใหม่',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             if (state.qrState.status == QrStatus.active ||
                 state.qrState.isSessionExpired)
               PaymentSubV4CountdownBar(

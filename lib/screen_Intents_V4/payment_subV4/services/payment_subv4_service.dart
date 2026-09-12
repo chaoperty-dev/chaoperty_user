@@ -16,12 +16,30 @@ import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsContractx_Fine_Model.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsInv_history_Model.dart';
 
+/// ผลลัพธ์จาก Service: แยก "ว่าง" ออกจาก "ล้มเหลว" ให้ ViewModel แสดง section error ได้
+class PaymentFetchResult<T> {
+  const PaymentFetchResult.success(this.data) : error = null;
+  const PaymentFetchResult.failure(this.error) : data = null;
+
+  final T? data;
+  final String? error;
+
+  bool get isSuccess => error == null;
+  T get valueOr => data as T;
+}
+
 /// Facade Service จัดการ API ทั้งหมดสำหรับ Payment V4
 class PaymentSubV4Service {
   final http.Client _client;
 
   PaymentSubV4Service({http.Client? client})
       : _client = client ?? httpClient;
+
+  /// timeout ต่อ endpoint (ตามแผนข้อ 8)
+  static const Duration requestTimeout = Duration(seconds: 20);
+
+  /// timeout สำหรับอัปโหลดสลิป (ไฟล์ใหญ่กว่า จึงนานกว่า)
+  static const Duration uploadTimeout = Duration(seconds: 60);
 
   /// ตรวจสอบสิทธิ์ Payment Intent
   Future<bool> checkAuth() async {
@@ -34,60 +52,95 @@ class PaymentSubV4Service {
   }
 
   /// โหลดข้อมูล Tenant
-  Future<List<TeNantModel>> loadTenantData({
+  Future<PaymentFetchResult<List<TeNantModel>>> loadTenantData({
     required String ren,
     required String cidDoc,
     required String qutser,
   }) async {
-    final url =
-        '${MyConstant().domain}/GC_tenantlookAS.php?isAdd=true&ren=$ren&ciddoc=$cidDoc&qutser=$qutser';
+    final uri = Uri.parse('${MyConstant().domain}/GC_tenantlookAS.php').replace(
+      queryParameters: {
+        'isAdd': 'true',
+        'ren': ren,
+        'ciddoc': cidDoc,
+        'qutser': qutser,
+      },
+    );
     try {
-      final response = await _client.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        if (result != null && result is List) {
-          return result.map((m) => TeNantModel.fromJson(m)).toList();
-        }
+      final response =
+          await _client.get(uri).timeout(requestTimeout);
+      if (response.statusCode != 200) {
+        return PaymentFetchResult.failure('tenant HTTP ${response.statusCode}');
       }
+      final result = json.decode(response.body);
+      if (result == null || result is! List) {
+        return const PaymentFetchResult.success([]);
+      }
+      return PaymentFetchResult.success(
+        result.map((m) => TeNantModel.fromJson(m)).toList(),
+      );
     } catch (e) {
       debugPrint('❌ loadTenantData error: $e');
+      return const PaymentFetchResult.failure('โหลดข้อมูลผู้เช่าไม่สำเร็จ');
     }
-    return [];
   }
 
   /// โหลดข้อมูล Rental / Property Info
-  Future<RenTalModel?> loadRentalData({required String ren}) async {
-    final url =
-        '${MyConstant().domain}/GC_rental_setring.php?isAdd=true&ren=$ren';
+  Future<PaymentFetchResult<RenTalModel?>> loadRentalData({
+    required String ren,
+  }) async {
+    final uri =
+        Uri.parse('${MyConstant().domain}/GC_rental_setring.php').replace(
+      queryParameters: {'isAdd': 'true', 'ren': ren},
+    );
     try {
-      final response = await _client.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        if (result != null && result is List && result.isNotEmpty) {
-          return RenTalModel.fromJson(result.first);
-        }
+      final response =
+          await _client.get(uri).timeout(requestTimeout);
+      if (response.statusCode != 200) {
+        return PaymentFetchResult.failure(
+          'rental HTTP ${response.statusCode}',
+        );
       }
+      final result = json.decode(response.body);
+      if (result == null || result is! List || result.isEmpty) {
+        return const PaymentFetchResult.success(null);
+      }
+      return PaymentFetchResult.success(RenTalModel.fromJson(result.first));
     } catch (e) {
       debugPrint('❌ loadRentalData error: $e');
+      return const PaymentFetchResult.failure('โหลดข้อมูลโครงการไม่สำเร็จ');
     }
-    return null;
   }
 
   /// โหลดบัญชีรับชำระ (Payment methods)
-  Future<List<PayMentModel>> loadPaymentMethods({required String ren}) async {
-    final url = '${MyConstant().domain_chao}/GC_payMent.php?isAdd=true&ren=$ren';
+  Future<PaymentFetchResult<List<PayMentModel>>> loadPaymentMethods({
+    required String ren,
+  }) async {
+    final uri =
+        Uri.parse('${MyConstant().domain_chao}/GC_payMent.php').replace(
+      queryParameters: {'isAdd': 'true', 'ren': ren},
+    );
     try {
-      final response = await _client.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final result = json.decode(response.body);
-        if (result != null && result is List) {
-          return result.map((m) => PayMentModel.fromJson(m)).toList();
-        }
+      final response =
+          await _client.get(uri).timeout(requestTimeout);
+      if (response.statusCode == 500) {
+        return const PaymentFetchResult.failure('ช่องทางชำระเงินตอบกลับผิดพลาด');
       }
+      if (response.statusCode != 200) {
+        return PaymentFetchResult.failure(
+          'payment HTTP ${response.statusCode}',
+        );
+      }
+      final result = json.decode(response.body);
+      if (result == null || result is! List) {
+        return const PaymentFetchResult.success([]);
+      }
+      return PaymentFetchResult.success(
+        result.map((m) => PayMentModel.fromJson(m)).toList(),
+      );
     } catch (e) {
       debugPrint('❌ loadPaymentMethods error: $e');
+      return const PaymentFetchResult.failure('โหลดช่องทางชำระเงินไม่สำเร็จ');
     }
-    return [];
   }
 
   /// โหลด Payment Intents จาก Server
@@ -129,11 +182,15 @@ class PaymentSubV4Service {
   }
 
   /// โหลดค่าปรับสัญญา (GC_fine)
-  Future<List<IntentsContractxFineModel>> loadContractFines({
+  /// คืน error เมื่อทุก cid ล้มเหลว; ถ้ามีบาง cid สำเร็จ ถือว่าสำเร็จ
+  Future<PaymentFetchResult<List<IntentsContractxFineModel>>>
+      loadContractFines({
     required String ren,
     required List<String> cids,
   }) async {
     final List<IntentsContractxFineModel> list = [];
+    var failed = 0;
+
     for (final cid in cids) {
       final uri = Uri.parse('${MyConstant().domain_chao}/GC_fine.php').replace(
         queryParameters: {
@@ -144,27 +201,38 @@ class PaymentSubV4Service {
         },
       );
       try {
-        final response = await _client.get(uri);
+        final response = await _client.get(uri).timeout(requestTimeout);
+        if (response.statusCode != 200) {
+          failed++;
+          continue;
+        }
         final result = json.decode(response.body);
-        if (result != null && result is List) {
+        if (result is List) {
           list.addAll(
             result.map((m) => IntentsContractxFineModel.fromJson(m)),
           );
         }
       } catch (e) {
         debugPrint('❌ loadContractFines for $cid error: $e');
+        failed++;
       }
     }
-    return list;
+
+    if (failed > 0 && list.isEmpty && cids.isNotEmpty) {
+      return const PaymentFetchResult.failure('โหลดค่าปรับไม่สำเร็จ');
+    }
+    return PaymentFetchResult.success(list);
   }
 
   /// โหลด Invoices
-  Future<List<InvoiceModel>> loadInvoices({
+  Future<PaymentFetchResult<List<InvoiceModel>>> loadInvoices({
     required String ren,
     required List<String> cids,
     required String qutser,
   }) async {
     final List<InvoiceModel> list = [];
+    var failed = 0;
+
     for (final cid in cids) {
       final uri =
           Uri.parse('${MyConstant().domain_chao}/GC_bill_invoice.php').replace(
@@ -176,16 +244,25 @@ class PaymentSubV4Service {
         },
       );
       try {
-        final response = await _client.get(uri);
+        final response = await _client.get(uri).timeout(requestTimeout);
+        if (response.statusCode != 200) {
+          failed++;
+          continue;
+        }
         final result = json.decode(response.body);
-        if (result != null && result is List) {
+        if (result is List) {
           list.addAll(result.map((m) => InvoiceModel.fromJson(m)));
         }
       } catch (e) {
         debugPrint('❌ loadInvoices for $cid error: $e');
+        failed++;
       }
     }
-    return list;
+
+    if (failed > 0 && list.isEmpty && cids.isNotEmpty) {
+      return const PaymentFetchResult.failure('โหลดใบแจ้งหนี้ไม่สำเร็จ');
+    }
+    return PaymentFetchResult.success(list);
   }
 
   /// โหลด Fine ราย Invoice
@@ -202,7 +279,7 @@ class PaymentSubV4Service {
       },
     );
     try {
-      final response = await _client.get(uri);
+      final response = await _client.get(uri).timeout(requestTimeout);
       final decoded = json.decode(response.body);
       if (decoded is Map<String, dynamic>) {
         return {
@@ -227,7 +304,8 @@ class PaymentSubV4Service {
   }
 
   /// โหลด History รายละเอียดบิลย่อย
-  Future<List<IntentsInvoiceHistoryModel>> loadInvoiceHistory({
+  Future<PaymentFetchResult<List<IntentsInvoiceHistoryModel>>>
+      loadInvoiceHistory({
     required String ren,
     required String user,
     required String cidDoc,
@@ -245,17 +323,23 @@ class PaymentSubV4Service {
       },
     );
     try {
-      final response = await _client.get(uri);
-      final result = json.decode(response.body);
-      if (result != null && result is List) {
-        return result
-            .map((m) => IntentsInvoiceHistoryModel.fromJson(m))
-            .toList();
+      final response = await _client.get(uri).timeout(requestTimeout);
+      if (response.statusCode != 200) {
+        return PaymentFetchResult.failure(
+          'invoice history HTTP ${response.statusCode}',
+        );
       }
+      final result = json.decode(response.body);
+      if (result is List) {
+        return PaymentFetchResult.success(
+          result.map((m) => IntentsInvoiceHistoryModel.fromJson(m)).toList(),
+        );
+      }
+      return const PaymentFetchResult.success([]);
     } catch (e) {
       debugPrint('❌ loadInvoiceHistory error: $e');
+      return const PaymentFetchResult.failure('โหลดประวัติรายการไม่สำเร็จ');
     }
-    return [];
   }
 
   /// สร้าง Payment Intent บน Server
@@ -362,6 +446,7 @@ class PaymentSubV4Service {
   }
 
   /// อัปโหลดสลิปหลักฐาน
+  /// ถือว่าสำเร็จเฉพาะเมื่อ HTTP 2xx และ body ไม่ได้ระบุ failure
   Future<bool> uploadSlip({
     required String intentUuid,
     required Uint8List slipBytes,
@@ -370,7 +455,13 @@ class PaymentSubV4Service {
     String? ref3,
   }) async {
     try {
+      // ต้องมี auth header จริงก่อนยิง Payment API
       final headers = await MyHeadersIntents.build();
+      if (headers['Authorization'] == null) {
+        debugPrint('🚫 uploadSlip: ไม่มี Authorization → ยกเลิกการอัปโหลด');
+        return false;
+      }
+
       final uri = Uri.parse(
           '${MyconfigIntents().domainIntents}/v1/payment/intent/$intentUuid/upload/slip');
 
@@ -402,12 +493,44 @@ class PaymentSubV4Service {
       );
 
       request.headers.addAll(headers);
-      final response = await request.send();
+      final streamed = await request.send().timeout(uploadTimeout);
+      final response = await http.Response.fromStream(streamed);
 
-      return response.statusCode == 200 || response.statusCode == 201;
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        debugPrint('❌ uploadSlip HTTP ${response.statusCode}');
+        return false;
+      }
+
+      // HTTP 200 อย่างเดียวไม่พอ ต้องตรวจ body ด้วย
+      return _bodyIndicatesSuccess(response.body);
     } catch (e) {
       debugPrint('❌ uploadSlip error: $e');
       return false;
+    }
+  }
+
+  /// ตรวจ body ว่าไม่ได้ระบุ failure
+  bool _bodyIndicatesSuccess(String body) {
+    if (body.trim().isEmpty) return true;
+    try {
+      final decoded = json.decode(body);
+      if (decoded is Map<String, dynamic>) {
+        if (decoded['success'] == false) return false;
+        final status = decoded['status'];
+        if (status is String) {
+          final s = status.toLowerCase();
+          if (s == 'failed' || s == 'error' || s == 'rejected') return false;
+        }
+        final message = decoded['message'];
+        if (message is String) {
+          final m = message.toLowerCase();
+          if (m.contains('fail') || m.contains('error')) return false;
+        }
+      }
+      return true;
+    } catch (_) {
+      // body ไม่ใช่ JSON (เช่น HTML error page) — ให้ผ่านเฉพาะที่ขึ้นต้นด้วย { เท่านั้น
+      return body.trimLeft().startsWith('{');
     }
   }
 
@@ -424,7 +547,7 @@ class PaymentSubV4Service {
         propertyNo: propertyNo,
         intentsUuid: intentsUuid,
         bankMerchantId: bankMerchantId,
-      );
+      ).timeout(requestTimeout);
       return response != null &&
           response.statusCode >= 200 &&
           response.statusCode < 300;

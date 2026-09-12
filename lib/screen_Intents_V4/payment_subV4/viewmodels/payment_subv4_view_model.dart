@@ -4,8 +4,9 @@ import 'package:chaoperty_user/CRC_16_Prompay/generate_qrcode.dart';
 import 'package:chaoperty_user/CRC_16_Prompay/generate_Ewallet_qrcode.dart';
 import 'package:chaoperty_user/Model/GetInvoice_Model.dart';
 import 'package:chaoperty_user/Model/GetPayMent_Model.dart';
-import 'package:chaoperty_user/Model/GetRenTal_Model.dart';
+import 'package:chaoperty_user/Model/GetTeNant_Model.dart';
 import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
+import 'package:chaoperty_user/screen_Intents/Model/IntentsContractx_Fine_Model.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/services/payment_subv4_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -86,13 +87,13 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       // 1. Auth Gate
       final isAuthOk = await _service.checkAuth();
 
-      // 2. โหลด Payment Methods & Rental
-      final paymentMethodsFuture = _service.loadPaymentMethods(ren: ren);
-      final rentalFuture = _service.loadRentalData(ren: ren);
-      final results = await Future.wait([paymentMethodsFuture, rentalFuture]);
+      // 2. โหลด Payment Methods & Rental (ไม่พึ่งกัน → ขนานกันได้)
+      final paymentRes = await _service.loadPaymentMethods(ren: ren);
+      final rentalRes = await _service.loadRentalData(ren: ren);
 
-      final paymentMethods = results[0] as List<PayMentModel>;
-      final rental = results[1] as RenTalModel?;
+      final paymentMethods =
+          paymentRes.isSuccess ? paymentRes.valueOr : <PayMentModel>[];
+      final rental = rentalRes.isSuccess ? rentalRes.valueOr : null;
 
       // Resolve selected payment model
       PayMentModel? selectedPay;
@@ -108,18 +109,19 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       // 3. โหลด Tenant Models
       var tenants = params.tenants;
       if (tenants == null || tenants.isEmpty) {
-        tenants = await _service.loadTenantData(
+        final tenantRes = await _service.loadTenantData(
           ren: ren,
           cidDoc: usercid,
           qutser: qutser,
         );
+        tenants = tenantRes.isSuccess ? tenantRes.valueOr : <TeNantModel>[];
       }
 
       final List<String> cids = tenants.isNotEmpty
           ? tenants.map((t) => t.cid ?? '').where((c) => c.isNotEmpty).toList()
           : [usercid];
 
-      // 4. โหลด Payment Intents
+      // 4. โหลด Payment Intents (ต้องมี auth เท่านั้น)
       final intents = isAuthOk
           ? await _service.loadPaymentIntents(
               cusno: custno,
@@ -129,16 +131,28 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
           : <PaymentIntent>[];
 
       // 5. โหลด Invoices & Contract Fines
-      final invoices = await _service.loadInvoices(
+      final invoiceRes = await _service.loadInvoices(
         ren: ren,
         cids: cids,
         qutser: qutser,
       );
-
-      final contractFines = await _service.loadContractFines(
+      final fineRes = await _service.loadContractFines(
         ren: ren,
         cids: cids,
       );
+
+      final invoices =
+          invoiceRes.isSuccess ? invoiceRes.valueOr : <InvoiceModel>[];
+      final contractFines =
+          fineRes.isSuccess ? fineRes.valueOr : <IntentsContractxFineModel>[];
+
+      // เก็บ error ของแต่ละ section ไว้แสดง แทนการกลืนหาย
+      final sectionErrors = <String>{
+        if (!paymentRes.isSuccess) paymentRes.error!,
+        if (!rentalRes.isSuccess) rentalRes.error!,
+        if (!invoiceRes.isSuccess) invoiceRes.error!,
+        if (!fineRes.isSuccess) fineRes.error!,
+      };
 
       // 6. Filter Invoices ตามสถานะ Intent
       final List<InvoiceModel> payableInvoices = [];
@@ -232,6 +246,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         summary: summary,
         selectedTab: targetTab,
         hasAutoSwitched: true,
+        sectionErrors: sectionErrors.toList(),
         uploadTargetUuid: preTarget?.intentUuid,
         uploadTargetAmount: preTarget == null
             ? null

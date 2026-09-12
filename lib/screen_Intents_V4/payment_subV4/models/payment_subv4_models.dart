@@ -241,6 +241,7 @@ class PaymentSubV4State {
     this.authValid = true,
     this.uploadTargetUuid,
     this.uploadTargetAmount,
+    this.sectionErrors = const <String>[],
   });
 
   final PageStatus pageStatus;
@@ -272,6 +273,9 @@ class PaymentSubV4State {
   /// null = ใช้ intent ที่สร้างในแท็บ 1
   final String? uploadTargetUuid;
   final Money? uploadTargetAmount;
+
+  /// error ของแต่ละ section ที่โหลดไม่สำเร็จ (ไม่ล้างข้อมูล section อื่นที่สำเร็จ)
+  final List<String> sectionErrors;
 
   // Tab Count Getters
   int get countAwaitingSlip => paymentIntents
@@ -308,6 +312,7 @@ class PaymentSubV4State {
     String? uploadTargetUuid,
     Money? uploadTargetAmount,
     bool clearUploadTarget = false,
+    List<String>? sectionErrors,
   }) {
     return PaymentSubV4State(
       pageStatus: pageStatus ?? this.pageStatus,
@@ -336,6 +341,7 @@ class PaymentSubV4State {
       uploadTargetAmount: clearUploadTarget
           ? null
           : (uploadTargetAmount ?? this.uploadTargetAmount),
+      sectionErrors: sectionErrors ?? this.sectionErrors,
     );
   }
 
