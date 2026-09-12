@@ -99,6 +99,23 @@ void main() {
 
       expect(next.uiEvent?.id, 'e2');
     });
+
+    test('same event id with a new seq is a distinct event', () {
+      // อัปโหลดล้มเหลวสองครั้งต้องแจ้งเตือนสองครั้ง
+      const first = PaymentUiEvent(
+        id: 'slip_upload_fail',
+        message: 'fail',
+        seq: 1,
+      );
+      const second = PaymentUiEvent(
+        id: 'slip_upload_fail',
+        message: 'fail',
+        seq: 2,
+      );
+
+      expect(first.id, second.id);
+      expect(first.seq, isNot(second.seq));
+    });
   });
 
   group('Intent status classification', () {

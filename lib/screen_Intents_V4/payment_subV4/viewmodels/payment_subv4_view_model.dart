@@ -31,6 +31,18 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   int _sessionTotalSecs = 0;
   int get sessionTotalSecs => _sessionTotalSecs;
 
+  /// เลขลำดับ event เพิ่มขึ้นทุกครั้งที่ emit
+  int _eventSeq = 0;
+
+  /// สร้าง UI event ที่มี seq ไม่ซ้ำ เพื่อให้ชนิดเดิมเกิดซ้ำได้
+  PaymentUiEvent _event(String id, String message, {bool isError = false}) =>
+      PaymentUiEvent(
+        id: id,
+        message: message,
+        isError: isError,
+        seq: ++_eventSeq,
+      );
+
   void _updateState(PaymentSubV4State newState) {
     if (_isDisposed) return;
     _state = newState;
@@ -339,11 +351,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   Future<bool> createPaymentIntent() async {
     if (_state.summary.grandTotal.isZero || _state.summary.grandTotal.isNegative) {
       _updateState(_state.copyWith(
-        uiEvent: const PaymentUiEvent(
-          id: 'invalid_amount',
-          message: 'ยอดเงินไม่ถูกต้อง',
-          isError: true,
-        ),
+        uiEvent: _event('invalid_amount', 'ยอดเงินไม่ถูกต้อง', isError: true),
       ));
       return false;
     }
@@ -351,9 +359,9 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     final payModel = _state.selectedPaymentModel;
     if (payModel == null) {
       _updateState(_state.copyWith(
-        uiEvent: const PaymentUiEvent(
-          id: 'no_payment_method',
-          message: 'กรุณาเลือกช่องทางการชำระเงิน',
+        uiEvent: _event(
+          'no_payment_method',
+          'กรุณาเลือกช่องทางการชำระเงิน',
           isError: true,
         ),
       ));
@@ -447,10 +455,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
             qrPayload: qrPayload,
             softExpireAt: softExpireAt,
           ),
-          uiEvent: const PaymentUiEvent(
-            id: 'create_intent_success',
-            message: 'สร้าง QR Code สำเร็จ',
-          ),
+          uiEvent: _event('create_intent_success', 'สร้าง QR Code สำเร็จ'),
         ));
         return true;
       }
@@ -460,9 +465,9 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
 
     _updateState(_state.copyWith(
       operation: PaymentOperation.none,
-      uiEvent: const PaymentUiEvent(
-        id: 'create_intent_fail',
-        message: 'สร้าง QR Code ล้มเหลว กรุณาลองใหม่อีกครั้ง',
+      uiEvent: _event(
+        'create_intent_fail',
+        'สร้าง QR Code ล้มเหลว กรุณาลองใหม่อีกครั้ง',
         isError: true,
       ),
     ));
@@ -627,9 +632,9 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         uuid == null ||
         uuid.isEmpty) {
       _updateState(_state.copyWith(
-        uiEvent: const PaymentUiEvent(
-          id: 'upload_no_target',
-          message: 'ไม่พบรายการชำระเงินสำหรับแนบสลิป',
+        uiEvent: _event(
+          'upload_no_target',
+          'ไม่พบรายการชำระเงินสำหรับแนบสลิป',
           isError: true,
         ),
       ));
@@ -657,10 +662,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
           isUploading: false,
           uploadSuccess: true,
         ),
-        uiEvent: const PaymentUiEvent(
-          id: 'slip_upload_success',
-          message: 'อัปโหลดสลิปสำเร็จ',
-        ),
+        uiEvent: _event('slip_upload_success', 'อัปโหลดสลิปสำเร็จ'),
       ));
       // Reload intents เพื่อปรับปรุงสถานะแท็บ
       await initialize();
@@ -669,9 +671,9 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       _updateState(_state.copyWith(
         operation: PaymentOperation.none,
         slipState: slip.copyWith(isUploading: false),
-        uiEvent: const PaymentUiEvent(
-          id: 'slip_upload_fail',
-          message: 'อัปโหลดสลิปล้มเหลว กรุณาลองใหม่',
+        uiEvent: _event(
+          'slip_upload_fail',
+          'อัปโหลดสลิปล้มเหลว กรุณาลองใหม่',
           isError: true,
         ),
       ));
@@ -684,9 +686,9 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     final uuid = _state.uploadTargetUuid ?? _state.qrState.intentUuid;
     if (uuid == null || uuid.isEmpty) {
       _updateState(_state.copyWith(
-        uiEvent: const PaymentUiEvent(
-          id: 'cancel_no_target',
-          message: 'ไม่พบรายการชำระเงินที่ต้องการยกเลิก',
+        uiEvent: _event(
+          'cancel_no_target',
+          'ไม่พบรายการชำระเงินที่ต้องการยกเลิก',
           isError: true,
         ),
       ));
@@ -721,9 +723,9 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         clearUploadTarget: true,
         qrState: const PaymentQrState(),
         slipState: const PaymentSlipState(),
-        uiEvent: const PaymentUiEvent(
-          id: 'cancel_intent_success',
-          message: 'ยกเลิกรายการชำระเงินสำเร็จ',
+        uiEvent: _event(
+          'cancel_intent_success',
+          'ยกเลิกรายการชำระเงินสำเร็จ',
         ),
       ));
       await initialize();
@@ -732,9 +734,9 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
 
     _updateState(_state.copyWith(
       operation: PaymentOperation.none,
-      uiEvent: const PaymentUiEvent(
-        id: 'cancel_intent_fail',
-        message: 'ยกเลิกรายการไม่สำเร็จ กรุณาลองใหม่',
+      uiEvent: _event(
+        'cancel_intent_fail',
+        'ยกเลิกรายการไม่สำเร็จ กรุณาลองใหม่',
         isError: true,
       ),
     ));
@@ -742,10 +744,13 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   }
 
   /// เคลียร์ UI Event เมื่อแสดงผลแล้ว
-  void consumeEvent(String id) {
-    if (_state.uiEvent?.id == id) {
-      _updateState(_state.copyWith(clearUiEvent: true));
-    }
+  /// เทียบทั้ง id และ seq เพื่อไม่ให้ event ชนิดเดียวกันครั้งถัดไปถูกกลืน
+  void consumeEvent(String id, {int? seq}) {
+    final current = _state.uiEvent;
+    if (current == null) return;
+    if (current.id != id) return;
+    if (seq != null && current.seq != seq) return;
+    _updateState(_state.copyWith(clearUiEvent: true));
   }
 
   @override

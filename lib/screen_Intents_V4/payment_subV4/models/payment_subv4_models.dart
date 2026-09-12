@@ -209,11 +209,18 @@ class PaymentUiEvent {
     required this.id,
     required this.message,
     this.isError = false,
+    this.seq = 0,
   });
 
+  /// ชนิดของ event (ใช้ระบุชนิด ไม่ใช่ระบุ instance)
   final String id;
   final String message;
   final bool isError;
+
+  /// เลขลำดับไม่ซ้ำต่อการ emit หนึ่งครั้ง
+  /// จำเป็นเพราะ event ชนิดเดิม (id เดิม) เกิดซ้ำได้ เช่น อัปโหลดล้มเหลวหลายครั้ง
+  /// ถ้าใช้ id เปรียบเทียบเฉย ๆ ครั้งที่สองจะไม่ถูกแสดง
+  final int seq;
 }
 
 /// State กลางของหน้าจอ PaymentSubV4

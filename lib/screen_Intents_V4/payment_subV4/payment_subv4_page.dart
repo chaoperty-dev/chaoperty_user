@@ -73,7 +73,7 @@ class _PaymentSubV4View extends StatefulWidget {
 
 class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
   bool _noticeShown = false;
-  String? _handledEventId;
+  int? _handledEventSeq;
 
   @override
   Widget build(BuildContext context) {
@@ -106,10 +106,10 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
       );
     }
 
-    // ฟัง UI Event เพื่อแสดง SnackBar อัตโนมัติ (กันแสดงซ้ำด้วย event id)
+    // ฟัง UI Event เพื่อแสดง SnackBar อัตโนมัติ (กันแสดงซ้ำด้วย seq)
     final event = state.uiEvent;
-    if (event != null && _handledEventId != event.id) {
-      _handledEventId = event.id;
+    if (event != null && _handledEventSeq != event.seq) {
+      _handledEventSeq = event.seq;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -119,7 +119,7 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
             duration: const Duration(seconds: 3),
           ),
         );
-        vm.consumeEvent(event.id);
+        vm.consumeEvent(event.id, seq: event.seq);
       });
     }
 
