@@ -303,6 +303,7 @@ class PaymentSubV4State {
     PageStatus? pageStatus,
     PaymentOperation? operation,
     String? errorMessage,
+    bool clearError = false,
     PaymentUiEvent? uiEvent,
     bool clearUiEvent = false,
     int? selectedTab,
@@ -312,7 +313,9 @@ class PaymentSubV4State {
     List<PaymentIntent>? paymentIntents,
     List<PayMentModel>? paymentModels,
     PayMentModel? selectedPaymentModel,
+    bool clearSelectedPayment = false,
     RenTalModel? rentalModel,
+    bool clearRental = false,
     List<TeNantModel>? tenantModels,
     List<IntentsContractxFineModel>? contractxFineModels,
     List<InvoicePayModel>? invoicePayModels,
@@ -325,6 +328,7 @@ class PaymentSubV4State {
     Money? uploadTargetAmount,
     bool clearUploadTarget = false,
     List<String>? sectionErrors,
+    bool clearSectionErrors = false,
     Map<String, List<IntentsInvoiceHistoryModel>>? invoiceHistoryByDocno,
     Map<String, Map<String, dynamic>>? invoiceFineByDocno,
     String? detailLoadingDocno,
@@ -333,7 +337,7 @@ class PaymentSubV4State {
     return PaymentSubV4State(
       pageStatus: pageStatus ?? this.pageStatus,
       operation: operation ?? this.operation,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       // คง event เดิมไว้จนกว่าจะสั่ง clear หรือส่ง event ใหม่
       uiEvent: clearUiEvent ? null : (uiEvent ?? this.uiEvent),
       selectedTab: selectedTab ?? this.selectedTab,
@@ -342,8 +346,10 @@ class PaymentSubV4State {
       invoicesInIntent: invoicesInIntent ?? this.invoicesInIntent,
       paymentIntents: paymentIntents ?? this.paymentIntents,
       paymentModels: paymentModels ?? this.paymentModels,
-      selectedPaymentModel: selectedPaymentModel ?? this.selectedPaymentModel,
-      rentalModel: rentalModel ?? this.rentalModel,
+      selectedPaymentModel: clearSelectedPayment
+          ? null
+          : (selectedPaymentModel ?? this.selectedPaymentModel),
+      rentalModel: clearRental ? null : (rentalModel ?? this.rentalModel),
       tenantModels: tenantModels ?? this.tenantModels,
       contractxFineModels: contractxFineModels ?? this.contractxFineModels,
       invoicePayModels: invoicePayModels ?? this.invoicePayModels,
@@ -357,7 +363,8 @@ class PaymentSubV4State {
       uploadTargetAmount: clearUploadTarget
           ? null
           : (uploadTargetAmount ?? this.uploadTargetAmount),
-      sectionErrors: sectionErrors ?? this.sectionErrors,
+      sectionErrors:
+          clearSectionErrors ? const [] : (sectionErrors ?? this.sectionErrors),
       invoiceHistoryByDocno:
           invoiceHistoryByDocno ?? this.invoiceHistoryByDocno,
       invoiceFineByDocno: invoiceFineByDocno ?? this.invoiceFineByDocno,

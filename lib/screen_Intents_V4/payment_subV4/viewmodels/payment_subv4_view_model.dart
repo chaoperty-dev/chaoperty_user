@@ -75,7 +75,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     _updateState(_state.copyWith(
       pageStatus: PageStatus.loading,
       operation: PaymentOperation.none,
-      errorMessage: null,
+      clearError: true,
     ));
 
     try {
@@ -95,6 +95,8 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       final paymentMethods =
           paymentRes.isSuccess ? paymentRes.valueOr : <PayMentModel>[];
       final rental = rentalRes.isSuccess ? rentalRes.valueOr : null;
+      // โหลด rental ไม่สำเร็จ = ไม่มีข้อมูลโครงการ ไม่ใช่คงค่าเก่าที่อาจผิด
+      final clearRental = !rentalRes.isSuccess;
 
       // Resolve selected payment model
       PayMentModel? selectedPay;
@@ -231,14 +233,17 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       }
 
       // ผูก intent เป้าหมายไว้ล่วงหน้า เพื่อให้แนบสลิปถูกใบ
+      // ต้อง clear เมื่อไม่มีเป้าหมาย ไม่งั้น copyWith จะคงค่าเก่าไว้ (?? this.x)
       final preTarget = targetIntents.length == 1 ? targetIntents.first : null;
 
       _updateState(_state.copyWith(
         pageStatus: PageStatus.ready,
         authValid: isAuthOk,
         rentalModel: rental,
+        clearRental: clearRental,
         paymentModels: paymentMethods,
         selectedPaymentModel: selectedPay,
+        clearSelectedPayment: selectedPay == null,
         tenantModels: tenants,
         contractxFineModels: contractFines,
         paymentIntents: intents,
@@ -248,6 +253,8 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         selectedTab: targetTab,
         hasAutoSwitched: true,
         sectionErrors: sectionErrors.toList(),
+        clearSectionErrors: sectionErrors.isEmpty,
+        clearUploadTarget: preTarget == null,
         uploadTargetUuid: preTarget?.intentUuid,
         uploadTargetAmount: preTarget == null
             ? null
@@ -463,7 +470,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   }
 
   /// โหลดรายละเอียดบิลย่อย + ค่าปรับ ของ invoice ที่ผู้ใช้กาง
-  /// โหลดครั้งเดียวต่อ docno แล้ว cache ไว้
+  /// cache เฉพาะเมื่อสำเร็จ — ถ้าล้มเหลวให้กางใหม่เพื่อลองอีกครั้ง
   Future<void> loadInvoiceDetail(String docno) async {
     if (docno.isEmpty) return;
     if (_state.invoiceHistoryByDocno.containsKey(docno)) return;
@@ -486,29 +493,41 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
 
     if (_isDisposed) return;
 
-    final historyMap = Map<String, List<IntentsInvoiceHistoryModel>>.from(
-      _state.invoiceHistoryByDocno,
-    );
-    historyMap[docno] =
-        historyRes.isSuccess ? historyRes.valueOr : <IntentsInvoiceHistoryModel>[];
-
     final fineByDoc = Map<String, Map<String, dynamic>>.from(
       _state.invoiceFineByDocno,
     );
     fineByDoc[docno] = fineMap;
 
+    if (!historyRes.isSuccess) {
+      // ไม่ cache — ปล่อยให้กางใหม่เพื่อ retry ได้
+      _updateState(_state.copyWith(
+        invoiceFineByDocno: fineByDoc,
+        clearDetailLoading: true,
+        clearSectionErrors: true,
+        sectionErrors: [historyRes.error!],
+      ));
+      return;
+    }
+
+    final historyMap = Map<String, List<IntentsInvoiceHistoryModel>>.from(
+      _state.invoiceHistoryByDocno,
+    );
+    historyMap[docno] = historyRes.valueOr;
+
     _updateState(_state.copyWith(
       invoiceHistoryByDocno: historyMap,
       invoiceFineByDocno: fineByDoc,
       clearDetailLoading: true,
-      sectionErrors: historyRes.isSuccess
-          ? _state.sectionErrors
-          : [
-              ..._state.sectionErrors,
-              historyRes.error!,
-            ],
+      clearSectionErrors: true,
+      sectionErrors: _state.sectionErrors
+          .where((e) => !_isDetailError(e))
+          .toList(),
     ));
   }
+
+  /// error ที่เกิดจาก loadInvoiceDetail (แยกจาก error ของ section หลัก)
+  bool _isDetailError(String message) =>
+      message.contains('ประวัติรายการ');
 
   /// สลับแท็บ
   void selectTab(int tab) {
