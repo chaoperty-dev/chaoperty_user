@@ -55,6 +55,24 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         seq: ++_eventSeq,
       );
 
+  /// parse ตัวเลขแบบปลอดภัย (null/empty/comma → 0)
+  double _d(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    final s = v.toString().replaceAll(',', '').trim();
+    if (s.isEmpty) return 0;
+    return double.tryParse(s) ?? 0;
+  }
+
+  /// cids ที่ใช้ยิง API — จาก tenantModels ถ้ามี ไม่งั้นใช้ usercid
+  List<String> _cidsFromState(String fallbackUsercid) {
+    final fromTenants = _state.tenantModels
+        .map((t) => t.cid ?? '')
+        .where((c) => c.isNotEmpty)
+        .toList();
+    return fromTenants.isNotEmpty ? fromTenants : [fallbackUsercid];
+  }
+
   void _updateState(PaymentSubV4State newState) {
     if (_isDisposed) return;
     _state = newState;
@@ -454,8 +472,70 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       final customerData =
           PaymentIntentPayload.buildCustomerData(trans: allTrans);
 
-      // 2) ยอดที่ส่ง — late_fee คือผลรวมค่าปรับราย invoice ไม่ใช่ fine_total
-      final requestedTotal = _state.summary.grandTotal.toDouble();
+      // 2) คิดยอดตามสูตรต้นแบบ ซึ่งอิง transaction-level ไม่ใช่ invoice-level
+      //    ยอดจาก GC_tran_select (sum_pvat/sum_amt) + GC_tran_select_fin (sum_tran_fine)
+      //    บวกยอดที่คิดจาก invoice history (sum_amt_in/sum_tran_fine_in)
+      var sumPvat = 0.0;
+      var sumTranFine = 0.0;
+      var sumAmtIn = 0.0;
+      var sumTranFineIn = 0.0;
+
+      final cids = _cidsFromState(usercid);
+
+      try {
+        final txs = await _service.loadTransactions(
+          ren: ren,
+          cids: cids,
+          user: user,
+        );
+        for (final t in txs) {
+          sumPvat += _d(t.pvat);
+        }
+      } catch (e) {
+        debugPrint('⚠️ loadTransactions failed, using invoice totals: $e');
+      }
+
+      try {
+        final fines = await _service.loadTransFines(
+          ren: ren,
+          cids: cids,
+          user: user,
+        );
+        for (final f in fines) {
+          sumTranFine += _d(f.total);
+        }
+      } catch (e) {
+        debugPrint('⚠️ loadTransFines failed: $e');
+      }
+
+      // ยอดจาก invoice history ของบิลที่เลือก
+      for (final h in allTrans) {
+        sumAmtIn += _d(h.total_t);
+      }
+      sumTranFineIn = sumInvoiceFine;
+
+      final requestedTotal = PaymentIntentPayload.requestedTotal(
+        sumPvat: sumPvat,
+        sumTranFine: sumTranFine,
+        sumAmtIn: sumAmtIn,
+        sumTranFineIn: sumTranFineIn,
+        sumDiscount: _state.summary.discountTotal.toDouble(),
+        sumDisIn: 0,
+        fineTotal: _state.summary.fineTotal.toDouble(),
+        disSumPakan: 0,
+      );
+
+      if (requestedTotal <= 0) {
+        _updateState(_state.copyWith(
+          operation: PaymentOperation.none,
+          uiEvent: _event(
+            'invalid_total',
+            'ยอดชำระทั้งหมดต้องมากกว่า 0',
+            isError: true,
+          ),
+        ));
+        return false;
+      }
 
       final res = await _service.createPaymentIntent(
         cusNo: custno,
