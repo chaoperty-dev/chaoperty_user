@@ -54,7 +54,10 @@ class PaymentSubV4Page extends StatelessWidget {
     if (override != null) {
       return ChangeNotifierProvider<PaymentSubV4ViewModel>.value(
         value: override,
-        child: const _PaymentSubV4View(),
+        child: _PaymentSubV4View(
+          animation: mainScreenAnimation,
+          animationController: mainScreenAnimationController,
+        ),
       );
     }
 
@@ -71,21 +74,66 @@ class PaymentSubV4Page extends StatelessWidget {
 
     return ChangeNotifierProvider(
       create: (_) => PaymentSubV4ViewModel(params: params)..initialize(),
-      child: const _PaymentSubV4View(),
+      child: _PaymentSubV4View(
+        animation: mainScreenAnimation,
+        animationController: mainScreenAnimationController,
+      ),
     );
   }
 }
 
 class _PaymentSubV4View extends StatefulWidget {
-  const _PaymentSubV4View();
+  const _PaymentSubV4View({
+    this.animation,
+    this.animationController,
+  });
+
+  final Animation<double>? animation;
+  final AnimationController? animationController;
 
   @override
   State<_PaymentSubV4View> createState() => _PaymentSubV4ViewState();
 }
 
-class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
+class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
+    with TickerProviderStateMixin {
   bool _noticeShown = false;
   int? _handledEventSeq;
+
+  /// ใช้เมื่อ caller ไม่ได้ส่ง animation มา (เช่นจาก My Diary)
+  late final AnimationController _localController;
+  late final Animation<double> _localAnimation;
+  late final bool _usingLocalController;
+
+  AnimationController get _controller =>
+      _usingLocalController
+          ? _localController
+          : widget.animationController!;
+
+  Animation<double> get _animation =>
+      _usingLocalController ? _localAnimation : widget.animation!;
+
+  @override
+  void initState() {
+    super.initState();
+    _usingLocalController = widget.animationController == null ||
+        widget.animation == null;
+    if (_usingLocalController) {
+      _localController = AnimationController(
+        vsync: this,
+        value: 1.0, // แสดงทันที ไม่ต้องรอ animation
+      );
+      _localAnimation = AlwaysStoppedAnimation(1.0);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_usingLocalController) {
+      _localController.dispose();
+    }
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -135,10 +183,17 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
       });
     }
 
-    return Scaffold(
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) => Scaffold(
       backgroundColor: const Color(0xFFF1F5F9),
       body: SafeArea(
-        child: Column(
+        child: FadeTransition(
+          opacity: _animation,
+          child: Transform(
+            transform: Matrix4.translationValues(
+                0.0, 30 * (1.0 - _animation.value), 0.0),
+            child: Column(
           children: [
             PaymentSubV4Header(
               title: vm.params.customerLanguage == 'EN' ? 'Payment' : 'การชำระ',
@@ -368,6 +423,9 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View> {
                 },
               ),
           ],
+        ),
+            ),
+          ),
         ),
       ),
     );

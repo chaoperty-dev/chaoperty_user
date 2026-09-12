@@ -7,7 +7,7 @@ import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:chaoperty_user/screen_Intents_V3/payment_subV3_InvAll.dart';
 import 'package:chaoperty_user/video_player_helper.dart';
 import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
-import 'package:chaoperty_user/screen_Intents_V4/payment_subV4_InvAll.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/payment_subv4_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -1775,7 +1775,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                               );
 
                               if (useV4) {
-                                return paymentSubV4InvAll(
+                                return PaymentSubV4Page(
                                   mainScreenAnimation: animation,
                                   mainScreenAnimationController:
                                       widget.mainScreenAnimationController!,

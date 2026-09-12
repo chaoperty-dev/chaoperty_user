@@ -34,7 +34,7 @@ import '../ui_view/title_view.dart';
 import 'meals_list_view.dart';
 import 'package:http/http.dart' as http;
 
-import '../../../screen_Intents_V4/payment_subV4_InvAll.dart';
+import '../../../screen_Intents_V4/payment_subV4/payment_subv4_page.dart';
 
 class MyDiaryScreen extends StatefulWidget {
   const MyDiaryScreen({Key? key, this.animationController}) : super(key: key);
@@ -1232,16 +1232,21 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
 
     // 3. navigate — ใช้ MaterialPageRoute ตรงๆ (ไม่ผ่าน V3 wrapper)
     //    ส่ง fromIntent: true เพื่อให้ V4 รู้ว่ามาจาก card/intent card
+    //    ส่ง targetIntentUuid/targetPaymentIntentNo ด้วย เพราะกรณีที่ API
+    //    ไม่ได้ส่ง billReferences มา selectedDocNos จะไม่ตรงกับ billReference
+    //    ของ intent จริง ทำให้ V4 หา intent ไม่เจอ
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => paymentSubV4InvAll(
+        builder: (_) => PaymentSubV4Page(
           teNantModel: teNantModels.isEmpty ? null : teNantModels,
           cuslang: cus_lang,
           serPayment: serPayment,
           serptPayment: null,
           selectedDocNos: docNos,
           fromIntent: true,
+          targetIntentUuid: t.intentUuid,
+          targetPaymentIntentNo: t.paymentIntentNo,
         ),
       ),
     );
