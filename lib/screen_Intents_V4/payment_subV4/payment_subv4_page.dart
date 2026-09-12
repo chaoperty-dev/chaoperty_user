@@ -7,6 +7,7 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_s
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_tabs.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_payment_card.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_qr_box.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_intent_card.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/platform/payment_subv4_slip_picker.dart';
 
@@ -161,19 +162,55 @@ class _PaymentSubV4View extends StatelessWidget {
                           ),
                         ),
                     ] else if (state.selectedTab == 2) ...[
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Text('รายการรอแนบหลักฐาน'),
-                        ),
-                      ),
+                      if (state.countAwaitingSlip == 0)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Text('ไม่มีรายการรอแนบหลักฐาน'),
+                          ),
+                        )
+                      else
+                        ...state.paymentIntents
+                            .where((p) =>
+                                PaymentSubV4State.classifyIntentStatus(p) ==
+                                NormalizedIntentStatus.awaitingSlip)
+                            .map(
+                              (intent) => PaymentSubV4IntentCard(
+                                intent: intent,
+                                isVerifyTab: false,
+                                onAttachSlip: () async {
+                                  final slip =
+                                      await PaymentSubV4SlipPicker.pickAndCompressImage();
+                                  if (slip != null) {
+                                    vm.setSlip(
+                                      bytes: slip.bytes,
+                                      fileName: slip.fileName,
+                                      mimeType: slip.mimeType,
+                                    );
+                                    await vm.uploadSlip();
+                                  }
+                                },
+                              ),
+                            ),
                     ] else if (state.selectedTab == 3) ...[
-                      const Center(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(vertical: 32),
-                          child: Text('รายการรอระบบตรวจสอบ'),
-                        ),
-                      ),
+                      if (state.countAwaitingVerify == 0)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Text('ไม่มีรายการรอระบบตรวจสอบ'),
+                          ),
+                        )
+                      else
+                        ...state.paymentIntents
+                            .where((p) =>
+                                PaymentSubV4State.classifyIntentStatus(p) ==
+                                NormalizedIntentStatus.awaitingVerification)
+                            .map(
+                              (intent) => PaymentSubV4IntentCard(
+                                intent: intent,
+                                isVerifyTab: true,
+                              ),
+                            ),
                     ],
                   ],
                 ),
