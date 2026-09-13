@@ -5,6 +5,7 @@ import 'package:chaoperty_user/Model/GetRenTal_Model.dart';
 import 'package:chaoperty_user/Model/GetInvoice_Model.dart';
 import 'package:chaoperty_user/Model/GetInvoice_pay_Model.dart';
 import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
+import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsContractx_Fine_Model.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsInv_history_Model.dart';
 
@@ -73,6 +74,60 @@ enum PaymentOperation {
   renewingQr,
   uploadingSlip,
   cancelling,
+}
+
+/// รูปแบบช่องทางที่ View ต้องแสดง
+/// แยกออกจาก QrStatus เพราะ intent ของ Bank Transfer ก็ active ได้โดยไม่มี QR
+enum PaymentChannelMode { qr, bankTransfer, unsupported }
+
+extension PayMentModelDisplay on PayMentModel {
+  PaymentChannelMode get channelMode {
+    final type = (ptser ?? '').trim();
+    if (type == '2') return PaymentChannelMode.bankTransfer;
+    if (const {'5', '6', '7', '11'}.contains(type)) {
+      return PaymentChannelMode.qr;
+    }
+    return PaymentChannelMode.unsupported;
+  }
+
+  bool get isQrChannel => channelMode == PaymentChannelMode.qr;
+  bool get isBankTransfer => channelMode == PaymentChannelMode.bankTransfer;
+
+  String bankDisplayName({required bool isEn}) {
+    final raw = (bank ?? '').trim();
+    final info = bankCodeMap[raw];
+    if (isEn) return (info?['en'] ?? raw).trim();
+    return raw;
+  }
+
+  String get bankShortCode => bankCodeMap[(bank ?? '').trim()]?['code'] ?? '';
+
+  String? get bankLogoAsset {
+    final file = bankCodeMap[(bank ?? '').trim()]?['logo'];
+    return file == null || file.isEmpty
+        ? null
+        : 'assets/images/LogoBank/$file';
+  }
+
+  String get safeAccountNumber {
+    final value = (bno ?? '').trim();
+    return value == 'null' ? '' : value;
+  }
+
+  String accountOwner({required bool isEn}) {
+    final value = (isEn ? bnameEn : bname) ?? bname ?? bnameEn ?? '';
+    return value.trim() == 'null' ? '' : value.trim();
+  }
+
+  String get safeCoOwner {
+    final value = (co ?? '').trim();
+    return value == 'null' ? '' : value;
+  }
+
+  String get safeRemark {
+    final value = (remark ?? '').trim();
+    return value == 'null' ? '' : value;
+  }
 }
 
 /// สถานะ QR Code

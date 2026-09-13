@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:chaoperty_user/color.dart';
 
-/// การ์ดแนะนำวิธีชำระเงิน 4 ขั้นตอน
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_theme.dart';
+
 class PaymentSubV4InstructionsCard extends StatelessWidget {
   const PaymentSubV4InstructionsCard({
     super.key,
@@ -15,133 +15,106 @@ class PaymentSubV4InstructionsCard extends StatelessWidget {
   List<String> get _steps => isBankTransfer
       ? [
           isEn
-              ? 'Copy the Account Number shown above by pressing the "Copy" button.'
-              : 'คัดลอกเลขบัญชีด้านบนโดยกดปุ่ม ‘คัดลอก’',
+              ? 'Copy the account number and verify the transfer amount.'
+              : 'คัดลอกเลขที่บัญชี และตรวจสอบยอดเงิน',
           isEn
-              ? 'Open your banking application to start the transaction.'
-              : 'เปิดแอปพลิเคชันธนาคารของคุณ เพื่อเริ่มทำรายการ',
+              ? 'Open your banking application and select “Transfer”.'
+              : 'เปิดแอปพลิเคชันธนาคารของคุณแล้วเลือกเมนู “โอนเงิน”',
           isEn
-              ? 'Go to the "Transfer" menu, then paste the copied number and enter the exact amount.'
-              : 'ไปยังเมนู ‘โอนเงิน’ จากนั้นนำเลขบัญชีที่คัดลอกไว้ไปวาง และใส่จำนวนเงินให้ตรง',
+              ? 'Enter the account number and transfer the exact amount.'
+              : 'วางเลขที่บัญชีและระบุยอดเงินให้ตรงกับที่ระบบแสดง',
           isEn
-              ? 'After transferring, attach the slip and confirm the payment.'
-              : 'หลังจากโอนเงินแล้ว ให้แนบสลิปและกดยืนยันการชำระเงิน',
+              ? 'Attach the transfer slip and confirm below.'
+              : 'เมื่อโอนสำเร็จ กดปุ่ม “แนบหลักฐานและยืนยัน” ด้านล่าง',
         ]
       : [
           isEn
-              ? 'Open your banking application and choose the "Scan QR" menu.'
-              : 'เปิดแอปพลิเคชันธนาคาร แล้วเลือกเมนู ‘สแกน QR’',
+              ? 'Save the QR Code or take a screenshot.'
+              : 'กดปุ่ม “บันทึก QR Code” ลงในโทรศัพท์ หรือคัดลอกเลขที่บัญชี',
           isEn
-              ? 'Scan the QR code shown above.'
-              : 'สแกน QR Code ที่แสดงอยู่ด้านบน',
+              ? 'Open your banking application.'
+              : 'เปิดแอปพลิเคชันธนาคารใดก็ได้ (K PLUS, SCB EASY, Krungthai NEXT ฯลฯ)',
           isEn
-              ? 'Verify the amount and confirm the transaction in your bank app.'
-              : 'ตรวจสอบจำนวนเงินให้ถูกต้อง แล้วยืนยันรายการในแอปธนาคาร',
+              ? 'Select “Scan / QR Code” and choose the saved image.'
+              : 'เลือกเมนู “สแกน / QR Code” แล้วเลือกดูรูปภาพจากอัลบั้ม',
           isEn
-              ? 'After transferring, attach the slip and confirm the payment.'
-              : 'หลังจากโอนเงินแล้ว ให้แนบสลิปและกดยืนยันการชำระเงิน',
+              ? 'Attach the transfer slip and confirm below.'
+              : 'เมื่อชำระสำเร็จ กดปุ่ม “แนบหลักฐานและยืนยัน” ด้านล่าง',
         ];
 
   @override
   Widget build(BuildContext context) {
-    final steps = _steps;
-
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 10),
+      decoration: PaymentSubV4Theme.cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.info_outline, color: Color(0xFF0E5C9E), size: 20),
-              const SizedBox(width: 8),
+              const Icon(
+                Icons.info_outline_rounded,
+                color: PaymentSubV4Theme.skyAction,
+                size: 18,
+              ),
+              const SizedBox(width: 7),
               Expanded(
                 child: Text(
                   isEn
                       ? 'How to pay in 4 easy steps'
                       : 'วิธีชำระเงินง่ายๆ 4 ขั้นตอน',
-                  style: const TextStyle(
-                    fontFamily: Font_.Fonts_T,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 15,
+                  style: PaymentSubV4Theme.text(
+                    size: 14,
+                    weight: FontWeight.w700,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          for (int i = 0; i < steps.length; i++)
-            IntrinsicHeight(
+          const SizedBox(height: 9),
+          for (int i = 0; i < _steps.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 34,
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 26,
-                          height: 26,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: i == steps.length - 1
-                                ? const Color(0xFFFF6B00).withValues(alpha: 0.15)
-                                : const Color(0xFF0E5C9E),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            '${i + 1}',
-                            style: TextStyle(
-                              color: i == steps.length - 1
-                                  ? const Color(0xFFE05E00)
-                                  : Colors.white,
-                              fontFamily: Font_.Fonts_T,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                        if (i < steps.length - 1)
-                          Expanded(
-                            child: Container(
-                              width: 1.5,
-                              color: Colors.grey.shade200,
-                            ),
-                          ),
-                      ],
+                  Container(
+                    width: 23,
+                    height: 23,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: i == _steps.length - 1
+                          ? const Color(0xFFFFE7D6)
+                          : const Color(0xFFEFF6FF),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: i == _steps.length - 1
+                            ? const Color(0xFFFED7AA)
+                            : const Color(0xFFDBEAFE),
+                      ),
+                    ),
+                    child: Text(
+                      '${i + 1}',
+                      style: PaymentSubV4Theme.text(
+                        size: 11,
+                        weight: FontWeight.w700,
+                        color: i == _steps.length - 1
+                            ? PaymentSubV4Theme.primaryOrangeDark
+                            : PaymentSubV4Theme.skyAction,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 9),
                   Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.only(top: 2, bottom: 12),
-                      decoration: i < steps.length - 1
-                          ? BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(color: Colors.grey.shade200),
-                              ),
-                            )
-                          : null,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
                       child: Text(
-                        steps[i],
-                        style: const TextStyle(
-                          fontFamily: Font_.Fonts_T,
-                          fontSize: 13,
-                          height: 1.5,
-                          color: Colors.black87,
+                        _steps[i],
+                        style: PaymentSubV4Theme.text(
+                          size: 13,
+                          color: const Color(0xFF334155),
+                          height: 1.45,
                         ),
                       ),
                     ),

@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pretty_qr_code/pretty_qr_code.dart';
+
 import 'package:chaoperty_user/Model/GetInvoice_Model.dart';
+import 'package:chaoperty_user/Model/GetPayMent_Model.dart';
 import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/payment_subv4_page.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/payment_subv4_view_model.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_instructions_card.dart';
 
 const _params = PaymentSubV4Params(customerLanguage: 'TH', paymentSerial: '1');
@@ -15,6 +19,37 @@ InvoiceModel _inv(String docno, String amtall, {String? dis}) {
   m.amtall = amtall;
   m.disendbill = dis;
   return m;
+}
+
+PayMentModel _payment({
+  required String ptser,
+  String? bno,
+  String? bname,
+  String? co,
+  String? remark,
+  String? bank,
+}) {
+  final m = PayMentModel();
+  m.ser = '1';
+  m.ptser = ptser;
+  m.bno = bno;
+  m.bname = bname;
+  m.co = co;
+  m.remark = remark;
+  m.bank = bank;
+  return m;
+}
+
+PaymentQrState _activeQr({String? payload, String? ref3, String? expireAt}) {
+  return PaymentQrState(
+    status: QrStatus.active,
+    intentUuid: 'uuid-1',
+    ref1: 'REF-ONE',
+    ref3: ref3,
+    qrPayload: payload ?? '00020101021229370016A000000677010111',
+    softExpireAt: expireAt,
+    secondsRemaining: 120,
+  );
 }
 
 Widget _wrap(PaymentSubV4State state) {
@@ -33,14 +68,15 @@ Widget _wrap(PaymentSubV4State state) {
 
 void main() {
   group('PaymentSubV4Page rendering by state', () {
-    testWidgets('loading state shows only a progress indicator', (tester) async {
+    testWidgets('loading state shows only a progress indicator',
+        (tester) async {
       await tester.pumpWidget(_wrap(const PaymentSubV4State(
         pageStatus: PageStatus.loading,
       )));
       await tester.pump();
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.text('การชำระ'), findsNothing);
+      expect(find.text('การชำระเงิน'), findsNothing);
     });
 
     testWidgets('error state shows the error message', (tester) async {
@@ -59,10 +95,20 @@ void main() {
       )));
       await tester.pump();
 
-      expect(find.text('การชำระ'), findsOneWidget);
+      expect(find.text('การชำระเงิน'), findsOneWidget);
       expect(find.text('ที่ต้องชำระ'), findsOneWidget);
-      expect(find.text('รอแนบหลักฐาน'), findsOneWidget);
+      expect(find.text('รอแนบสลิป'), findsOneWidget);
       expect(find.text('รอระบบตรวจสอบ'), findsOneWidget);
+    });
+
+    testWidgets('header exposes help and status affordances', (tester) async {
+      await tester.pumpWidget(_wrap(const PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+      )));
+      await tester.pump();
+
+      expect(find.byIcon(Icons.help_outline_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
     });
 
     testWidgets('tab badges show the intent counts', (tester) async {
@@ -78,7 +124,6 @@ void main() {
       await tester.pumpWidget(_wrap(state));
       await tester.pump();
 
-      // 2 รอแนบหลักฐาน, 1 รอตรวจสอบ
       expect(find.text('2'), findsOneWidget);
       expect(find.text('1'), findsOneWidget);
     });
@@ -104,11 +149,10 @@ void main() {
       await tester.pump();
 
       expect(find.text('INV-001'), findsOneWidget);
-      // net = 1000 - 100 = 900
       expect(find.text('฿900.00'), findsOneWidget);
     });
 
-    testWidgets('bottom action is hidden when there are no invoices',
+    testWidgets('bottom action hidden when there are no invoices',
         (tester) async {
       await tester.pumpWidget(_wrap(const PaymentSubV4State(
         pageStatus: PageStatus.ready,
@@ -119,11 +163,12 @@ void main() {
       expect(find.textContaining('เริ่มการชำระ'), findsNothing);
     });
 
-    testWidgets('bottom action shows start label before a QR exists',
+    testWidgets('bottom action shows start label before a payment exists',
         (tester) async {
       final state = PaymentSubV4State(
         pageStatus: PageStatus.ready,
         selectedTab: 1,
+        selectedPaymentModel: _payment(ptser: '5', bno: '0843631897'),
         invoices: [_inv('INV-001', '500.00')],
         summary: const PaymentSummary(grandTotal: Money(50000)),
       );
@@ -132,53 +177,53 @@ void main() {
       await tester.pump();
 
       expect(find.textContaining('เริ่มการชำระ'), findsOneWidget);
+      expect(find.text('ยอดรวมที่ต้องโอน'), findsOneWidget);
+      expect(find.text('รอสลิปยืนยัน'), findsOneWidget);
     });
 
-    testWidgets('bottom action switches label when a QR is active',
+    testWidgets('bottom action switches label when payment is active',
         (tester) async {
       final state = PaymentSubV4State(
         pageStatus: PageStatus.ready,
         selectedTab: 1,
+        selectedPaymentModel: _payment(ptser: '5', bno: '0843631897'),
         invoices: [_inv('INV-001', '500.00')],
         summary: const PaymentSummary(grandTotal: Money(50000)),
-        qrState: const PaymentQrState(
-          status: QrStatus.active,
-          intentUuid: 'uuid-1',
-          qrPayload: '00020101021229',
-          secondsRemaining: 120,
-        ),
+        qrState: _activeQr(),
       );
 
       await tester.pumpWidget(_wrap(state));
       await tester.pump();
 
-      expect(find.textContaining('แนบหลักฐานและยืนยัน'), findsOneWidget);
+      // scope ที่ CTA เพราะข้อความเดียวกันปรากฏใน instructions card ด้วย
+      expect(
+        find.descendant(
+          of: find.byType(PaymentSubV4BottomAction),
+          matching: find.textContaining('แนบหลักฐานและยืนยัน'),
+        ),
+        findsOneWidget,
+      );
     });
 
-    testWidgets('countdown bar is shown when a QR is active', (tester) async {
+    testWidgets('countdown alert renders remaining time', (tester) async {
       final state = PaymentSubV4State(
         pageStatus: PageStatus.ready,
-        qrState: const PaymentQrState(
-          status: QrStatus.active,
-          intentUuid: 'uuid-1',
-          secondsRemaining: 65,
-        ),
+        selectedPaymentModel: _payment(ptser: '5', bno: '0843631897'),
+        qrState: _activeQr().copyWith(secondsRemaining: 65),
       );
 
       await tester.pumpWidget(_wrap(state));
       await tester.pump();
 
-      expect(find.textContaining('QR ใช้ได้อีก'), findsOneWidget);
-      expect(find.textContaining('00:01:05'), findsOneWidget);
+      expect(find.text('QR ใช้ได้อีกภายใน'), findsOneWidget);
+      expect(find.text('01:05'), findsOneWidget);
     });
 
-    testWidgets('countdown bar reports expiry when the session ended',
-        (tester) async {
+    testWidgets('countdown alert reports expiry', (tester) async {
       final state = PaymentSubV4State(
         pageStatus: PageStatus.ready,
-        qrState: const PaymentQrState(
-          status: QrStatus.active,
-          intentUuid: 'uuid-1',
+        selectedPaymentModel: _payment(ptser: '5', bno: '0843631897'),
+        qrState: _activeQr().copyWith(
           secondsRemaining: 0,
           isSessionExpired: true,
         ),
@@ -187,7 +232,10 @@ void main() {
       await tester.pumpWidget(_wrap(state));
       await tester.pump();
 
-      expect(find.text('QR หมดอายุแล้ว'), findsOneWidget);
+      // "QR หมดอายุแล้ว" ปรากฏทั้งใน countdown alert และ overlay บน QR
+      expect(find.text('QR หมดอายุแล้ว'), findsNWidgets(2));
+      expect(find.byIcon(Icons.timer_off_rounded), findsWidgets);
+      expect(find.text('--:--'), findsOneWidget);
     });
 
     testWidgets('section errors show a retry banner', (tester) async {
@@ -218,11 +266,14 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MaterialApp(home: PaymentSubV4Page(cuslang: 'EN', viewModelOverride: vm)),
+        MaterialApp(
+          home: PaymentSubV4Page(cuslang: 'EN', viewModelOverride: vm),
+        ),
       );
       await tester.pump();
 
       expect(find.text('Payment'), findsOneWidget);
+      expect(find.text('To pay'), findsOneWidget);
     });
 
     testWidgets('tab 2 lists awaiting-slip intents', (tester) async {
@@ -268,8 +319,6 @@ void main() {
 
       expect(find.text('วิธีชำระเงินง่ายๆ 4 ขั้นตอน'), findsOneWidget);
 
-      // scope ให้อยู่ใน instructions card เท่านั้น
-      // เพราะเลขขั้นตอนชนกับ badge ของแท็บได้ (เช่น "1" ของ "ที่ต้องชำระ")
       final card = find.byType(PaymentSubV4InstructionsCard);
       expect(card, findsOneWidget);
 
@@ -280,6 +329,96 @@ void main() {
           reason: 'step $n should appear exactly once inside the card',
         );
       }
+    });
+  });
+
+  group('channel variants', () {
+    testWidgets('bank transfer channel renders no QR widget', (tester) async {
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedPaymentModel: _payment(
+          ptser: '2',
+          bno: '051-5-53800033-3',
+          bname: 'บริษัท ทดสอบ จำกัด',
+          co: 'น.ส. กิตติธร ทดสอบ',
+          remark: 'โอนแล้วแนบสลิป',
+          bank: 'ธนาคารออมสิน',
+        ),
+        summary: const PaymentSummary(grandTotal: Money(100000)),
+        qrState: const PaymentQrState(
+          status: QrStatus.unavailable,
+          intentUuid: 'uuid-bank',
+          ref3: 'REF-BANK',
+          softExpireAt: '2026-09-08T08:45:00Z',
+        ),
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+
+      expect(find.byType(PrettyQrView), findsNothing);
+      expect(find.text('บันทึกภาพ QR Code ลงเครื่อง'), findsNothing);
+      expect(find.text('051-5-53800033-3'), findsOneWidget);
+      expect(find.text('บริษัท ทดสอบ จำกัด'), findsOneWidget);
+      expect(find.text('น.ส. กิตติธร ทดสอบ'), findsOneWidget);
+      expect(find.text('คัดลอก'), findsOneWidget);
+      expect(find.text('คัดลอกยอดเงิน'), findsOneWidget);
+      expect(find.textContaining('โอนแล้วแนบสลิป'), findsOneWidget);
+    });
+
+    testWidgets('bank transfer channel shows bank header and ref/expiry',
+        (tester) async {
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedPaymentModel: _payment(
+          ptser: '2',
+          bno: '051-5-53800033-3',
+          bname: 'บริษัท ทดสอบ จำกัด',
+          bank: 'ธนาคารออมสิน',
+        ),
+        summary: const PaymentSummary(grandTotal: Money(100000)),
+        qrState: const PaymentQrState(
+          status: QrStatus.unavailable,
+          intentUuid: 'uuid-bank',
+          ref3: 'REF-BANK',
+          softExpireAt: '2026-09-08T08:45:00Z',
+        ),
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+
+      expect(find.text('ธนาคารปลายทาง'), findsOneWidget);
+      expect(find.textContaining('ออมสิน'), findsOneWidget);
+      expect(find.textContaining('REF-BANK'), findsOneWidget);
+      expect(
+        find.textContaining('หมดอายุ: '),
+        findsOneWidget,
+        reason: 'ref/expiry footer must render an explicit expiry line',
+      );
+    });
+
+    testWidgets('QR channel renders QR widget and save action', (tester) async {
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedPaymentModel: _payment(
+          ptser: '5',
+          bno: '0843631897',
+          bname: 'ร้านค้าทดสอบ',
+          bank: 'ธนาคารกสิกรไทย',
+        ),
+        summary: const PaymentSummary(grandTotal: Money(100000)),
+        qrState: _activeQr(ref3: 'REF-QR'),
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+
+      expect(find.byType(PrettyQrView), findsOneWidget);
+      expect(find.text('บันทึกภาพ QR Code ลงเครื่อง'), findsOneWidget);
+      expect(find.text('ยอดเงินที่ต้องชำระ'), findsOneWidget);
+      expect(find.text('ผู้รับเงิน / Merchant'), findsOneWidget);
+      expect(find.text('คัดลอกยอดเงิน'), findsNothing);
     });
   });
 }

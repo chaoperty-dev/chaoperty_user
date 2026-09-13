@@ -1,20 +1,26 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:chaoperty_user/Model/GetTeNant_Model.dart';
 import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
 import 'package:chaoperty_user/color.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/platform/payment_subv4_web_actions.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/payment_subv4_view_model.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_header.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_tabs.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_payment_card.dart';
-import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_qr_box.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_intent_card.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_invoice_row.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_dialogs.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_instructions_card.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_countdown_bar.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_theme.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/platform/payment_subv4_slip_picker.dart';
 
 /// Entry page รองรับทั้ง Parameter เก่าและใหม่ เพื่อ Parity
@@ -99,6 +105,7 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
     with TickerProviderStateMixin {
   bool _noticeShown = false;
   int? _handledEventSeq;
+  final GlobalKey _qrBoundaryKey = GlobalKey();
 
   /// ใช้เมื่อ caller ไม่ได้ส่ง animation มา (เช่นจาก My Diary)
   late final AnimationController _localController;
@@ -140,6 +147,10 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
     final vm = context.watch<PaymentSubV4ViewModel>();
     final state = vm.state;
     final isEn = vm.params.customerLanguage == 'EN';
+    final payment = state.selectedPaymentModel;
+    final hasActivePayment = (state.qrState.intentUuid ?? '').isNotEmpty;
+    final isQrChannel = payment?.isQrChannel == true;
+    final merchantName = _merchantName(state);
 
     // แจ้งเตือนให้แนบหลักฐานครั้งแรกที่เข้าหน้า
     if (!_noticeShown && state.pageStatus == PageStatus.ready) {
@@ -186,18 +197,33 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) => Scaffold(
-      backgroundColor: const Color(0xFFF1F5F9),
+      backgroundColor: PaymentSubV4Theme.pageBackground,
       body: SafeArea(
-        child: FadeTransition(
-          opacity: _animation,
-          child: Transform(
-            transform: Matrix4.translationValues(
-                0.0, 30 * (1.0 - _animation.value), 0.0),
-            child: Column(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: FadeTransition(
+              opacity: _animation,
+              child: Transform(
+                transform: Matrix4.translationValues(
+                    0.0, 30 * (1.0 - _animation.value), 0.0),
+                child: Column(
           children: [
             PaymentSubV4Header(
-              title: vm.params.customerLanguage == 'EN' ? 'Payment' : 'การชำระ',
+              title: isEn ? 'Payment' : 'การชำระเงิน',
+              isConnected: state.authValid,
               onBack: () => Navigator.of(context).pop(),
+              onHelp: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isEn
+                          ? 'Please contact property support.'
+                          : 'กรุณาติดต่อฝ่ายดูแลโครงการ',
+                    ),
+                  ),
+                );
+              },
             ),
             PaymentSubV4Tabs(
               selectedTab: state.selectedTab,
@@ -205,6 +231,7 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
               countAwaitingSlip: state.countAwaitingSlip,
               countAwaitingVerify: state.countAwaitingVerify,
               onTabSelected: (tab) => vm.selectTab(tab),
+              isEn: isEn,
             ),
             if (state.sectionErrors.isNotEmpty)
               Container(
@@ -249,14 +276,13 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
                   ],
                 ),
               ),
-            if (state.qrState.status == QrStatus.active ||
-                state.qrState.isSessionExpired)
+            if (hasActivePayment)
               PaymentSubV4CountdownBar(
                 qrState: state.qrState,
                 totalSeconds: vm.sessionTotalSecs,
                 isEn: isEn,
               ),
-            if (state.qrState.status == QrStatus.active)
+            if (hasActivePayment)
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
                 child: Row(
@@ -287,17 +313,29 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   children: [
-                    PaymentSubV4PaymentCard(
-                      paymentModel: state.selectedPaymentModel,
-                      summary: state.summary,
-                      qrState: state.qrState,
-                    ),
-                    if (state.qrState.status == QrStatus.active)
-                      PaymentSubV4QrBox(
-                        qrState: state.qrState,
+                    if (hasActivePayment)
+                      PaymentSubV4PaymentCard(
+                        paymentModel: payment,
                         summary: state.summary,
-                        onRenewQr: () => vm.createPaymentIntent(),
+                        qrState: state.qrState,
+                        isEn: isEn,
+                        merchantName: merchantName,
+                        qrBoundaryKey: _qrBoundaryKey,
+                        onCopy: (value) => _copyText(value, isEn),
+                        onSaveQr: isQrChannel
+                            ? () => _saveQrOnWeb(isEn)
+                            : null,
+                        onRenewQr: isQrChannel
+                            ? () => vm.createPaymentIntent()
+                            : null,
                       ),
+                    if (hasActivePayment) ...[
+                      const SizedBox(height: 12),
+                      PaymentSubV4InstructionsCard(
+                        isEn: isEn,
+                        isBankTransfer: payment?.isBankTransfer == true,
+                      ),
+                    ],
                     if (state.slipState.slipBytes != null) ...[
                       const SizedBox(height: 12),
                       Container(
@@ -349,12 +387,13 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
                             onExpand: (d) => vm.loadInvoiceDetail(d),
                           );
                         }),
-                        const SizedBox(height: 16),
-                        PaymentSubV4InstructionsCard(
-                          isEn: isEn,
-                          isBankTransfer:
-                              state.selectedPaymentModel?.ptser == '2',
-                        ),
+                        if (!hasActivePayment) ...[
+                          const SizedBox(height: 16),
+                          PaymentSubV4InstructionsCard(
+                            isEn: isEn,
+                            isBankTransfer: payment?.isBankTransfer == true,
+                          ),
+                        ],
                       ],
                     ] else if (state.selectedTab == 2) ...[
                       if (state.countAwaitingSlip == 0)
@@ -405,30 +444,103 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
               PaymentSubV4BottomAction(
                 summary: state.summary,
                 operation: state.operation,
-                label: state.qrState.status == QrStatus.active
+                isEn: isEn,
+                enabled: state.summary.grandTotal.isPositive,
+                label: hasActivePayment
                     ? (isEn
                         ? 'Attach slip and confirm'
                         : 'กดเพื่อ "แนบหลักฐานและยืนยัน"')
-                    : (isEn
-                        ? 'Start payment'
-                        : 'กดเพื่อ "เริ่มการชำระ"'),
+                    : (isEn ? 'Start payment' : 'กดเพื่อ "เริ่มการชำระ"'),
                 onActionPressed: () async {
-                  if (vm.state.qrState.status == QrStatus.active) {
+                  if (hasActivePayment) {
                     await _confirmAndUploadSlip(null, isEn);
                   } else {
-                    // ยังไม่มี QR → สร้าง intent + QR
-                    // หากล้มเหลว ViewModel จะส่ง uiEvent ให้แสดง SnackBar เอง
                     await vm.createPaymentIntent();
                   }
                 },
               ),
           ],
         ),
+                ),
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  String _merchantName(PaymentSubV4State state) {
+    final rental = state.rentalModel;
+    final rentalName = (rental?.pn ?? rental?.rtname ?? '').trim();
+    if (rentalName.isNotEmpty && rentalName != 'null') return rentalName;
+
+    if (state.tenantModels.isNotEmpty) {
+      final tenant = state.tenantModels.first;
+      final name = (tenant.sname ?? tenant.cname ?? tenant.rtname ?? '').trim();
+      if (name.isNotEmpty && name != 'null') return name;
+    }
+    return '';
+  }
+
+  Future<void> _copyText(String value, bool isEn) async {
+    if (value.trim().isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isEn ? 'Copied' : 'คัดลอกเรียบร้อยแล้ว'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _saveQrOnWeb(bool isEn) async {
+    if (!kIsWeb) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEn
+                ? 'QR saving is available on Web in this version.'
+                : 'เวอร์ชันนี้รองรับการบันทึก QR บน Web',
+          ),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await WidgetsBinding.instance.endOfFrame;
+      final boundary = _qrBoundaryKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) throw StateError('QR boundary is unavailable');
+
+      final image = await boundary.toImage(pixelRatio: 3);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) throw StateError('QR image could not be encoded');
+
+      final saved = await savePaymentQrOnWeb(data.buffer.asUint8List());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            saved
+                ? (isEn ? 'QR Code saved' : 'บันทึก QR Code แล้ว')
+                : (isEn ? 'Could not save QR Code' : 'บันทึก QR Code ไม่สำเร็จ'),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEn ? 'Could not save QR Code' : 'บันทึก QR Code ไม่สำเร็จ',
+          ),
+        ),
+      );
+    }
   }
 
   /// เลือกสลิป → preview → ยืนยันด้วย slide → upload

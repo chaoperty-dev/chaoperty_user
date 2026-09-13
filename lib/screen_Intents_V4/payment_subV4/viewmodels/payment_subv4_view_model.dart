@@ -544,24 +544,38 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
           qrPayload = generateQRCode(promptPayID: bno, amount: amtVal);
         } else if (ptser == '11') {
           qrPayload = generateEwalletQRCode(promptPayID: bno, amount: amtVal);
-        } else if (ptser == '2') {
-          qrPayload = payModel.img ?? '';
         }
+
+        // ptser 2 เป็น Bank Transfer: intent active ได้ แต่ต้องไม่มี QR payload
+        // channel mode จาก PayMentModel เป็นตัวตัดสิน presentation
+        final isBankTransfer = payModel.isBankTransfer;
+        final qrStatus = isBankTransfer
+            ? QrStatus.unavailable
+            : qrPayload.isEmpty
+                ? QrStatus.unavailable
+                : QrStatus.active;
 
         startQrCountdown(softExpireAt);
 
         _updateState(_state.copyWith(
           operation: PaymentOperation.none,
           qrState: PaymentQrState(
-            status: QrStatus.active,
+            status: qrStatus,
             intentUuid: uuid,
             ref1: ref1,
             ref2: ref2,
             ref3: ref3,
-            qrPayload: qrPayload,
+            qrPayload: isBankTransfer ? null : qrPayload,
             softExpireAt: softExpireAt,
+            secondsRemaining: _sessionTotalSecs,
+            isSessionExpired: _sessionTotalSecs <= 0,
           ),
-          uiEvent: _event('create_intent_success', 'สร้าง QR Code สำเร็จ'),
+          uiEvent: _event(
+            'create_intent_success',
+            isBankTransfer
+                ? 'สร้างรายการชำระเงินสำเร็จ'
+                : 'สร้าง QR Code สำเร็จ',
+          ),
         ));
         return true;
       }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:chaoperty_user/color.dart';
+
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_theme.dart';
 
 class PaymentSubV4BottomAction extends StatelessWidget {
   const PaymentSubV4BottomAction({
@@ -9,86 +9,178 @@ class PaymentSubV4BottomAction extends StatelessWidget {
     required this.summary,
     required this.operation,
     required this.onActionPressed,
-    this.label = 'กดเพื่อ "เริ่มการชำระ"',
+    required this.isEn,
+    required this.label,
+    this.statusText,
+    this.enabled = true,
   });
 
   final PaymentSummary summary;
   final PaymentOperation operation;
   final VoidCallback onActionPressed;
+  final bool isEn;
   final String label;
+  final String? statusText;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final nFormat = NumberFormat('#,##0.00', 'en_US');
-    final isLoading = operation != PaymentOperation.none;
+    final loading = operation != PaymentOperation.none;
+    final canPress = enabled && !loading && summary.grandTotal.isPositive;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.fromLTRB(14, 9, 14, 8),
+      decoration: const BoxDecoration(
         color: Colors.white,
+        border: Border(top: BorderSide(color: PaymentSubV4Theme.border)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, -4),
+            color: Color(0x140F172A),
+            blurRadius: 20,
+            offset: Offset(0, -5),
           ),
         ],
       ),
       child: SafeArea(
+        top: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'ยอดชำระสุทธิ:',
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 13,
-                    fontFamily: Font_.Fonts_T,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isEn ? 'Total to transfer' : 'ยอดรวมที่ต้องโอน',
+                        style: PaymentSubV4Theme.text(
+                          size: 11,
+                          color: PaymentSubV4Theme.textSecondary,
+                          height: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        '฿${PaymentSubV4Theme.money(summary.grandTotal)}',
+                        style: PaymentSubV4Theme.text(
+                          size: 20,
+                          weight: FontWeight.w700,
+                          tabular: true,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Text(
-                  '${nFormat.format(summary.grandTotal.toDouble())} บาท',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: Font_.Fonts_T,
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFFBEB),
+                    borderRadius: BorderRadius.circular(9),
+                    border: Border.all(color: PaymentSubV4Theme.amberBorder),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.schedule_rounded,
+                        size: 13,
+                        color: PaymentSubV4Theme.amberForeground,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusText ??
+                            (isEn ? 'Awaiting slip' : 'รอสลิปยืนยัน'),
+                        style: PaymentSubV4Theme.text(
+                          size: 11,
+                          weight: FontWeight.w600,
+                          color: PaymentSubV4Theme.amberForeground,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 7),
             SizedBox(
               width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B00),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              height: 50,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: canPress
+                      ? const LinearGradient(
+                          colors: [
+                            PaymentSubV4Theme.primaryOrange,
+                            PaymentSubV4Theme.primaryOrangeDark,
+                          ],
+                        )
+                      : const LinearGradient(
+                          colors: [Color(0xFFCBD5E1), Color(0xFF94A3B8)],
+                        ),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: canPress
+                      ? const [
+                          BoxShadow(
+                            color: Color(0x3DF97316),
+                            blurRadius: 12,
+                            offset: Offset(0, 5),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: canPress ? onActionPressed : null,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 13),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (loading)
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.3,
+                                color: Colors.white,
+                              ),
+                            )
+                          else ...[
+                            const Icon(
+                              Icons.attach_file_rounded,
+                              size: 20,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 7),
+                            Flexible(
+                              child: Text(
+                                label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: PaymentSubV4Theme.text(
+                                  size: 15,
+                                  weight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            const Icon(
+                              Icons.chevron_right_rounded,
+                              size: 21,
+                              color: Colors.white,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                onPressed: isLoading ? null : onActionPressed,
-                child: isLoading
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
-                        ),
-                      )
-                    : Text(
-                        label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: Font_.Fonts_T,
-                        ),
-                      ),
               ),
             ),
           ],
