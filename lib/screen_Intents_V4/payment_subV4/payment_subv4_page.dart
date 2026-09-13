@@ -14,6 +14,7 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/paymen
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_header.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_tabs.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_payment_card.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bank_summary.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_intent_card.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_invoice_row.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
@@ -276,7 +277,7 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
                   ],
                 ),
               ),
-            if (hasActivePayment)
+            if (hasActivePayment && state.selectedTab == 1)
               PaymentSubV4CountdownBar(
                 qrState: state.qrState,
                 totalSeconds: vm.sessionTotalSecs,
@@ -396,6 +397,11 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
                         ],
                       ],
                     ] else if (state.selectedTab == 2) ...[
+                      PaymentSubV4BankSummary(
+                        paymentModel: payment,
+                        isEn: isEn,
+                      ),
+                      const SizedBox(height: 10),
                       if (state.countAwaitingSlip == 0)
                         const Center(
                           child: Padding(
@@ -412,11 +418,17 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
                               (intent) => PaymentSubV4IntentCard(
                                 intent: intent,
                                 isVerifyTab: false,
-                                onAttachSlip: () =>
+                                isEn: isEn,
+                                onOpenSlip: () =>
                                     _confirmAndUploadSlip(intent, isEn),
                               ),
                             ),
                     ] else if (state.selectedTab == 3) ...[
+                      PaymentSubV4BankSummary(
+                        paymentModel: payment,
+                        isEn: isEn,
+                      ),
+                      const SizedBox(height: 10),
                       if (state.countAwaitingVerify == 0)
                         const Center(
                           child: Padding(
@@ -433,6 +445,9 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
                               (intent) => PaymentSubV4IntentCard(
                                 intent: intent,
                                 isVerifyTab: true,
+                                isEn: isEn,
+                                onOpenSlip: () =>
+                                    _confirmAndUploadSlip(intent, isEn),
                               ),
                             ),
                     ],

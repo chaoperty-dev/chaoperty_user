@@ -8,6 +8,7 @@ import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/payment_subv4_page.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/payment_subv4_view_model.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bank_summary.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_instructions_card.dart';
 
@@ -419,6 +420,209 @@ void main() {
       expect(find.text('ยอดเงินที่ต้องชำระ'), findsOneWidget);
       expect(find.text('ผู้รับเงิน / Merchant'), findsOneWidget);
       expect(find.text('คัดลอกยอดเงิน'), findsNothing);
+    });
+
+    testWidgets('tab 2 keeps bank summary so a reopened page still shows data',
+        (tester) async {
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedTab: 2,
+        selectedPaymentModel: _payment(
+          ptser: '5',
+          bno: '0843631897',
+          bname: 'ร้านค้าทดสอบ',
+          bank: 'ธนาคารกสิกรไทย',
+        ),
+        paymentIntents: [PaymentIntent(status: 'รอชำระเงิน', amount: 250.0)],
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+
+      expect(find.byType(PaymentSubV4BankSummary), findsOneWidget);
+      expect(find.text('0843631897'), findsOneWidget);
+      expect(find.textContaining('กสิกรไทย'), findsWidgets);
+    });
+
+    testWidgets('tab 3 keeps bank summary too', (tester) async {
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedTab: 3,
+        selectedPaymentModel: _payment(
+          ptser: '2',
+          bno: '051-5-53800033-3',
+          bname: 'บริษัท ทดสอบ จำกัด',
+          bank: 'ธนาคารออมสิน',
+        ),
+        paymentIntents: [PaymentIntent(status: 'รอการตรวจสอบ')],
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+
+      expect(find.byType(PaymentSubV4BankSummary), findsOneWidget);
+      expect(find.text('051-5-53800033-3'), findsOneWidget);
+    });
+
+    testWidgets('countdown alert only renders on tab 1', (tester) async {
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedTab: 2,
+        selectedPaymentModel: _payment(ptser: '5', bno: '0843631897'),
+        paymentIntents: [PaymentIntent(status: 'รอชำระเงิน')],
+        qrState: _activeQr().copyWith(secondsRemaining: 90),
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+
+      expect(find.text('QR ใช้ได้อีกภายใน'), findsNothing);
+    });
+  });
+
+  group('intent card actions', () {
+    Future<void> pumpTab(
+      WidgetTester tester, {
+      required int tab,
+      required List<PaymentIntent> intents,
+    }) async {
+      await tester.pumpWidget(_wrap(PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedTab: tab,
+        selectedPaymentModel: _payment(ptser: '5', bno: '0843631897'),
+        paymentIntents: intents,
+      )));
+      await tester.pump();
+    }
+
+    testWidgets('awaiting slip intent shows the attach-proof button',
+        (tester) async {
+      await pumpTab(
+        tester,
+        tab: 2,
+        intents: [PaymentIntent(status: 'รอชำระเงิน', amount: 500)],
+      );
+
+      expect(find.text('กดเพื่อแนบหลักฐาน'), findsOneWidget);
+    });
+
+    testWidgets('awaiting verification without slip shows view-proof button',
+        (tester) async {
+      await pumpTab(
+        tester,
+        tab: 3,
+        intents: [PaymentIntent(status: 'รอการตรวจสอบ', amount: 500)],
+      );
+
+      expect(find.text('กดเพื่อดูหลักฐาน'), findsOneWidget);
+    });
+
+    testWidgets('verified intent that already has a slip hides the button',
+        (tester) async {
+      await pumpTab(
+        tester,
+        tab: 3,
+        intents: [
+          PaymentIntent(
+            status: 'รอการตรวจสอบ',
+            systemStatus: 'slip_uploaded',
+            amount: 500,
+          ),
+        ],
+      );
+
+      expect(find.text('กดเพื่อดูหลักฐาน'), findsNothing);
+      expect(find.text('กดเพื่อแนบหลักฐาน'), findsNothing);
+    });
+
+    testWidgets('tab 3 marks invoices as slip attached', (tester) async {
+      await pumpTab(
+        tester,
+        tab: 3,
+        intents: [
+          PaymentIntent(
+            status: 'รอการตรวจสอบ',
+            amount: 500,
+            invoices: [Invoice(billReference: 'INV-9', total: 500)],
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('#-'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('แนบหลักฐานแล้ว'), findsOneWidget);
+      expect(find.text('INV-9'), findsOneWidget);
+      expect(find.textContaining('หมายเหตุ:'), findsOneWidget);
+    });
+
+    testWidgets('tab 2 does not mark invoices as slip attached',
+        (tester) async {
+      await pumpTab(
+        tester,
+        tab: 2,
+        intents: [
+          PaymentIntent(
+            status: 'รอชำระเงิน',
+            amount: 500,
+            invoices: [Invoice(billReference: 'INV-9', total: 500)],
+          ),
+        ],
+      );
+
+      await tester.tap(find.text('#-'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('แนบหลักฐานแล้ว'), findsNothing);
+      expect(find.text('INV-9'), findsOneWidget);
+    });
+  });
+
+  group('openIntent restore', () {
+    test('hydrates refs, expiry and amount from the intent', () {
+      final vm = PaymentSubV4ViewModel.withState(
+        params: _params,
+        initialState: const PaymentSubV4State(pageStatus: PageStatus.ready),
+      );
+
+      final intent = PaymentIntent(
+        status: 'รอชำระเงิน',
+        intentUuid: 'uuid-restored',
+        paymentIntentNo: 'PI-RESTORE',
+        amount: 1234.5,
+        ref1: 'REF-1',
+        ref2: 'REF-2',
+        ref3: 'REF-3',
+        softExpireAt: DateTime.now().add(const Duration(minutes: 5)),
+      );
+
+      vm.openIntent(intent);
+      final state = vm.state;
+
+      expect(state.uploadTargetUuid, 'uuid-restored');
+      expect(state.uploadTargetAmount?.toDouble(), 1234.5);
+      expect(state.qrState.intentUuid, 'uuid-restored');
+      expect(state.qrState.paymentIntentNo, 'PI-RESTORE');
+      expect(state.qrState.ref1, 'REF-1');
+      expect(state.qrState.ref2, 'REF-2');
+      expect(state.qrState.ref3, 'REF-3');
+      expect(state.qrState.softExpireAt, isNotNull);
+      expect(state.summary.grandTotal.toDouble(), 1234.5);
+      expect(vm.sessionTotalSecs, greaterThan(0));
+      vm.dispose();
+    });
+
+    test('ignores an intent without uuid', () {
+      final vm = PaymentSubV4ViewModel.withState(
+        params: _params,
+        initialState: const PaymentSubV4State(pageStatus: PageStatus.ready),
+      );
+
+      vm.openIntent(PaymentIntent(status: 'รอชำระเงิน'));
+
+      expect(vm.state.uploadTargetUuid, isNull);
+      expect(vm.state.qrState.intentUuid, isNull);
+      vm.dispose();
     });
   });
 }

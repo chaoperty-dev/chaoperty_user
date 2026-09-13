@@ -293,6 +293,22 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
             ? null
             : Money.fromDouble(preTarget.amount ?? preTarget.requestedAmount),
       ));
+
+      // เปิดจาก intent card หรือกลับเข้าหน้าใหม่ → เติม ref/expiry จาก server
+      // เพื่อให้แท็บ 2/3 มีข้อมูลแสดงเหมือนต้นฉบับที่เรียก QrGenRef ด้วยค่า intent
+      if (preTarget != null) {
+        openIntent(preTarget);
+      } else if (targetTab != 1 && intents.isNotEmpty) {
+        // ไม่ได้ระบุ intent แต่ถูกพาไปแท็บ 2/3 → ผูกใบแรกที่ตรงแท็บนั้น
+        final fallbackStatus = targetTab == 3
+            ? NormalizedIntentStatus.awaitingVerification
+            : NormalizedIntentStatus.awaitingSlip;
+        final fallback = intents.firstWhere(
+          (p) => PaymentSubV4State.classifyIntentStatus(p) == fallbackStatus,
+          orElse: () => intents.first,
+        );
+        openIntent(fallback);
+      }
     } catch (e) {
       debugPrint('❌ initialize error: $e');
       _updateState(_state.copyWith(
@@ -704,17 +720,44 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     });
   }
 
-  /// เลือก Intent ที่ต้องการดำเนินการ (ใช้กับแท็บ 2 ที่กดแนบสลิปจาก intent card)
+  /// เลือก Intent ที่ต้องการดำเนินการ (ใช้กับแท็บ 2/3 ที่กดจาก intent card)
+  ///
+  /// ต้อง hydrate ref/expiry จาก intent ที่โหลดมาจาก server ให้ครบ
+  /// เพราะผู้ใช้อาจออกจากแอปแล้วกลับเข้ามาใหม่ ซึ่ง state ในหน่วยความจำหายหมด
+  /// ต้นฉบับแก้ด้วยวิธีเดียวกัน คือเรียก QrGenRef ด้วย ref1/ref2/ref3/softExpireAt
+  /// ของ intent ที่ได้จาก server
   void openIntent(PaymentIntent intent) {
     final uuid = intent.intentUuid;
     if (uuid == null || uuid.isEmpty) return;
 
-    final amt = Money.fromDouble(intent.amount ?? intent.requestedAmount);
+    final amount = Money.fromDouble(intent.amount ?? intent.requestedAmount);
+    final expireIso = intent.softExpireAt?.toIso8601String();
 
     _updateState(_state.copyWith(
       uploadTargetUuid: uuid,
-      uploadTargetAmount: amt,
+      uploadTargetAmount: amount,
+      qrState: PaymentQrState(
+        status: QrStatus.unavailable,
+        intentUuid: uuid,
+        paymentIntentNo: intent.paymentIntentNo,
+        ref1: intent.ref1,
+        ref2: intent.ref2,
+        ref3: intent.ref3,
+        softExpireAt: expireIso,
+        secondsRemaining: 0,
+        isSessionExpired: false,
+      ),
+      summary: PaymentSummary(
+        subTotal: _state.summary.subTotal,
+        fineTotal: _state.summary.fineTotal,
+        discountTotal: _state.summary.discountTotal,
+        vatTotal: _state.summary.vatTotal,
+        whtTotal: _state.summary.whtTotal,
+        grandTotal: amount.isPositive ? amount : _state.summary.grandTotal,
+      ),
     ));
+
+    startQrCountdown(expireIso);
   }
 
   /// ตั้งค่ารูปสลิปจาก View
