@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
@@ -11,14 +14,17 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/paymen
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bank_summary.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_instructions_card.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_dialogs.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_intent_card.dart';
 
 const _params = PaymentSubV4Params(customerLanguage: 'TH', paymentSerial: '1');
 
-InvoiceModel _inv(String docno, String amtall, {String? dis}) {
+InvoiceModel _inv(String docno, String amtall, {String? dis, String? totalBill}) {
   final m = InvoiceModel();
   m.docno = docno;
   m.amtall = amtall;
   m.disendbill = dis;
+  m.total_bill = totalBill;
   return m;
 }
 
@@ -65,6 +71,24 @@ Widget _wrap(PaymentSubV4State state) {
       viewModelOverride: vm,
     ),
   );
+}
+
+/// หน้าเพจเด้ง dialog "ประกาศสำคัญสำหรับผู้เช่า" ครั้งแรกที่ state พร้อม
+/// (เหมือนต้นฉบับ, barrierDismissible: false) — ปิดก่อนเพื่อให้เทสต์แตะ widget อื่นได้
+///
+/// dialog นี้ไม่มีปุ่มปิด ต้องลาก handle ที่มีไอคอนลูกศรไปทางขวาจนสุด
+Future<void> dismissAttachNotice(WidgetTester tester) async {
+  final title = find.text('ประกาศสำคัญสำหรับผู้เช่า');
+  if (title.evaluate().isEmpty) return;
+
+  final handle = find.descendant(
+    of: find.ancestor(of: title, matching: find.byType(Dialog)),
+    matching: find.byIcon(Icons.arrow_forward_rounded),
+  );
+  if (handle.evaluate().isEmpty) return;
+
+  await tester.drag(handle.first, const Offset(700, 0));
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -153,6 +177,23 @@ void main() {
       expect(find.text('฿900.00'), findsOneWidget);
     });
 
+    testWidgets('invoice row shows total_bill, not the API-only amtall',
+        (tester) async {
+      // amtall (205.61) คือยอดก่อน VAT ที่ใช้ส่ง API; total_bill (220.00) คือยอดที่แสดง
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedTab: 1,
+        invoices: [_inv('INV-VAT', '205.61', totalBill: '220.00')],
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+      await dismissAttachNotice(tester);
+
+      expect(find.text('฿220.00'), findsOneWidget);
+      expect(find.text('฿205.61'), findsNothing);
+    });
+
     testWidgets('bottom action hidden when there are no invoices',
         (tester) async {
       await tester.pumpWidget(_wrap(const PaymentSubV4State(
@@ -201,6 +242,64 @@ void main() {
         find.descendant(
           of: find.byType(PaymentSubV4BottomAction),
           matching: find.textContaining('แนบหลักฐานและยืนยัน'),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('bottom action shows the server amount when an intent exists',
+        (tester) async {
+      // summary กับยอดของ intent ต่างกัน (เคสมีส่วนลด) — ต้องแสดงยอดของ intent
+      // เพราะเป็นยอดเดียวกับที่ QR สแกนได้
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedTab: 1,
+        selectedPaymentModel: _payment(ptser: '5', bno: '0843631897'),
+        invoices: [_inv('INV-001', '1100.00', dis: '100.00')],
+        summary: const PaymentSummary(grandTotal: Money(110000)),
+        qrState: PaymentQrState(
+          status: QrStatus.active,
+          intentUuid: 'uuid-1',
+          qrPayload: 'PAYLOAD',
+          amount: 1000,
+        ),
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+      await dismissAttachNotice(tester);
+
+      final cta = find.byType(PaymentSubV4BottomAction);
+      expect(cta, findsOneWidget);
+      // ยอดของ intent = 1,000.00 ไม่ใช่ summary 1,100.00
+      expect(
+        find.descendant(of: cta, matching: find.text('฿1,000.00')),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(of: cta, matching: find.text('฿1,100.00')),
+        findsNothing,
+      );
+    });
+
+    testWidgets('bottom action falls back to the summary amount beforehand',
+        (tester) async {
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedTab: 1,
+        selectedPaymentModel: _payment(ptser: '5', bno: '0843631897'),
+        invoices: [_inv('INV-001', '500.00')],
+        summary: const PaymentSummary(grandTotal: Money(50000)),
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+      await dismissAttachNotice(tester);
+
+      expect(
+        find.descendant(
+          of: find.byType(PaymentSubV4BottomAction),
+          matching: find.text('฿500.00'),
         ),
         findsOneWidget,
       );
@@ -361,10 +460,129 @@ void main() {
       expect(find.text('บันทึกภาพ QR Code ลงเครื่อง'), findsNothing);
       expect(find.text('051-5-53800033-3'), findsOneWidget);
       expect(find.text('บริษัท ทดสอบ จำกัด'), findsOneWidget);
-      expect(find.text('น.ส. กิตติธร ทดสอบ'), findsOneWidget);
       expect(find.text('คัดลอก'), findsOneWidget);
       expect(find.text('คัดลอกยอดเงิน'), findsOneWidget);
       expect(find.textContaining('โอนแล้วแนบสลิป'), findsOneWidget);
+    });
+
+    testWidgets('payee name comes from bname only, never bnameEn or co',
+        (tester) async {
+      // ต้นฉบับใช้ payment_bname = PayMentModel.bname เท่านั้น
+      // bnameEn ใช้ส่ง API และ co ไม่ถูกแสดงผลเลย
+      final payment = _payment(
+        ptser: '2',
+        bno: '051-5-53800033-3',
+        bname: 'ชื่อไทยเท่านั้น',
+        bank: 'ธนาคารออมสิน',
+      );
+      payment.bnameEn = 'ENGLISH-NAME-MUST-NOT-SHOW';
+      payment.co = 'CO-NAME-MUST-NOT-SHOW';
+
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedPaymentModel: payment,
+        summary: const PaymentSummary(grandTotal: Money(100000)),
+        qrState: const PaymentQrState(
+          status: QrStatus.unavailable,
+          intentUuid: 'uuid-payee',
+          ref3: 'REF-1',
+        ),
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+      await dismissAttachNotice(tester);
+
+      expect(find.text('ชื่อไทยเท่านั้น'), findsWidgets);
+      expect(find.textContaining('ENGLISH-NAME-MUST-NOT-SHOW'), findsNothing);
+      expect(find.textContaining('CO-NAME-MUST-NOT-SHOW'), findsNothing);
+    });
+
+    testWidgets('payee name stays Thai even in the English locale',
+        (tester) async {
+      final payment = _payment(
+        ptser: '2',
+        bno: '051-5-53800033-3',
+        bname: 'ชื่อไทยเท่านั้น',
+        bank: 'ธนาคารออมสิน',
+      );
+      payment.bnameEn = 'ENGLISH-NAME-MUST-NOT-SHOW';
+
+      final vm = PaymentSubV4ViewModel.withState(
+        params: const PaymentSubV4Params(customerLanguage: 'EN'),
+        initialState: PaymentSubV4State(
+          pageStatus: PageStatus.ready,
+          selectedPaymentModel: payment,
+          summary: const PaymentSummary(grandTotal: Money(100000)),
+          qrState: const PaymentQrState(
+            status: QrStatus.unavailable,
+            intentUuid: 'uuid-payee-en',
+            ref3: 'REF-1',
+          ),
+        ),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PaymentSubV4Page(cuslang: 'EN', viewModelOverride: vm),
+        ),
+      );
+      await tester.pump();
+      await dismissAttachNotice(tester);
+
+      expect(find.text('ชื่อไทยเท่านั้น'), findsWidgets);
+      expect(find.textContaining('ENGLISH-NAME-MUST-NOT-SHOW'), findsNothing);
+    });
+
+    testWidgets('reference footer shows ref3, never falls back to ref1',
+        (tester) async {
+      // ref1 = cid/customerNo ไม่ใช่เลขอ้างอิงการโอน — ต้นฉบับแสดงแค่ ref3
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedPaymentModel: _payment(ptser: '6', bno: '0843631897'),
+        summary: const PaymentSummary(grandTotal: Money(100000)),
+        qrState: PaymentQrState(
+          status: QrStatus.active,
+          intentUuid: 'uuid-ref',
+          ref1: 'CID-SHOULD-NOT-SHOW',
+          ref2: 'PI-SHOULD-NOT-SHOW',
+          ref3: 'REF-THREE',
+          qrPayload: 'PAYLOAD',
+          softExpireAt: '2026-09-20T08:45:00Z',
+        ),
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+      await dismissAttachNotice(tester);
+
+      expect(find.textContaining('REF-THREE'), findsOneWidget);
+      expect(find.textContaining('CID-SHOULD-NOT-SHOW'), findsNothing);
+      expect(find.textContaining('PI-SHOULD-NOT-SHOW'), findsNothing);
+    });
+
+    testWidgets('reference footer shows the placeholder when ref3 is empty',
+        (tester) async {
+      final state = PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+        selectedPaymentModel: _payment(ptser: '6', bno: '0843631897'),
+        summary: const PaymentSummary(grandTotal: Money(100000)),
+        qrState: const PaymentQrState(
+          status: QrStatus.active,
+          intentUuid: 'uuid-ref2',
+          ref1: 'CID-ONLY',
+          ref3: '-',
+          qrPayload: 'PAYLOAD',
+        ),
+      );
+
+      await tester.pumpWidget(_wrap(state));
+      await tester.pump();
+      await dismissAttachNotice(tester);
+
+      // ref1 มีค่า แต่ต้องไม่ถูกนำมาแสดงแทน ref3
+      expect(find.textContaining('CID-ONLY'), findsNothing);
+      expect(find.textContaining('Ref: -'), findsOneWidget);
     });
 
     testWidgets('bank transfer channel shows bank header and ref/expiry',
@@ -493,6 +711,23 @@ void main() {
         paymentIntents: intents,
       )));
       await tester.pump();
+      await dismissAttachNotice(tester);
+    }
+
+    /// กางการ์ด intent ใบแรกออก
+    ///
+    /// ต้อง scope ที่ [PaymentSubV4IntentCard] เพราะการ์ดสรุปธนาคาร
+    /// ก็ใช้ ExpansionTile เหมือนกัน (โครงเดียวกับต้นฉบับ)
+    Future<void> expandFirstCard(WidgetTester tester) async {
+      final tile = find
+          .descendant(
+            of: find.byType(PaymentSubV4IntentCard).first,
+            matching: find.byType(ExpansionTile),
+          )
+          .first;
+      await tester.ensureVisible(tile);
+      await tester.tap(tile);
+      await tester.pumpAndSettle();
     }
 
     testWidgets('awaiting slip intent shows the attach-proof button',
@@ -506,12 +741,29 @@ void main() {
       expect(find.text('กดเพื่อแนบหลักฐาน'), findsOneWidget);
     });
 
-    testWidgets('awaiting verification without slip shows view-proof button',
+    testWidgets('exact verification status hides the action button',
         (tester) async {
+      // ต้นฉบับ: isWaitingCheck เทียบตรงตัวกับ 'รอตรวจสอบ'/'รอการตรวจสอบ'
+      // เมื่อเข้าเงื่อนไขนี้ + เป็นสถานะรอตรวจ → ไม่แสดงปุ่มเลย
       await pumpTab(
         tester,
         tab: 3,
         intents: [PaymentIntent(status: 'รอการตรวจสอบ', amount: 500)],
+      );
+
+      expect(find.text('กดเพื่อดูหลักฐาน'), findsNothing);
+      expect(find.text('กดเพื่อแนบหลักฐาน'), findsNothing);
+      expect(find.text('หลักฐานการชำระ'), findsNothing);
+    });
+
+    testWidgets('verification wording without exact match shows view-proof',
+        (tester) async {
+      // status ที่มีคำว่า ตรวจ แต่ไม่ตรงกับข้อความที่ต้นฉบับเช็คตรงตัว
+      // → showSlipAction = false และ _isAwaitingVerifyStatus = true
+      await pumpTab(
+        tester,
+        tab: 3,
+        intents: [PaymentIntent(status: 'รอตรวจสอบการชำระ', amount: 500)],
       );
 
       expect(find.text('กดเพื่อดูหลักฐาน'), findsOneWidget);
@@ -535,6 +787,45 @@ void main() {
       expect(find.text('กดเพื่อแนบหลักฐาน'), findsNothing);
     });
 
+    testWidgets('uploaded slip on a non-verify status shows payment proof',
+        (tester) async {
+      await pumpTab(
+        tester,
+        tab: 2,
+        intents: [
+          PaymentIntent(
+            status: 'รอชำระเงิน',
+            systemStatus: 'slip_uploaded',
+            amount: 500,
+          ),
+        ],
+      );
+
+      expect(find.text('หลักฐานการชำระ'), findsOneWidget);
+    });
+
+    testWidgets('card shows intent no, amount, expiry and bill count',
+        (tester) async {
+      await pumpTab(
+        tester,
+        tab: 2,
+        intents: [
+          PaymentIntent(
+            status: 'รอชำระเงิน',
+            paymentIntentNo: 'PI-555',
+            amount: 1234.5,
+            softExpireAt: DateTime(2026, 9, 20, 15, 30),
+            invoices: [Invoice(billReference: 'INV-9', total: 500)],
+          ),
+        ],
+      );
+
+      expect(find.text('#PI-555'), findsOneWidget);
+      expect(find.text('฿1,234.50'), findsOneWidget);
+      expect(find.textContaining('หมดอายุ '), findsOneWidget);
+      expect(find.text('1 บิล'), findsOneWidget);
+    });
+
     testWidgets('tab 3 marks invoices as slip attached', (tester) async {
       await pumpTab(
         tester,
@@ -548,8 +839,7 @@ void main() {
         ],
       );
 
-      await tester.tap(find.text('#-'));
-      await tester.pumpAndSettle();
+      await expandFirstCard(tester);
 
       expect(find.text('แนบหลักฐานแล้ว'), findsOneWidget);
       expect(find.text('INV-9'), findsOneWidget);
@@ -570,11 +860,221 @@ void main() {
         ],
       );
 
-      await tester.tap(find.text('#-'));
-      await tester.pumpAndSettle();
+      await expandFirstCard(tester);
 
       expect(find.text('แนบหลักฐานแล้ว'), findsNothing);
       expect(find.text('INV-9'), findsOneWidget);
+    });
+
+    testWidgets('card shows the per-invoice fine chip when late fee exists',
+        (tester) async {
+      await pumpTab(
+        tester,
+        tab: 2,
+        intents: [
+          PaymentIntent(
+            status: 'รอชำระเงิน',
+            amount: 500,
+            invoices: [
+              Invoice(
+                billReference: 'INV-9',
+                total: 500,
+                lateFee: 25,
+                metadata: [
+                  Metadata(docno: 'INV-9', date: '2026-01-15'),
+                ],
+              ),
+            ],
+          ),
+        ],
+      );
+
+      await expandFirstCard(tester);
+
+      expect(find.text('ค่าปรับ: 25.00'), findsOneWidget);
+      expect(find.text('15-01-2026'), findsOneWidget);
+    });
+  });
+
+  group('legacy slip dialogs', () {
+    /// เปิด dialog/sheet แล้วรอให้แสดง
+    ///
+    /// ห้าม await future ที่ dialog คืนมา เพราะจะค้างจนผู้ใช้ปิด
+    /// และห้ามใช้ pumpAndSettle กับ dialog ที่มี CircularProgressIndicator
+    /// เพราะอนิเมชันวนไม่จบ → ใช้ [settle] = false แทน
+    Future<void> showSheet(
+      WidgetTester tester,
+      Future<void> Function(BuildContext) open, {
+      bool settle = true,
+    }) async {
+      late BuildContext captured;
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(builder: (ctx) {
+          captured = ctx;
+          return const Scaffold(body: SizedBox.shrink());
+        }),
+      ));
+
+      unawaited(open(captured));
+      if (settle) {
+        await tester.pumpAndSettle();
+      } else {
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 350));
+      }
+    }
+
+    testWidgets('attach sheet shows guidance, amount and disabled slider',
+        (tester) async {
+      await showSheet(
+        tester,
+        (ctx) => PaymentSubV4Dialogs.showAttachSlipSheet(
+          ctx,
+          isEn: false,
+          summary: const PaymentSummary(grandTotal: Money(150000)),
+          slip: const PaymentSlipState(),
+          onPickSlip: () async {},
+          onConfirm: () async {},
+        ),
+      );
+
+      expect(find.text('ยืนยันการชำระเงิน'), findsOneWidget);
+      expect(find.text('อัปโหลดสลิป'), findsOneWidget);
+      expect(find.text('จำเป็น'), findsOneWidget);
+      expect(find.text('กดเพื่ออัปโหลดสลิป'), findsOneWidget);
+      expect(find.text('จำนวนที่ต้องชำระ'), findsOneWidget);
+      expect(find.text('1,500.00'), findsOneWidget);
+      expect(find.text('เลื่อนเพื่อยืนยันการชำระเงิน'), findsOneWidget);
+    });
+
+    testWidgets('attach sheet shows the expired-order chip when bill is dead',
+        (tester) async {
+      await showSheet(
+        tester,
+        (ctx) => PaymentSubV4Dialogs.showAttachSlipSheet(
+          ctx,
+          isEn: false,
+          summary: const PaymentSummary(grandTotal: Money(100)),
+          slip: const PaymentSlipState(),
+          billDead: true,
+          onCancelPayment: () {},
+          onPickSlip: () async {},
+          onConfirm: () async {},
+        ),
+      );
+
+      expect(find.text('รายการ หมดอายุ - ยกเลิกรายการ'), findsOneWidget);
+    });
+
+    testWidgets('attach sheet shows the bank-transfer shortcut label',
+        (tester) async {
+      await showSheet(
+        tester,
+        (ctx) => PaymentSubV4Dialogs.showAttachSlipSheet(
+          ctx,
+          isEn: false,
+          summary: const PaymentSummary(grandTotal: Money(100)),
+          slip: const PaymentSlipState(),
+          isBankTransfer: true,
+          onShowQr: () {},
+          onPickSlip: () async {},
+          onConfirm: () async {},
+        ),
+      );
+
+      expect(find.text('แสดงหมายเลขบัญชี'), findsOneWidget);
+    });
+
+    testWidgets('attached slip sheet lists the legacy slip fields',
+        (tester) async {
+      await showSheet(
+        tester,
+        (ctx) => PaymentSubV4Dialogs.showAttachedSlipSheet(
+          ctx,
+          isEn: false,
+          slip: const PaymentSlipInfo(
+            slipNo: 'SLIP-1',
+            originalFilename: 'slip.jpg',
+            amount: '1,500.00',
+            currency: 'THB',
+            transferDate: '2026-01-15',
+            transferRefNo: 'REF-9',
+            status: 'PENDING',
+          ),
+          onReattach: () async {},
+          onViewSlip: () async {},
+        ),
+      );
+
+      expect(find.text('อัปโหลดเรียบร้อยแล้ว'), findsOneWidget);
+      expect(find.text('ไฟล์:'), findsOneWidget);
+      expect(find.text('slip.jpg'), findsOneWidget);
+      expect(find.text('1,500.00 THB'), findsOneWidget);
+      expect(find.text('2026-01-15'), findsOneWidget);
+      expect(find.text('REF-9'), findsOneWidget);
+      expect(find.text('รอตรวจสอบ'), findsOneWidget);
+      expect(find.text('แนบอีกครั้ง'), findsOneWidget);
+      expect(find.text('ดูหลักฐาน'), findsOneWidget);
+    });
+
+    testWidgets('preview dialog shows a spinner while the loader is pending',
+        (tester) async {
+      final completer = Completer<Uint8List?>();
+
+      await showSheet(
+        tester,
+        (ctx) => PaymentSubV4Dialogs.showSlipPreview(
+          ctx,
+          isEn: false,
+          loader: () => completer.future,
+        ),
+        settle: false,
+      );
+
+      expect(find.text('หลักฐานการโอนเงิน'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      // ปล่อย loader ให้จบ เพื่อไม่ให้ timer ค้างตอนจบเทสต์
+      completer.complete(null);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('preview dialog falls back to an error state when loader fails',
+        (tester) async {
+      await showSheet(
+        tester,
+        (ctx) => PaymentSubV4Dialogs.showSlipPreview(
+          ctx,
+          isEn: false,
+          loader: () async => null,
+        ),
+      );
+
+      expect(find.text('ไม่สามารถโหลดรูปภาพได้'), findsOneWidget);
+    });
+
+    testWidgets('preview dialog renders the loaded image', (tester) async {
+      // PNG 1x1 โปร่งใส
+      final png = Uint8List.fromList(const [
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+        0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+        0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+        0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+        0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+      ]);
+
+      await showSheet(
+        tester,
+        (ctx) => PaymentSubV4Dialogs.showSlipPreview(
+          ctx,
+          isEn: false,
+          loader: () async => png,
+        ),
+      );
+
+      expect(find.byType(Image), findsOneWidget);
+      expect(find.text('ไม่สามารถโหลดรูปภาพได้'), findsNothing);
     });
   });
 

@@ -12,7 +12,6 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
     required this.summary,
     required this.qrState,
     required this.isEn,
-    required this.merchantName,
     required this.onCopy,
     this.onSaveQr,
     this.onRenewQr,
@@ -23,7 +22,6 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
   final PaymentSummary summary;
   final PaymentQrState qrState;
   final bool isEn;
-  final String merchantName;
   final ValueChanged<String> onCopy;
   final VoidCallback? onSaveQr;
   final VoidCallback? onRenewQr;
@@ -184,6 +182,16 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
     final payload = (qrState.qrPayload ?? '').trim();
     final expired = qrState.isSessionExpired;
 
+    // ยอดบน QR ต้องเป็นยอดที่ server ถือ (`qrState.amount` = requested_amount)
+    // ไม่ใช่ summary.grandTotal ที่ฝั่งแอปรวมเอง — ไม่ตรงกันเมื่อมีส่วนลด
+    final amount = qrState.amount != null
+        ? Money.fromDouble(qrState.amount)
+        : summary.grandTotal;
+
+    // ชื่อผู้รับเงินใช้ `bname` ของช่องทางชำระ เท่านั้น (ต้นฉบับ: `payment_bname`,
+    // payment_subV4_InvAll.dart:3407) — ไม่ใช่ชื่อโครงการหรือชื่อผู้เช่า
+    final owner = payment.accountOwner();
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       child: RepaintBoundary(
@@ -277,7 +285,7 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
                       ),
                     ),
                     TextSpan(
-                      text: PaymentSubV4Theme.money(summary.grandTotal),
+                      text: PaymentSubV4Theme.money(amount),
                       style: PaymentSubV4Theme.text(
                         size: 30,
                         weight: FontWeight.w800,
@@ -351,7 +359,7 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            merchantName.isEmpty ? '-' : merchantName,
+                            owner.isEmpty ? '-' : owner,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: PaymentSubV4Theme.text(
@@ -373,9 +381,15 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
   }
 
   Widget _bankTransferBody(PayMentModel payment) {
-    final owner = payment.accountOwner(isEn: isEn);
-    final coOwner = payment.safeCoOwner;
+    // ต้นฉบับแสดงเฉพาะ `payment_bname` ใต้หัวข้อ "ชื่อบัญชี" — ไม่มี `co`
+    // (payment_subV4_InvAll.dart:2846-2864)
+    final owner = payment.accountOwner();
     final account = payment.safeAccountNumber;
+
+    // ยอดโอนต้องตรงกับยอดที่ server ถือเช่นเดียวกับฝั่ง QR
+    final amount = qrState.amount != null
+        ? Money.fromDouble(qrState.amount)
+        : summary.grandTotal;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
@@ -402,22 +416,13 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   owner.isEmpty ? '-' : owner,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: PaymentSubV4Theme.text(
                     size: 14,
                     weight: FontWeight.w600,
                   ),
                 ),
-                if (coOwner.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    coOwner,
-                    style: PaymentSubV4Theme.text(
-                      size: 12,
-                      color: PaymentSubV4Theme.textSecondary,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -493,7 +498,7 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '฿${PaymentSubV4Theme.money(summary.grandTotal)}',
+                        '฿${PaymentSubV4Theme.money(amount)}',
                         style: PaymentSubV4Theme.text(
                           size: 26,
                           weight: FontWeight.w800,
@@ -507,7 +512,7 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 _copyButton(
                   label: isEn ? 'Copy amount' : 'คัดลอกยอดเงิน',
-                  value: summary.grandTotal.toFixed2(),
+                  value: amount.toFixed2(),
                   color: PaymentSubV4Theme.amberForeground,
                   light: true,
                 ),
@@ -551,9 +556,10 @@ class PaymentSubV4PaymentCard extends StatelessWidget {
   }
 
   Widget _referenceFooter() {
-    final ref = (qrState.ref3 ?? '').trim().isNotEmpty
-        ? qrState.ref3!.trim()
-        : (qrState.ref1 ?? '').trim();
+    // ต้นฉบับแสดง `ref3` เท่านั้น ไม่มี fallback ไป ref1/ref2
+    // (payment_subV4_InvAll.dart:3484 — 'ชำระภายใน $paymentExpiryText | Ref: $ref3')
+    // ref1 คือ cid/customerNo ซึ่งไม่ใช่เลขอ้างอิงการโอน จึงต้องไม่ถูกนำมาแสดง
+    final ref = (qrState.ref3 ?? '').trim();
 
     return Container(
       width: double.infinity,

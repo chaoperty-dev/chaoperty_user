@@ -13,6 +13,7 @@ class PaymentSubV4BottomAction extends StatelessWidget {
     required this.label,
     this.statusText,
     this.enabled = true,
+    this.amountOverride,
   });
 
   final PaymentSummary summary;
@@ -23,10 +24,18 @@ class PaymentSubV4BottomAction extends StatelessWidget {
   final String? statusText;
   final bool enabled;
 
+  /// ยอดที่ต้องแสดง/ใช้ตัดสินการกดปุ่ม
+  ///
+  /// หลังสร้าง intent แล้ว ต้องเป็นยอดที่ server ถือ (`qrState.amount`)
+  /// ไม่ใช่ `summary.grandTotal` ที่ฝั่งแอปรวมเอง — สองค่าไม่เท่ากันเมื่อมีส่วนลด
+  /// ปล่อย null = ยังไม่มี intent ใช้ยอดจาก summary
+  final Money? amountOverride;
+
   @override
   Widget build(BuildContext context) {
     final loading = operation != PaymentOperation.none;
-    final canPress = enabled && !loading && summary.grandTotal.isPositive;
+    final amount = amountOverride ?? summary.grandTotal;
+    final canPress = enabled && !loading && amount.isPositive;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 9, 14, 8),
@@ -62,7 +71,7 @@ class PaymentSubV4BottomAction extends StatelessWidget {
                       ),
                       const SizedBox(height: 1),
                       Text(
-                        '฿${PaymentSubV4Theme.money(summary.grandTotal)}',
+                        '฿${PaymentSubV4Theme.money(amount)}',
                         style: PaymentSubV4Theme.text(
                           size: 20,
                           weight: FontWeight.w700,

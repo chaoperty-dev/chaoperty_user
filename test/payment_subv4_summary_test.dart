@@ -4,10 +4,11 @@ import 'package:chaoperty_user/Model/GetPayMent_Model.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/services/payment_subv4_service.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/viewmodels/payment_subv4_view_model.dart';
 
-InvoiceModel _inv({String? amtall, String? disendbill}) {
+InvoiceModel _inv({String? amtall, String? disendbill, String? totalBill}) {
   final m = InvoiceModel();
   m.amtall = amtall;
   m.disendbill = disendbill;
+  m.total_bill = totalBill;
   return m;
 }
 
@@ -109,6 +110,71 @@ void main() {
       expect(s.subTotal.satang, 0);
       expect(s.grandTotal.satang, 0);
       expect(s.grandTotal.isZero, isTrue);
+    });
+  });
+
+  group('displayed amount uses total_bill, not amtall', () {
+    test('prefers total_bill when both are present', () {
+      // amtall คือยอดก่อน VAT ที่ใช้ส่ง API (205.61) ส่วน total_bill คือยอดที่แสดง (220)
+      // ต้นฉบับแสดง total_bill ทุกหน้าจอ (payment_subV4_InvAll.dart:5210)
+      final s = PaymentSubV4ViewModel.calculateSummary(
+        [_inv(amtall: '205.61', totalBill: '220.00')],
+        null,
+      );
+
+      expect(s.subTotal.toDouble(), 220.0);
+      expect(s.grandTotal.toDouble(), 220.0);
+    });
+
+    test('falls back to amtall when total_bill is missing', () {
+      final s = PaymentSubV4ViewModel.calculateSummary(
+        [_inv(amtall: '205.61')],
+        null,
+      );
+
+      expect(s.subTotal.toDouble(), 205.61);
+    });
+
+    test('falls back to amtall when total_bill is zero', () {
+      final s = PaymentSubV4ViewModel.calculateSummary(
+        [_inv(amtall: '100.00', totalBill: '0.00')],
+        null,
+      );
+
+      expect(s.subTotal.toDouble(), 100.0);
+    });
+
+    test('subtracts the discount from total_bill', () {
+      final s = PaymentSubV4ViewModel.calculateSummary(
+        [_inv(amtall: '205.61', totalBill: '220.00', disendbill: '20.00')],
+        null,
+      );
+
+      expect(s.subTotal.toDouble(), 220.0);
+      expect(s.grandTotal.toDouble(), 200.0);
+    });
+
+    test('sums total_bill across multiple invoices', () {
+      final s = PaymentSubV4ViewModel.calculateSummary(
+        [
+          _inv(amtall: '93.46', totalBill: '100.00'),
+          _inv(amtall: '112.15', totalBill: '120.00'),
+        ],
+        null,
+      );
+
+      expect(s.subTotal.toDouble(), 220.0);
+    });
+
+    test('percentage fine is computed from the displayed base', () {
+      final s = PaymentSubV4ViewModel.calculateSummary(
+        [_inv(amtall: '205.61', totalBill: '220.00')],
+        _pay(fine: '1', fineA: '0.00', fineC: '10'),
+      );
+
+      // 10% ของ 220 = 22 (ไม่ใช่ 10% ของ 205.61)
+      expect(s.fineTotal.toDouble(), 22.0);
+      expect(s.grandTotal.toDouble(), 242.0);
     });
   });
 

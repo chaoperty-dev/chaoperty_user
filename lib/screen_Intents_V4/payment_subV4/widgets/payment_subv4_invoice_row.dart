@@ -28,8 +28,9 @@ class PaymentSubV4InvoiceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final nFormat = NumberFormat('#,##0.00', 'en_US');
     final docno = (invoice.docno ?? '').trim();
-    final amount = Money.parse(invoice.amtall);
-    final discount = Money.parse(invoice.disendbill);
+    // ใช้ยอดที่แสดงผล (total_bill) ไม่ใช่ amtall ที่ใช้ส่ง API — ดู [InvoiceModelDisplay]
+    final amount = invoice.displayAmount;
+    final discount = invoice.displayDiscount;
     final fineTotal = Money.fromDouble((fine?['total'] as num?)?.toDouble());
     final net = Money(amount.satang - discount.satang + fineTotal.satang);
 

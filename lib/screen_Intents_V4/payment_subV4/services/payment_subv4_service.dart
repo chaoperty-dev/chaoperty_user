@@ -28,6 +28,33 @@ class PaymentFetchResult<T> {
   T get valueOr => data as T;
 }
 
+/// ผลลัพธ์การอัปโหลดสลิป — เก็บ `slip_no` ที่ server คืนมา
+/// เพื่อให้ View เปิดดูหลักฐานได้ทันทีโดยไม่ต้องรอ refresh ทั้งหน้า
+class SlipUploadResult {
+  const SlipUploadResult.success({this.slipNo})
+      : success = true,
+        error = null;
+  const SlipUploadResult.failure(this.error)
+      : success = false,
+        slipNo = null;
+
+  final bool success;
+  final String? slipNo;
+  final String? error;
+}
+
+/// ผลลัพธ์การโหลดรูปหลักฐานจาก preview endpoint
+class SlipPreviewResult {
+  const SlipPreviewResult.success(this.bytes) : error = null;
+  const SlipPreviewResult.failure(this.error) : bytes = null;
+
+  final Uint8List? bytes;
+  final String? error;
+
+  bool get isSuccess => error == null && bytes != null;
+  Uint8List get valueOr => bytes as Uint8List;
+}
+
 /// Facade Service จัดการ API ทั้งหมดสำหรับ Payment V4
 class PaymentSubV4Service {
   final http.Client _client;
@@ -493,9 +520,45 @@ class PaymentSubV4Service {
     return null;
   }
 
+  /// ดึงรูปหลักฐานจาก `GET /v1/payment/intent/upload/{slipUuid}/preview`
+  ///
+  /// ใช้ endpoint เดียวกับต้นฉบับ (`getSlipPreviewPaymentIntents`)
+  Future<SlipPreviewResult> loadSlipPreview({required String slipUuid}) async {
+    if (slipUuid.trim().isEmpty) {
+      return const SlipPreviewResult.failure('ไม่พบรหัสหลักฐานการชำระ');
+    }
+    try {
+      final headers = await MyHeadersIntents.build();
+      if (headers['Authorization'] == null) {
+        debugPrint('🚫 loadSlipPreview: ไม่มี Authorization');
+        return const SlipPreviewResult.failure('ไม่พบสิทธิ์เข้าถึงระบบชำระเงิน');
+      }
+
+      final resp =
+          await getSlipPreviewPaymentIntents(slipUuid: slipUuid).timeout(
+        requestTimeout,
+      );
+      if (resp == null) {
+        return const SlipPreviewResult.failure('โหลดรูปหลักฐานไม่สำเร็จ');
+      }
+      if (resp.statusCode < 200 || resp.statusCode >= 300) {
+        return SlipPreviewResult.failure(
+          'โหลดรูปหลักฐานไม่สำเร็จ (${resp.statusCode})',
+        );
+      }
+      if (resp.bodyBytes.isEmpty) {
+        return const SlipPreviewResult.failure('ไม่พบรูปหลักฐาน');
+      }
+      return SlipPreviewResult.success(resp.bodyBytes);
+    } catch (e) {
+      debugPrint('❌ loadSlipPreview error: $e');
+      return const SlipPreviewResult.failure('โหลดรูปหลักฐานไม่สำเร็จ');
+    }
+  }
+
   /// อัปโหลดสลิปหลักฐาน
   /// ถือว่าสำเร็จเฉพาะเมื่อ HTTP 2xx และ body ไม่ได้ระบุ failure
-  Future<bool> uploadSlip({
+  Future<SlipUploadResult> uploadSlip({
     required String intentUuid,
     required Uint8List slipBytes,
     required String fileName,
@@ -507,7 +570,7 @@ class PaymentSubV4Service {
       final headers = await MyHeadersIntents.build();
       if (headers['Authorization'] == null) {
         debugPrint('🚫 uploadSlip: ไม่มี Authorization → ยกเลิกการอัปโหลด');
-        return false;
+        return const SlipUploadResult.failure('ไม่พบสิทธิ์เข้าถึงระบบชำระเงิน');
       }
 
       final uri = Uri.parse(
@@ -546,15 +609,46 @@ class PaymentSubV4Service {
 
       if (response.statusCode != 200 && response.statusCode != 201) {
         debugPrint('❌ uploadSlip HTTP ${response.statusCode}');
-        return false;
+        return SlipUploadResult.failure('อัปโหลดสลิปล้มเหลว (${response.statusCode})');
       }
 
       // HTTP 200 อย่างเดียวไม่พอ ต้องตรวจ body ด้วย
-      return bodyIndicatesSuccess(response.body);
+      if (!bodyIndicatesSuccess(response.body)) {
+        return const SlipUploadResult.failure('อัปโหลดสลิปล้มเหลว');
+      }
+
+      return SlipUploadResult.success(slipNo: parseSlipNo(response.body));
     } catch (e) {
       debugPrint('❌ uploadSlip error: $e');
-      return false;
+      return const SlipUploadResult.failure('อัปโหลดสลิปล้มเหลว');
     }
+  }
+
+  /// ดึง `slip_no` จาก body ที่อัปโหลดสำเร็จ
+  ///
+  /// ต้นฉบับอ่าน `jsonResponse['slip_no']` ตรง ๆ แล้วเก็บไว้เปิดดูหลักฐานทีหลัง
+  /// static เพื่อ unit test ได้โดยไม่ยิง network
+  static String? parseSlipNo(String body) {
+    if (body.trim().isEmpty) return null;
+    try {
+      final decoded = json.decode(body);
+      if (decoded is Map) {
+        for (final key in const ['slip_no', 'slipNo', 'uuid']) {
+          final raw = decoded[key];
+          final value = raw?.toString().trim() ?? '';
+          if (value.isNotEmpty) return value;
+        }
+        final data = decoded['data'];
+        if (data is Map) {
+          for (final key in const ['slip_no', 'slipNo', 'uuid']) {
+            final raw = data[key];
+            final value = raw?.toString().trim() ?? '';
+            if (value.isNotEmpty) return value;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// ตรวจ body ว่าไม่ได้ระบุ failure
