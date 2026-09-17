@@ -15,6 +15,7 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_s
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_bottom_action.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_instructions_card.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_dialogs.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_header.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/widgets/payment_subv4_intent_card.dart';
 
 const _params = PaymentSubV4Params(customerLanguage: 'TH', paymentSerial: '1');
@@ -134,6 +135,35 @@ void main() {
 
       expect(find.byIcon(Icons.help_outline_rounded), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
+    });
+
+    testWidgets('header keeps title inside its bounds with top safe padding',
+        (tester) async {
+      tester.view.padding = const FakeViewPadding(
+        top: 32,
+        bottom: 0,
+        left: 0,
+        right: 0,
+      );
+      addTearDown(tester.view.resetPadding);
+
+      await tester.pumpWidget(_wrap(const PaymentSubV4State(
+        pageStatus: PageStatus.ready,
+      )));
+      await tester.pump();
+      await dismissAttachNotice(tester);
+
+      final header = find.byType(PaymentSubV4Header);
+      expect(header, findsOneWidget);
+      final headerBox = tester.renderObject<RenderBox>(header);
+      final titleBox = tester.renderObject<RenderBox>(find.text('การชำระเงิน'));
+      final titleTop = titleBox.localToGlobal(Offset.zero).dy;
+      final titleBottom = titleTop + titleBox.size.height;
+      final headerTop = headerBox.localToGlobal(Offset.zero).dy;
+      final headerBottom = headerTop + headerBox.size.height;
+
+      expect(titleTop, greaterThanOrEqualTo(headerTop));
+      expect(titleBottom, lessThanOrEqualTo(headerBottom));
     });
 
     testWidgets('tab badges show the intent counts', (tester) async {
