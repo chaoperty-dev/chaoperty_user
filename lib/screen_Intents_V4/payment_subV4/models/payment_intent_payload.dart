@@ -115,6 +115,7 @@ class PaymentIntentPayload {
     return [
       {
         'docno': docno,
+        'duedate': fine['duedate'] ?? '',
         'expser': _i(fine['expser']),
         'expname': fine['expname'] ?? 'ชำระเกินกำหนด',
         'no': _i(fine['no']),

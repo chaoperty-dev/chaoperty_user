@@ -38,7 +38,8 @@ class PaymentSubV4BottomAction extends StatelessWidget {
     final canPress = enabled && !loading && amount.isPositive;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 9, 14, 8),
+      // Bottom action must reach screen edges; only inner content has spacing.
+      padding: EdgeInsets.zero,
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: PaymentSubV4Theme.border)),
@@ -52,6 +53,9 @@ class PaymentSubV4BottomAction extends StatelessWidget {
       ),
       child: SafeArea(
         top: false,
+        // CTA ต้องเต็มความกว้าง — ห้าม SafeArea ใส่ inset ซ้าย/ขวาเพิ่ม
+        left: false,
+        right: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -99,8 +103,7 @@ class PaymentSubV4BottomAction extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        statusText ??
-                            (isEn ? 'Awaiting slip' : 'รอสลิปยืนยัน'),
+                        statusText ?? (isEn ? 'Awaiting slip' : 'รอสลิปยืนยัน'),
                         style: PaymentSubV4Theme.text(
                           size: 11,
                           weight: FontWeight.w600,

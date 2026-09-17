@@ -12,6 +12,7 @@ import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_qr
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/models/payment_subv4_models.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/services/payment_subv4_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 /// ผลลัพธ์ของ `_loadOrCreateSession`
 ///
 /// [session] คือ `active_qr_session` (ว่างได้ถ้า server ไม่ให้)
@@ -70,6 +71,57 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     final s = v.toString().replaceAll(',', '').trim();
     if (s.isEmpty) return 0;
     return double.tryParse(s) ?? 0;
+  }
+
+  /// โหลดค่าปรับของ invoice ตั้งแต่ initial load ครั้งแรก
+  ///
+  /// Legacy เรียกทั้ง `GC_selectFine_inv.php` และ
+  /// `In_tran_select_fine_inv.php` ระหว่างเตรียมข้อมูลหน้า ไม่ได้รอให้ผู้ใช้
+  /// กาง `ExpansionTile` ก่อน จึงต้องทำในรอบ initialize เดียวกัน แล้ว cache
+  /// ตาม docno เพื่อไม่ยิง endpoint ซ้ำตอนกางบิล
+  Future<Map<String, Map<String, dynamic>>> _loadInitialInvoiceFines({
+    required String ren,
+    required String cidDoc,
+    required String user,
+    required List<InvoiceModel> invoices,
+  }) async {
+    final entries = await Future.wait(
+      invoices.map((invoice) async {
+        final docno = (invoice.docno ?? '').trim();
+        if (docno.isEmpty) return const <String, dynamic>{};
+
+        final gcFine = await _service.loadInvoiceFine(
+          ren: ren,
+          docno: docno,
+        );
+        final tranFine = await _service.loadInvoiceFineAmount(
+          ren: ren,
+          cidDoc: cidDoc,
+          tser: invoice.ser ?? '',
+          tdocno: docno,
+          user: user,
+        );
+
+        // ใช้ยอดจาก In_tran_select_fine_inv เป็นหลักตาม legacy
+        // ถ้า endpoint ไม่พบค่าปรับ ค่อยใช้ GC_selectFine_inv
+        final gcTotal = _d(gcFine['total']);
+        final effectiveTotal = tranFine > 0 ? tranFine : gcTotal;
+        final merged = <String, dynamic>{
+          ...gcFine,
+          'total': effectiveTotal,
+          'invoice_fine': effectiveTotal,
+        };
+        return <String, dynamic>{docno: merged};
+      }),
+    );
+
+    final result = <String, Map<String, dynamic>>{};
+    for (final entry in entries) {
+      for (final item in entry.entries) {
+        result[item.key] = Map<String, dynamic>.from(item.value as Map);
+      }
+    }
+    return result;
   }
 
   void _updateState(PaymentSubV4State newState) {
@@ -190,6 +242,16 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       final contractFines =
           fineRes.isSuccess ? fineRes.valueOr : <IntentsContractxFineModel>[];
 
+      // ตรวจค่าปรับราย invoice ตั้งแต่โหลดครั้งแรกเหมือน legacy `in_Trans_fine_re`
+      // เพื่อให้แถวบิลแสดงยอดค่าปรับได้ทันที ไม่ต้องรอผู้ใช้กาง ExpansionTile
+      // และไม่ยิง endpoint ซ้ำทุกครั้งที่กางบิล
+      final initialInvoiceFines = await _loadInitialInvoiceFines(
+        ren: ren,
+        cidDoc: usercid,
+        user: (prefs.getString('ser') ?? '').trim(),
+        invoices: invoices,
+      );
+
       // เก็บ error ของแต่ละ section ไว้แสดง แทนการกลืนหาย
       final sectionErrors = <String>{
         if (!paymentRes.isSuccess) paymentRes.error!,
@@ -204,8 +266,8 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
 
       for (final inv in invoices) {
         final docno = (inv.docno ?? '').trim();
-        final inIntent = intents.any((intent) =>
-            intent.invoices.any((i) => (i.billReference ?? '').trim() == docno));
+        final inIntent = intents.any((intent) => intent.invoices
+            .any((i) => (i.billReference ?? '').trim() == docno));
 
         // Filter ตาม payser หรือ selectedDocNos
         final isPayerMatched =
@@ -229,7 +291,21 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       }
 
       // 7. คำนวณยอดเงินรวม
-      final summary = _calculateSummary(payableInvoices, selectedPay);
+      final baseSummary = _calculateSummary(payableInvoices, selectedPay);
+
+      // ค่าปรับราย invoice ต้องถูกรวมตั้งแต่ initial load เหมือน legacy
+      // `in_Trans_fine_re` — ไม่รอผู้ใช้กางบิลก่อนจึงค่อยเห็นยอดจริง
+      final payableDocnos = payableInvoices
+          .map((inv) => (inv.docno ?? '').trim())
+          .where((docno) => docno.isNotEmpty)
+          .toSet();
+      final initialInvoiceFineTotal = initialInvoiceFines.entries
+          .where((entry) => payableDocnos.contains(entry.key))
+          .fold<double>(0, (sum, entry) => sum + _d(entry.value['total']));
+      final summary = _summaryWithInvoiceFines(
+        baseSummary,
+        initialInvoiceFineTotal,
+      );
 
       // 8. Auto-Switch แท็บ (ใช้เฉพาะ intent ที่ caller ระบุ เมื่อมี)
       final targetIntents = _resolveTargetIntents(intents);
@@ -240,10 +316,10 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         if (cameFromIntent) {
           // ลำดับความสำคัญ: สถานะ intent มาก่อน เพราะผู้ใช้กดมาจาก intent card
           // ใช้กติกาข้อความ status แบบเดียวกับต้นฉบับ (ไม่ใช่ classifier ที่นับ slip_uploaded)
-          final hasVerify = targetIntents
-              .any((p) => PaymentSubV4State.legacyIsAwaitingVerifyStatus(p.status));
-          final hasSlip = targetIntents
-              .any((p) => PaymentSubV4State.legacyIsAwaitingSlipStatus(p.status));
+          final hasVerify = targetIntents.any(
+              (p) => PaymentSubV4State.legacyIsAwaitingVerifyStatus(p.status));
+          final hasSlip = targetIntents.any(
+              (p) => PaymentSubV4State.legacyIsAwaitingSlipStatus(p.status));
 
           if (hasVerify) {
             targetTab = 3;
@@ -254,11 +330,12 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
           }
         } else if (payableInvoices.isEmpty) {
           final countSlip = intents
-              .where((p) => PaymentSubV4State.legacyIsAwaitingSlipStatus(p.status))
+              .where(
+                  (p) => PaymentSubV4State.legacyIsAwaitingSlipStatus(p.status))
               .length;
           final countVerify = intents
-              .where(
-                  (p) => PaymentSubV4State.legacyIsAwaitingVerifyStatus(p.status))
+              .where((p) =>
+                  PaymentSubV4State.legacyIsAwaitingVerifyStatus(p.status))
               .length;
 
           if (countSlip > 0) {
@@ -287,6 +364,12 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         invoices: payableInvoices,
         invoicesInIntent: inIntentInvoices,
         summary: summary,
+        // ค่าปรับถูกโหลดตั้งแต่ครั้งแรก — แถว invoice แสดงได้ทันที
+        // และ loadInvoiceDetail จะใช้ค่าเดิม ไม่ยิงซ้ำเมื่อผู้ใช้กางบิล
+        invoiceFineByDocno: {
+          ..._state.invoiceFineByDocno,
+          ...initialInvoiceFines,
+        },
         selectedTab: targetTab,
         hasAutoSwitched: true,
         sectionErrors: sectionErrors.toList(),
@@ -314,10 +397,12 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         // ใช้กติกาข้อความ status แบบเดียวกับที่แท็บใช้ (ไม่ใช่ classifier)
         final fallback = targetTab == 3
             ? intents
-                .where((p) => PaymentSubV4State.legacyIsAwaitingVerifyStatus(p.status))
+                .where((p) =>
+                    PaymentSubV4State.legacyIsAwaitingVerifyStatus(p.status))
                 .firstOrNull
             : intents
-                .where((p) => PaymentSubV4State.legacyIsAwaitingSlipStatus(p.status))
+                .where((p) =>
+                    PaymentSubV4State.legacyIsAwaitingSlipStatus(p.status))
                 .firstOrNull;
 
         await openIntentDetail(fallback ?? intents.first);
@@ -392,6 +477,29 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
     );
   }
 
+  /// เพิ่มค่าปรับราย invoice เข้า summary ตั้งแต่ initial load
+  ///
+  /// Legacy แสดงค่าปรับบนยอดตั้งแต่ `in_Trans_fine_re()` เสร็จ ไม่ใช่รอ
+  /// `ExpansionTile` ดังนั้น total ที่ผู้ใช้เห็นต้องรวมค่าปรับก้อนนี้ด้วย
+  static PaymentSummary _summaryWithInvoiceFines(
+    PaymentSummary base,
+    double invoiceFineTotal,
+  ) {
+    final fine = Money.fromDouble(invoiceFineTotal);
+    final grandSatang = base.subTotal.satang -
+        base.discountTotal.satang +
+        base.fineTotal.satang +
+        fine.satang;
+    return PaymentSummary(
+      subTotal: base.subTotal,
+      fineTotal: base.fineTotal + fine,
+      discountTotal: base.discountTotal,
+      vatTotal: base.vatTotal,
+      whtTotal: base.whtTotal,
+      grandTotal: Money(grandSatang > 0 ? grandSatang : 0),
+    );
+  }
+
   /// wrapper ให้ ViewModel เรียกใช้และเทสต์ static ได้
   PaymentSummary _calculateSummary(
     List<InvoiceModel> invoices,
@@ -401,7 +509,8 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
 
   /// สร้าง Payment Intent และเริ่ม QR Code
   Future<bool> createPaymentIntent() async {
-    if (_state.summary.grandTotal.isZero || _state.summary.grandTotal.isNegative) {
+    if (_state.summary.grandTotal.isZero ||
+        _state.summary.grandTotal.isNegative) {
       _updateState(_state.copyWith(
         uiEvent: _event('invalid_amount', 'ยอดเงินไม่ถูกต้อง', isError: true),
       ));
@@ -461,14 +570,18 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
 
         final fineMap = await _service.loadInvoiceFine(ren: ren, docno: docno);
 
-        // ค่าปรับราย invoice มาจาก In_tran_select_fine_inv (string "ชื่อ,ยอด")
-        final invoiceFine = await _service.loadInvoiceFineAmount(
-          ren: ren,
-          cidDoc: usercid,
-          tser: inv.ser ?? '',
-          tdocno: docno,
-          user: user,
-        );
+        // ใช้ค่าที่ initialize โหลดไว้ก่อนแล้ว — ไม่ยิง endpoint ซ้ำ
+        // ถ้าไม่มี cache (เช่น initial request ล้มเหลว) ค่อย retry ตอนกดเริ่มจ่าย
+        final cachedFine = _state.invoiceFineByDocno[docno]?['invoice_fine'];
+        final invoiceFine = cachedFine != null
+            ? _d(cachedFine)
+            : await _service.loadInvoiceFineAmount(
+                ren: ren,
+                cidDoc: usercid,
+                tser: inv.ser ?? '',
+                tdocno: docno,
+                user: user,
+              );
         sumInvoiceFine += invoiceFine;
 
         // เก็บลง invoicePayModels เพื่อให้ fineForDocno ใช้ค่าจริง
@@ -582,7 +695,8 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
             '→ using=${serverAmount > 0 ? serverAmount : requestedTotal}');
 
         final amtVal = PaymentQrPayload.resolveAmount(
-          intentRequestedAmount: serverAmount > 0 ? serverAmount : requestedTotal,
+          intentRequestedAmount:
+              serverAmount > 0 ? serverAmount : requestedTotal,
           fallback: _state.summary.grandTotal.toDouble(),
         );
 
@@ -665,7 +779,10 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       cidDoc: usercid,
       docno: docno,
     );
-    final fineMap = await _service.loadInvoiceFine(ren: ren, docno: docno);
+    // ค่าปรับถูกโหลดตั้งแต่ initialize แล้ว — ใช้ cache เดิม ไม่ยิงซ้ำ
+    // ตอนผู้ใช้กางรายการ (ถ้า initial load ล้มเหลว ค่อย retry ที่นี่)
+    final fineMap = _state.invoiceFineByDocno[docno] ??
+        await _service.loadInvoiceFine(ren: ren, docno: docno);
 
     if (_isDisposed) return;
 
@@ -695,15 +812,13 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       invoiceFineByDocno: fineByDoc,
       clearDetailLoading: true,
       clearSectionErrors: true,
-      sectionErrors: _state.sectionErrors
-          .where((e) => !_isDetailError(e))
-          .toList(),
+      sectionErrors:
+          _state.sectionErrors.where((e) => !_isDetailError(e)).toList(),
     ));
   }
 
   /// error ที่เกิดจาก loadInvoiceDetail (แยกจาก error ของ section หลัก)
-  bool _isDetailError(String message) =>
-      message.contains('ประวัติรายการ');
+  bool _isDetailError(String message) => message.contains('ประวัติรายการ');
 
   /// สลับแท็บ
   void selectTab(int tab) {
@@ -862,8 +977,8 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
 
     // ต้นฉบับเลือกธนาคารจาก `intent.bankmerchantid` ไม่ใช่ช่องทางที่ผู้ใช้เลือก
     // เพราะ intent ที่เปิดจากแท็บ 2/3 อาจเป็นของธนาคารอื่น
-    final payModel = _payModelFor(intent.bankmerchantid) ??
-        _state.selectedPaymentModel;
+    final payModel =
+        _payModelFor(intent.bankmerchantid) ?? _state.selectedPaymentModel;
     final expireIso = intent.softExpireAt?.toIso8601String();
 
     // ต้นฉบับเซ็ต _intentsSlipData จาก `attaches` ของ details response
@@ -972,7 +1087,12 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         propertyNo: propertyNo,
         intentsUuid: intentUuid,
       );
-      if (_isDisposed) return (session: const <String, dynamic>{}, source: const <String, dynamic>{});
+      if (_isDisposed) {
+        return (
+          session: const <String, dynamic>{},
+          source: const <String, dynamic>{},
+        );
+      }
 
       if (detail != null) {
         source = detail;
@@ -1122,14 +1242,15 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       invoices: intent.invoices,
       customerNo: intent.customerNo,
       softExpireAt: sessionExpire,
-      billExpireAt: (result.source['soft_expire_at'] as String?) ??
-          sessionExpire,
+      billExpireAt:
+          (result.source['soft_expire_at'] as String?) ?? sessionExpire,
     );
 
     _updateState(_state.copyWith(
       qrState: _state.qrState.copyWith(
         isBillDead: sessionMap.isNotEmpty &&
-            _isBillDead(_state.qrState.billExpireAt, _state.qrState.softExpireAt),
+            _isBillDead(
+                _state.qrState.billExpireAt, _state.qrState.softExpireAt),
       ),
     ));
   }
@@ -1154,8 +1275,8 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
   /// ต้นฉบับเรียก `_renewQrAndReload()` ซึ่ง POST `/generate` ด้วย UUID เดิม
   /// ถ้า session ยังไม่หมดจะโหลด session เดิมกลับมาแทนการยิง generate (กัน 409)
   Future<bool> renewQr() async {
-    final uuid = (_state.uploadTargetUuid ?? _state.qrState.intentUuid ?? '')
-        .trim();
+    final uuid =
+        (_state.uploadTargetUuid ?? _state.qrState.intentUuid ?? '').trim();
     final payModel = _state.selectedPaymentModel;
     if (uuid.isEmpty || payModel == null) return false;
 
@@ -1181,8 +1302,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         _applyQrSession(
           intentUuid: uuid,
           payModel: payModel,
-          amount: _state.qrState.amount ??
-              _state.summary.grandTotal.toDouble(),
+          amount: _state.qrState.amount ?? _state.summary.grandTotal.toDouble(),
           ref1: map['ref1'] as String?,
           ref2: map['ref2'] as String?,
           ref3: map['ref3'] as String?,

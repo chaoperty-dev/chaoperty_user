@@ -184,9 +184,7 @@ extension PayMentModelDisplay on PayMentModel {
 
   String? get bankLogoAsset {
     final file = bankCodeMap[(bank ?? '').trim()]?['logo'];
-    return file == null || file.isEmpty
-        ? null
-        : 'assets/images/LogoBank/$file';
+    return file == null || file.isEmpty ? null : 'assets/images/LogoBank/$file';
   }
 
   String get safeAccountNumber {
@@ -491,9 +489,8 @@ class PaymentSubV4State {
   // `_countAwaitingVerify`) ไม่ใช่ [classifyIntentStatus] เพราะต้นฉบับนับจาก
   // ข้อความ status เท่านั้น — intent ที่ system_status เป็น slip_uploaded
   // แต่ status ยังเป็น "รอชำระเงิน" จะยังอยู่แท็บรอแนบหลักฐานเหมือนต้นฉบับ
-  int get countAwaitingSlip => paymentIntents
-      .where((p) => legacyIsAwaitingSlipStatus(p.status))
-      .length;
+  int get countAwaitingSlip =>
+      paymentIntents.where((p) => legacyIsAwaitingSlipStatus(p.status)).length;
 
   int get countAwaitingVerify => paymentIntents
       .where((p) => legacyIsAwaitingVerifyStatus(p.status))
@@ -576,8 +573,9 @@ class PaymentSubV4State {
       qrState: qrState ?? this.qrState,
       slipState: slipState ?? this.slipState,
       authValid: authValid ?? this.authValid,
-      uploadTargetUuid:
-          clearUploadTarget ? null : (uploadTargetUuid ?? this.uploadTargetUuid),
+      uploadTargetUuid: clearUploadTarget
+          ? null
+          : (uploadTargetUuid ?? this.uploadTargetUuid),
       uploadTargetAmount: clearUploadTarget
           ? null
           : (uploadTargetAmount ?? this.uploadTargetAmount),
@@ -585,21 +583,19 @@ class PaymentSubV4State {
           clearTargetIntent ? null : (targetIntent ?? this.targetIntent),
       attachedSlip:
           clearAttachedSlip ? null : (attachedSlip ?? this.attachedSlip),
-      slipPreviewBytes: clearSlipPreview
-          ? null
-          : (slipPreviewBytes ?? this.slipPreviewBytes),
-      isSlipPreviewLoading:
-          isSlipPreviewLoading ?? this.isSlipPreviewLoading,
-      slipPreviewError: clearSlipPreview
-          ? null
-          : (slipPreviewError ?? this.slipPreviewError),
+      slipPreviewBytes:
+          clearSlipPreview ? null : (slipPreviewBytes ?? this.slipPreviewBytes),
+      isSlipPreviewLoading: isSlipPreviewLoading ?? this.isSlipPreviewLoading,
+      slipPreviewError:
+          clearSlipPreview ? null : (slipPreviewError ?? this.slipPreviewError),
       sectionErrors:
           clearSectionErrors ? const [] : (sectionErrors ?? this.sectionErrors),
       invoiceHistoryByDocno:
           invoiceHistoryByDocno ?? this.invoiceHistoryByDocno,
       invoiceFineByDocno: invoiceFineByDocno ?? this.invoiceFineByDocno,
-      detailLoadingDocno:
-          clearDetailLoading ? null : (detailLoadingDocno ?? this.detailLoadingDocno),
+      detailLoadingDocno: clearDetailLoading
+          ? null
+          : (detailLoadingDocno ?? this.detailLoadingDocno),
     );
   }
 

@@ -59,8 +59,7 @@ class SlipPreviewResult {
 class PaymentSubV4Service {
   final http.Client _client;
 
-  PaymentSubV4Service({http.Client? client})
-      : _client = client ?? httpClient;
+  PaymentSubV4Service({http.Client? client}) : _client = client ?? httpClient;
 
   /// timeout ต่อ endpoint (ตามแผนข้อ 8)
   static const Duration requestTimeout = Duration(seconds: 20);
@@ -93,8 +92,7 @@ class PaymentSubV4Service {
       },
     );
     try {
-      final response =
-          await _client.get(uri).timeout(requestTimeout);
+      final response = await _client.get(uri).timeout(requestTimeout);
       if (response.statusCode != 200) {
         return PaymentFetchResult.failure('tenant HTTP ${response.statusCode}');
       }
@@ -120,8 +118,7 @@ class PaymentSubV4Service {
       queryParameters: {'isAdd': 'true', 'ren': ren},
     );
     try {
-      final response =
-          await _client.get(uri).timeout(requestTimeout);
+      final response = await _client.get(uri).timeout(requestTimeout);
       if (response.statusCode != 200) {
         return PaymentFetchResult.failure(
           'rental HTTP ${response.statusCode}',
@@ -142,15 +139,14 @@ class PaymentSubV4Service {
   Future<PaymentFetchResult<List<PayMentModel>>> loadPaymentMethods({
     required String ren,
   }) async {
-    final uri =
-        Uri.parse('${MyConstant().domain_chao}/GC_payMent.php').replace(
+    final uri = Uri.parse('${MyConstant().domain_chao}/GC_payMent.php').replace(
       queryParameters: {'isAdd': 'true', 'ren': ren},
     );
     try {
-      final response =
-          await _client.get(uri).timeout(requestTimeout);
+      final response = await _client.get(uri).timeout(requestTimeout);
       if (response.statusCode == 500) {
-        return const PaymentFetchResult.failure('ช่องทางชำระเงินตอบกลับผิดพลาด');
+        return const PaymentFetchResult.failure(
+            'ช่องทางชำระเงินตอบกลับผิดพลาด');
       }
       if (response.statusCode != 200) {
         return PaymentFetchResult.failure(
@@ -313,6 +309,7 @@ class PaymentSubV4Service {
           'ok': true,
           'expname': decoded['expname'],
           'expser': decoded['expser'],
+          'duedate': decoded['duedate'],
           'no': decoded['no'],
           'pvat': (decoded['pvat'] as num?)?.toDouble() ?? 0.0,
           'vser': (decoded['vser'] as num?)?.toDouble() ?? 0.0,
@@ -531,7 +528,8 @@ class PaymentSubV4Service {
       final headers = await MyHeadersIntents.build();
       if (headers['Authorization'] == null) {
         debugPrint('🚫 loadSlipPreview: ไม่มี Authorization');
-        return const SlipPreviewResult.failure('ไม่พบสิทธิ์เข้าถึงระบบชำระเงิน');
+        return const SlipPreviewResult.failure(
+            'ไม่พบสิทธิ์เข้าถึงระบบชำระเงิน');
       }
 
       final resp =
@@ -609,7 +607,8 @@ class PaymentSubV4Service {
 
       if (response.statusCode != 200 && response.statusCode != 201) {
         debugPrint('❌ uploadSlip HTTP ${response.statusCode}');
-        return SlipUploadResult.failure('อัปโหลดสลิปล้มเหลว (${response.statusCode})');
+        return SlipUploadResult.failure(
+            'อัปโหลดสลิปล้มเหลว (${response.statusCode})');
       }
 
       // HTTP 200 อย่างเดียวไม่พอ ต้องตรวจ body ด้วย
@@ -666,10 +665,7 @@ class PaymentSubV4Service {
         final status = decoded['status'];
         if (status is String) {
           final s = status.toLowerCase();
-          if (s == 'failed' ||
-              s == 'error' ||
-              s == 'rejected' ||
-              s == 'fail') {
+          if (s == 'failed' || s == 'error' || s == 'rejected' || s == 'fail') {
             return false;
           }
         }
@@ -677,7 +673,9 @@ class PaymentSubV4Service {
         final message = decoded['message'];
         if (message is String) {
           final m = message.toLowerCase();
-          if (m.contains('fail') || m.contains('error') || m.contains('ไม่สำเร็จ')) {
+          if (m.contains('fail') ||
+              m.contains('error') ||
+              m.contains('ไม่สำเร็จ')) {
             return false;
           }
         }

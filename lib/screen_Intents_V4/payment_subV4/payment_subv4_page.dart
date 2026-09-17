@@ -197,291 +197,283 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
       builder: (context, child) => Scaffold(
         backgroundColor: PaymentSubV4Theme.pageBackground,
         body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: FadeTransition(
-                opacity: _animation,
-                child: Transform(
-                  transform: Matrix4.translationValues(
-                      0.0, 30 * (1.0 - _animation.value), 0.0),
-                  child: Column(
-                    children: [
-                      PaymentSubV4Header(
-                        title: isEn ? 'Payment' : 'การชำระเงิน',
-                        isConnected: state.authValid,
-                        onBack: () => Navigator.of(context).pop(),
-                        onHelp: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                isEn
-                                    ? 'Please contact property support.'
-                                    : 'กรุณาติดต่อฝ่ายดูแลโครงการ',
+          child: SizedBox(
+            width: double.infinity,
+            child: FadeTransition(
+              opacity: _animation,
+              child: Transform(
+                transform: Matrix4.translationValues(
+                    0.0, 30 * (1.0 - _animation.value), 0.0),
+                child: Column(
+                  children: [
+                    PaymentSubV4Header(
+                      title: isEn ? 'Payment' : 'การชำระเงิน',
+                      isConnected: state.authValid,
+                      onBack: () => Navigator.of(context).pop(),
+                      onHelp: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              isEn
+                                  ? 'Please contact property support.'
+                                  : 'กรุณาติดต่อฝ่ายดูแลโครงการ',
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    PaymentSubV4Tabs(
+                      selectedTab: state.selectedTab,
+                      countPayable: state.invoices.length,
+                      countAwaitingSlip: state.countAwaitingSlip,
+                      countAwaitingVerify: state.countAwaitingVerify,
+                      onTabSelected: (tab) => vm.selectTab(tab),
+                      isEn: isEn,
+                    ),
+                    if (state.sectionErrors.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        color: Colors.orange.shade50,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.warning_amber_rounded,
+                                size: 16, color: Colors.orange.shade800),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  for (final msg in state.sectionErrors)
+                                    Text(
+                                      msg,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontFamily: Font_.Fonts_T,
+                                        color: Colors.orange.shade900,
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
-                          );
-                        },
+                            TextButton(
+                              onPressed: () => vm.initialize(),
+                              style: TextButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                minimumSize: const Size(0, 32),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                isEn ? 'Retry' : 'ลองใหม่',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      PaymentSubV4Tabs(
-                        selectedTab: state.selectedTab,
-                        countPayable: state.invoices.length,
-                        countAwaitingSlip: state.countAwaitingSlip,
-                        countAwaitingVerify: state.countAwaitingVerify,
-                        onTabSelected: (tab) => vm.selectTab(tab),
+                    if (hasActivePayment && state.selectedTab == 1)
+                      PaymentSubV4CountdownBar(
+                        qrState: state.qrState,
+                        totalSeconds: vm.sessionTotalSecs,
                         isEn: isEn,
                       ),
-                      if (state.sectionErrors.isNotEmpty)
-                        Container(
-                          width: double.infinity,
-                          color: Colors.orange.shade50,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(Icons.warning_amber_rounded,
-                                  size: 16, color: Colors.orange.shade800),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    for (final msg in state.sectionErrors)
-                                      Text(
-                                        msg,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontFamily: Font_.Fonts_T,
-                                          color: Colors.orange.shade900,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () => vm.initialize(),
-                                style: TextButton.styleFrom(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 8),
-                                  minimumSize: const Size(0, 32),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: Text(
-                                  isEn ? 'Retry' : 'ลองใหม่',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (hasActivePayment && state.selectedTab == 1)
-                        PaymentSubV4CountdownBar(
-                          qrState: state.qrState,
-                          totalSeconds: vm.sessionTotalSecs,
-                          isEn: isEn,
-                        ),
-                      if (hasActivePayment)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton.icon(
-                                onPressed:
-                                    state.operation == PaymentOperation.none
-                                        ? () => _confirmCancelPayment(isEn)
-                                        : null,
-                                icon:
-                                    const Icon(Icons.cancel_outlined, size: 16),
-                                label: Text(
-                                  isEn ? 'Cancel payment' : 'ยกเลิกรายการชำระ',
-                                  style: const TextStyle(
-                                    fontSize: 12.5,
-                                    fontFamily: Font_.Fonts_T,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: Colors.red.shade700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            children: [
-                              if (hasActivePayment)
-                                PaymentSubV4PaymentCard(
-                                  paymentModel: payment,
-                                  summary: state.summary,
-                                  qrState: state.qrState,
-                                  isEn: isEn,
-                                  qrBoundaryKey: _qrBoundaryKey,
-                                  onCopy: (value) => _copyText(value, isEn),
-                                  onSaveQr: isQrChannel
-                                      ? () => _saveQrOnWeb(isEn)
+                    if (hasActivePayment)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton.icon(
+                              onPressed:
+                                  state.operation == PaymentOperation.none
+                                      ? () => _confirmCancelPayment(isEn)
                                       : null,
-                                  // ขอ QR ใหม่ = ต่ออายุ intent เดิม
-                                  // (ไม่ใช่สร้าง intent ใหม่ทับ)
-                                  onRenewQr:
-                                      isQrChannel ? () => vm.renewQr() : null,
+                              icon: const Icon(Icons.cancel_outlined, size: 16),
+                              label: Text(
+                                isEn ? 'Cancel payment' : 'ยกเลิกรายการชำระ',
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontFamily: Font_.Fonts_T,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                              if (hasActivePayment) ...[
-                                const SizedBox(height: 12),
-                                PaymentSubV4InstructionsCard(
-                                  isEn: isEn,
-                                  isBankTransfer:
-                                      payment?.isBankTransfer == true,
-                                ),
-                              ],
-                              if (state.slipState.slipBytes != null) ...[
-                                const SizedBox(height: 12),
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                        color: Colors.green.shade200),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.check_circle,
-                                          color: Colors.green),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          state.slipState.fileName ??
-                                              'แนบสลิปแล้ว',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.close, size: 18),
-                                        onPressed: () => vm.clearSlip(),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 16),
-                              if (state.selectedTab == 1) ...[
-                                if (state.invoices.isEmpty)
-                                  const Center(
-                                    child: Padding(
-                                      padding:
-                                          EdgeInsets.symmetric(vertical: 32),
-                                      child: Text('ไม่มีรายการที่ต้องชำระ'),
-                                    ),
-                                  )
-                                else ...[
-                                  ...state.invoices.map((inv) {
-                                    final docno = (inv.docno ?? '').trim();
-                                    return PaymentSubV4InvoiceRow(
-                                      invoice: inv,
-                                      isEn: isEn,
-                                      history:
-                                          state.invoiceHistoryByDocno[docno] ??
-                                              const [],
-                                      fine: state.invoiceFineByDocno[docno],
-                                      isLoadingDetail:
-                                          state.detailLoadingDocno == docno,
-                                      onExpand: (d) => vm.loadInvoiceDetail(d),
-                                    );
-                                  }),
-                                  if (!hasActivePayment) ...[
-                                    const SizedBox(height: 16),
-                                    PaymentSubV4InstructionsCard(
-                                      isEn: isEn,
-                                      isBankTransfer:
-                                          payment?.isBankTransfer == true,
-                                    ),
-                                  ],
-                                ],
-                              ] else if (state.selectedTab == 2) ...[
-                                PaymentSubV4BankSummary(
-                                  paymentModel: payment,
-                                  isEn: isEn,
-                                ),
-                                const SizedBox(height: 10),
-                                if (state.countAwaitingSlip == 0)
-                                  const Center(
-                                    child: Padding(
-                                      padding:
-                                          EdgeInsets.symmetric(vertical: 32),
-                                      child: Text('ไม่มีรายการรอแนบหลักฐาน'),
-                                    ),
-                                  )
-                                else
-                                  ...state.awaitingSlipIntents.map(
-                                    (intent) => PaymentSubV4IntentCard(
-                                      intent: intent,
-                                      isVerifyTab: false,
-                                      isEn: isEn,
-                                      onOpenSlip: () =>
-                                          _openIntentAction(intent, isEn),
-                                    ),
-                                  ),
-                              ] else if (state.selectedTab == 3) ...[
-                                PaymentSubV4BankSummary(
-                                  paymentModel: payment,
-                                  isEn: isEn,
-                                ),
-                                const SizedBox(height: 10),
-                                if (state.countAwaitingVerify == 0)
-                                  const Center(
-                                    child: Padding(
-                                      padding:
-                                          EdgeInsets.symmetric(vertical: 32),
-                                      child: Text('ไม่มีรายการรอระบบตรวจสอบ'),
-                                    ),
-                                  )
-                                else
-                                  ...state.awaitingVerifyIntents.map(
-                                    (intent) => PaymentSubV4IntentCard(
-                                      intent: intent,
-                                      isVerifyTab: true,
-                                      isEn: isEn,
-                                      onOpenSlip: () =>
-                                          _openIntentAction(intent, isEn),
-                                    ),
-                                  ),
-                              ],
-                            ],
-                          ),
+                              ),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.red.shade700,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      if (state.selectedTab == 1 && state.invoices.isNotEmpty)
-                        PaymentSubV4BottomAction(
-                          summary: state.summary,
-                          operation: state.operation,
-                          isEn: isEn,
-                          // มี intent แล้ว → ใช้ยอดที่ server ถือ ให้ตรงกับ QR
-                          amountOverride: _activeAmount(state),
-                          enabled: _activeAmount(state).isPositive,
-                          label: hasActivePayment
-                              ? (isEn
-                                  ? 'Attach slip and confirm'
-                                  : 'กดเพื่อ "แนบหลักฐานและยืนยัน"')
-                              : (isEn
-                                  ? 'Start payment'
-                                  : 'กดเพื่อ "เริ่มการชำระ"'),
-                          onActionPressed: () async {
-                            if (hasActivePayment) {
-                              await _openTab1AttachFlow(isEn);
-                            } else {
-                              await vm.createPaymentIntent();
-                            }
-                          },
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: [
+                            if (hasActivePayment)
+                              PaymentSubV4PaymentCard(
+                                paymentModel: payment,
+                                summary: state.summary,
+                                qrState: state.qrState,
+                                isEn: isEn,
+                                qrBoundaryKey: _qrBoundaryKey,
+                                onCopy: (value) => _copyText(value, isEn),
+                                onSaveQr: isQrChannel
+                                    ? () => _saveQrOnWeb(isEn)
+                                    : null,
+                                // ขอ QR ใหม่ = ต่ออายุ intent เดิม
+                                // (ไม่ใช่สร้าง intent ใหม่ทับ)
+                                onRenewQr:
+                                    isQrChannel ? () => vm.renewQr() : null,
+                              ),
+                            if (hasActivePayment) ...[
+                              const SizedBox(height: 12),
+                              PaymentSubV4InstructionsCard(
+                                isEn: isEn,
+                                isBankTransfer: payment?.isBankTransfer == true,
+                              ),
+                            ],
+                            if (state.slipState.slipBytes != null) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border:
+                                      Border.all(color: Colors.green.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle,
+                                        color: Colors.green),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        state.slipState.fileName ??
+                                            'แนบสลิปแล้ว',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.close, size: 18),
+                                      onPressed: () => vm.clearSlip(),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 16),
+                            if (state.selectedTab == 1) ...[
+                              if (state.invoices.isEmpty)
+                                const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 32),
+                                    child: Text('ไม่มีรายการที่ต้องชำระ'),
+                                  ),
+                                )
+                              else ...[
+                                ...state.invoices.map((inv) {
+                                  final docno = (inv.docno ?? '').trim();
+                                  return PaymentSubV4InvoiceRow(
+                                    invoice: inv,
+                                    isEn: isEn,
+                                    history:
+                                        state.invoiceHistoryByDocno[docno] ??
+                                            const [],
+                                    fine: state.invoiceFineByDocno[docno],
+                                    isLoadingDetail:
+                                        state.detailLoadingDocno == docno,
+                                    onExpand: (d) => vm.loadInvoiceDetail(d),
+                                  );
+                                }),
+                                if (!hasActivePayment) ...[
+                                  const SizedBox(height: 16),
+                                  PaymentSubV4InstructionsCard(
+                                    isEn: isEn,
+                                    isBankTransfer:
+                                        payment?.isBankTransfer == true,
+                                  ),
+                                ],
+                              ],
+                            ] else if (state.selectedTab == 2) ...[
+                              PaymentSubV4BankSummary(
+                                paymentModel: payment,
+                                isEn: isEn,
+                              ),
+                              const SizedBox(height: 10),
+                              if (state.countAwaitingSlip == 0)
+                                const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 32),
+                                    child: Text('ไม่มีรายการรอแนบหลักฐาน'),
+                                  ),
+                                )
+                              else
+                                ...state.awaitingSlipIntents.map(
+                                  (intent) => PaymentSubV4IntentCard(
+                                    intent: intent,
+                                    isVerifyTab: false,
+                                    isEn: isEn,
+                                    onOpenSlip: () =>
+                                        _openIntentAction(intent, isEn),
+                                  ),
+                                ),
+                            ] else if (state.selectedTab == 3) ...[
+                              PaymentSubV4BankSummary(
+                                paymentModel: payment,
+                                isEn: isEn,
+                              ),
+                              const SizedBox(height: 10),
+                              if (state.countAwaitingVerify == 0)
+                                const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(vertical: 32),
+                                    child: Text('ไม่มีรายการรอระบบตรวจสอบ'),
+                                  ),
+                                )
+                              else
+                                ...state.awaitingVerifyIntents.map(
+                                  (intent) => PaymentSubV4IntentCard(
+                                    intent: intent,
+                                    isVerifyTab: true,
+                                    isEn: isEn,
+                                    onOpenSlip: () =>
+                                        _openIntentAction(intent, isEn),
+                                  ),
+                                ),
+                            ],
+                          ],
                         ),
-                    ],
-                  ),
+                      ),
+                    ),
+                    if (state.selectedTab == 1 && state.invoices.isNotEmpty)
+                      PaymentSubV4BottomAction(
+                        summary: state.summary,
+                        operation: state.operation,
+                        isEn: isEn,
+                        // มี intent แล้ว → ใช้ยอดที่ server ถือ ให้ตรงกับ QR
+                        amountOverride: _activeAmount(state),
+                        enabled: _activeAmount(state).isPositive,
+                        label: hasActivePayment
+                            ? (isEn
+                                ? 'Attach slip and confirm'
+                                : 'กดเพื่อ "แนบหลักฐานและยืนยัน"')
+                            : (isEn
+                                ? 'Start payment'
+                                : 'กดเพื่อ "เริ่มการชำระ"'),
+                        onActionPressed: () async {
+                          if (hasActivePayment) {
+                            await _openTab1AttachFlow(isEn);
+                          } else {
+                            await vm.createPaymentIntent();
+                          }
+                        },
+                      ),
+                  ],
                 ),
               ),
             ),
