@@ -19,12 +19,13 @@ class PaymentSubV4Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Page owns top SafeArea. Do not add another inset here: nested SafeArea
-    // compresses the 54px header and clips title/icons on Web.
-    return Material(
-      color: Colors.white,
-      child: SizedBox(
-        height: 54,
+    // Parent Column centers children. Force full width; otherwise Material
+    // shrink-wraps title and clips positioned Back/Help buttons on Web.
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: Material(
+        color: Colors.white,
         child: Stack(
           alignment: Alignment.center,
           children: [
