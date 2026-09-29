@@ -10,6 +10,8 @@ Future<http.Response?> postPaymentIntentsBillReferenceAvailableBulk({
   required String propertyno,
   required List billreference,
 }) async {
+  final ok = await MyHeadersIntents.checkauthpaymentintents();
+  if (!ok) return null;
   final headers = await MyHeadersIntents.build();
   final url = Uri.parse(
     '${MyconfigIntents().domainIntents}/v1/payment/intents/bill-reference/available/bulk',

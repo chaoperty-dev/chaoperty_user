@@ -53,6 +53,8 @@ Future<http.Response?> postPaymentIntentsState({
   required String cusno,
   required String propertyno,
 }) async {
+  final ok = await MyHeadersIntents.checkauthpaymentintents();
+  if (!ok) return null;
   final headers = await MyHeadersIntents.build();
 
   final url = Uri.parse(
