@@ -248,7 +248,7 @@ void main() {
       await tester.pumpWidget(_wrap(state));
       await tester.pump();
 
-      expect(find.textContaining('เริ่มการชำระ'), findsOneWidget);
+      expect(find.text('กดเพื่อชำระ'), findsOneWidget);
       expect(find.text('ยอดรวมที่ต้องโอน'), findsOneWidget);
       expect(find.text('รอสลิปยืนยัน'), findsOneWidget);
     });
