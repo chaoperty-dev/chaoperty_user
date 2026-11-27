@@ -7,8 +7,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 // import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 // import 'package:bottom_sheet/bottom_sheet.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'package:chaoperty_user/screen/pay_bill_Mainscreen_Choice.dart';
-import 'package:chaoperty_user/screen/pay_bill_screen_Choice.dart';
+import 'package:chaoperty_user/screen/pay_bill_Mainscreen_Choice_new.dart';
 import 'package:chaoperty_user/screen/pay_scan_bill_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,12 +16,14 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:marquee/marquee.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 // import 'package:chaoperty_user/screen/mobile_scanner_page.dart';
 import 'package:url_launcher/url_launcher.dart';
 // import 'package:x_message/x_message.dart';
 
 import '../Constant/Myconstant.dart';
+import '../Constant/session_service.dart';
 import '../Model/GetContractx_Model.dart';
 import '../Model/GetInvoice_Model.dart';
 import '../Model/GetInvoice_history_Model.dart';
@@ -41,6 +42,9 @@ import 'bill_history.dart';
 import 'home_select_cid.dart';
 import 'loginscreen.dart';
 import 'meter_screen.dart';
+import 'provider/homeprovider.dart';
+import 'provider/payhisprovider.dart';
+import 'provider/payprovider.dart';
 // import 'metercheck_screen.dart';
 import 'package:http/http.dart' as http;
 // import 'package:grouped_list/grouped_list.dart';
@@ -174,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                       },
                       child: Image.network(imgList[i].image.toString(),
-                          fit: BoxFit.cover, width: 1500.0),
+                          fit: BoxFit.cover, width: 1500.0, cacheWidth: 480),
                     ),
                   ],
                 )),
@@ -263,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<Null> checkPreferance() async {
     DateTime currentDate = DateTime.now();
 
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
     //   '${Uri.base.toString().substring(0, Uri.base.toString().length - 8)}/chao_api';
     // Format the date as 'YYYY-MM-DD'
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
@@ -905,7 +909,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             : select_page == 2
                                 ? (renTal_user.toString() == '106' ||
                                         renTal_user.toString() == '50')
-                                    ? PaybillMainScreenChoice() //PayBillscreenChoice()
+                                    ? PaybillMainScreenChoiceNew()
                                     : PaybillMainScreen()
                                 // PayBillscreen()
                                 : select_page == 3
@@ -2179,10 +2183,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.all(8.0),
                         child: TextButton(
                           onPressed: () async {
-                            // widget.navigateToMeter(1);
-                            SharedPreferences preferences =
-                                await SharedPreferences.getInstance();
-                            await preferences.clear();
+                            // ✅ Clear ทุกอย่าง: SharedPreferences, ApiSession,
+                            //    AppMarkets, web localStorage, Provider state
+                            await SessionService.clearAll(
+                                providers: <ChangeNotifier>[
+                                  context.read<WaitPayListProvider>(),
+                                  context.read<PayFormProvider>(),
+                                  context.read<PayHisProvider>(),
+                                ]);
+                            if (!context.mounted) return;
                             MaterialPageRoute route = MaterialPageRoute(
                               builder: (context) => const LoginScreen(),
                             );
@@ -3023,7 +3032,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                                     maxFontSize:
                                                                         15,
                                                                     maxLines: 1,
-                                                                    '${DateFormat('dd-MM-yyyy').format(DateTime.parse('${_InvoiceHistoryModels[index].date} 00:00:00'))}', //${_InvoiceHistoryModels[index].date}
+                                                                    '${DateFormat('dd-MM').format(DateTime.parse('${_InvoiceHistoryModels[index].date} 00:00:00'))}-${DateTime.parse('${_InvoiceHistoryModels[index].date} 00:00:00').year + 543}', //${_InvoiceHistoryModels[index].date}
                                                                     textAlign:
                                                                         TextAlign
                                                                             .center,

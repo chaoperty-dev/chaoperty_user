@@ -1,5 +1,8 @@
 import 'package:auto_size_text/auto_size_text.dart';
-
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -8,15 +11,12 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+
 import '../../CRC_16_Prompay/generate_qrcode.dart';
 
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Bills_INV.dart';
 import '../../Model/GetInvoice_history_Model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
 
 class Pdfgen_BillingNoteInvlice_TP3_V2 {
   //////////---------------------------------------------------->(ใบวางบิล แจ้งหนี้)  ใช้  ++
@@ -117,11 +117,11 @@ class Pdfgen_BillingNoteInvlice_TP3_V2 {
     // }
     if (img1 == null || img1.toString() == '') {
       netImage_QR.add(await networkImage(
-          '${MyConstant().domain_chao}/Awaitdownload/imagenot.png'));
+          '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png'));
       // netImage_QR.add(iconImage);
     } else {
       netImage_QR.add(await networkImage(
-          '${MyConstant().domain_chao}/files/$foder/payment/${img1}'));
+          '${MyConstant().domain_chao_img}/files/$foder/payment/${img1}'));
     }
     final tableHeaders = [
       'ลำดับ',
@@ -2164,15 +2164,6 @@ class Pdfgen_BillingNoteInvlice_TP3_V2 {
       // Upload the file
       await uploadFile(data, name_1);
     } else if (Preview_ser.toString() == 'File') {
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      await FlutterFileDialog.saveFile(
-        params: SaveFileDialogParams(
-          data: data,
-          fileName: 'ใบวางบิล_ใบแจ้งหนี้${cFinn}.pdf',
-        ),
-      );
-
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
       // MimeType type = MimeType.PDF;

@@ -122,7 +122,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   DateTime datex = DateTime.now();
   bool? isChecked = false;
   bool isLoading = true;
+  bool _initialLoading = true; // show 1-sec splash on first enter
   bool _isProcessingLink = false; // Prevent double submission
+  bool _isInfoExpanded = false; // For expandable info text
+  bool _isPaymentInfoExpanded = false; // For payment details expand/collapse
   bool _isExporting = false;
   Uint8List? _exportQrBytes;
   GlobalKey qrImageKey = GlobalKey();
@@ -185,8 +188,17 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
   String? selectedValue;
   String? numinvoice, paymentSer1, paymentName1, paymentSer2, paymentName2;
+
+  String? Payment_bno,
+      Payment_bname,
+      Payment_bname_en,
+      Payment_bank_ncode,
+      Payment_paytype_ncode,
+      Payment_remark;
+
   final Form_payment1 = TextEditingController();
   final Form_payment2 = TextEditingController();
+  final Form_paymentNote = TextEditingController();
   List<TeNantModel> teNantModels = [];
   List<IntentsContractxFineModel> contractxFineModels = [];
   List<TransFineModel> transFineModels = [];
@@ -249,6 +261,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   String? _slipImageName;
   String? intentsAttacheSlipNo; // Added
   late Stream<int> _timerStream;
+  // Added 2026-07-08: hold subscriptions so we can cancel on dispose.
+  // Previously _timerStream was passed straight to StreamBuilder and
+  // broadcast forever (1Hz) even after widget pop.
+  StreamSubscription<int>? _timerSub;
   String? qrDataNoIntens;
   // ================= Helpers for Right Panel =================
 
@@ -283,11 +299,25 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     _timerStream =
         Stream.periodic(const Duration(seconds: 1), (_) => secondsUntilExpire())
             .asBroadcastStream();
+    // Hold a listener so we can cancel it on dispose; previously
+    // the broadcast stream kept running 1Hz until app exit.
+    _timerSub = _timerStream.listen((_) {});
     if (widget.mainScreenAnimationController == null) {
       _usingLocalController = true;
       _localController = AnimationController(vsync: this, value: 1.0);
       _localAnimation = AlwaysStoppedAnimation(1.0);
     }
+
+    // splash loading 1 วินาที ตอนเข้าหน้าครั้งแรก
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) setState(() => _initialLoading = false);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) _showAttachSlipWarning();
+      });
+    });
 
     checkPreferance().then((value) {
       Value_newDateY1 = DateFormat('yyyy-MM-dd').format(newDatetime);
@@ -299,17 +329,225 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     });
   }
 
+  void _showAttachSlipWarning() {
+    final isEN = widget.cuslang == 'EN';
+    double dx = 0.0;
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => StatefulBuilder(
+            builder: (_, setSS) => Dialog(
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.85,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 28),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 68,
+                              height: 68,
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.warning_rounded,
+                                  color: Colors.red, size: 38),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              isEN
+                                  ? 'Important Notice'
+                                  : 'ประกาศสำคัญสำหรับผู้เช่า',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              isEN
+                                  ? 'After making a payment, tenants must attach payment evidence via the tenant app every time.'
+                                  : 'หลังจากทำการชำระเงินแล้ว\nผู้เช่าจะต้องแนบหลักฐานการชำระเงิน\nผ่านแอปผู้เช่าทุกครั้ง',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 14, height: 1.6),
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.07),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                    color: Colors.red.withValues(alpha: 0.4),
+                                    width: 1.5),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  // const Icon(Icons.cancel_rounded,
+                                  //     color: Colors.red, size: 24),
+                                  // const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      isEN
+                                          ? 'If no evidence is attached,\nthe system will treat it as\n"No Payment Made" in all cases'
+                                          : 'หากไม่แนบหลักฐานในแอปผู้เช่า\nระบบจะถือว่า\n"ยังไม่มีการชำระเงิน" ทุกกรณี',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.red,
+                                        height: 1.65,
+                                      ),
+                                    ),
+                                  ),
+                                  // const SizedBox(width: 10),
+                                  // const Icon(Icons.cancel_rounded,
+                                  //     color: Colors.red, size: 24),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            // ── Slide-to-dismiss button ──
+                            LayoutBuilder(builder: (_, constraints) {
+                              const double handleSize = 46.0;
+                              const double trackHeight = 52.0;
+                              const double pad = 4.0;
+                              final double maxDrag =
+                                  constraints.maxWidth - handleSize - pad * 2;
+                              final double pct = (dx / maxDrag).clamp(0.0, 1.0);
+
+                              return Container(
+                                height: trackHeight,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color.lerp(Colors.grey,
+                                          Colors.grey.shade800, pct)!,
+                                      Colors.grey.shade800,
+                                    ],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  ),
+                                  borderRadius:
+                                      BorderRadius.circular(trackHeight / 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.grey.withValues(alpha: 0.35),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.centerLeft,
+                                  children: [
+                                    // label — จางลงเมื่อเลื่อน
+                                    Center(
+                                      child: Opacity(
+                                        opacity:
+                                            (1.0 - pct * 2).clamp(0.0, 1.0),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              isEN
+                                                  ? 'Slide to close'
+                                                  : 'เลื่อนเพื่อปิด',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            // const SizedBox(width: 6),
+                                            // const Icon(Icons.arrow_forward_rounded,
+                                            //     color: Colors.white70, size: 18),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // handle
+                                    AnimatedPositioned(
+                                      duration: dx == 0
+                                          ? const Duration(milliseconds: 300)
+                                          : Duration.zero,
+                                      curve: Curves.elasticOut,
+                                      left: pad + dx,
+                                      child: GestureDetector(
+                                        onHorizontalDragUpdate: (d) {
+                                          setSS(() {
+                                            dx = (dx + d.delta.dx)
+                                                .clamp(0.0, maxDrag);
+                                          });
+                                        },
+                                        onHorizontalDragEnd: (_) {
+                                          if (dx >= maxDrag * 0.72) {
+                                            Navigator.of(ctx,
+                                                    rootNavigator: true)
+                                                .pop();
+                                          } else {
+                                            setSS(() => dx = 0.0);
+                                          }
+                                        },
+                                        child: Container(
+                                          width: handleSize,
+                                          height: handleSize,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black26,
+                                                blurRadius: 6,
+                                                offset: Offset(2, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            Icons.arrow_forward_rounded,
+                                            color: Colors.grey.shade700,
+                                            size: 24,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                )));
+  }
+
   @override
   void dispose() {
     if (_usingLocalController) {
       _localController.dispose();
     }
+    _timerSub?.cancel();
+    _qrUpdateTrigger.dispose();
     super.dispose();
   }
 
-  int _toU16(String? v) =>
-      (int.tryParse((v ?? '0').trim()) ?? 0) +
-      65535; // ✅ 16-bit unsigned (0..65535)
+  String _toU16(String? v) => (v ?? '0').trim();
   Future<void> _initData() async {
     setState(() {
       isLoading = true;
@@ -328,8 +566,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
     var renPreferences = await preferences.getString('renTalSer');
 
-    String? custno16Bit = await _toU16('$custnoPreferences').toString();
-    final ren16Bit = await _toU16('$renPreferences');
+    String? custno16Bit = _toU16('$custnoPreferences');
+    final ren16Bit = _toU16('$renPreferences');
     debugPrint(
         '_initData Step: redPaymentIntents: cusno=$custnoPreferences, propertyno=$renPreferences');
     debugPrint(
@@ -576,7 +814,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                   ),
                 ),
                 LoadingAnimationWidget.inkDrop(
-                  color: Colors.green,
+                  color: Colors.indigo,
                   size: 70,
                 ),
               ],
@@ -620,9 +858,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
       // 0) Prepare fine data once
       await read_GC_fine();
-      if (contractxFineModels.isNotEmpty) {
-        await in_Trans_fine_re();
-      }
+      // Always populate invoicePayModels — handles both with/without fine internally
+      await in_Trans_fine_re();
 
       // ---------- dteilData ----------
       for (var Indexinv = 0; Indexinv < _InvoiceModels.length; Indexinv++) {
@@ -901,6 +1138,26 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     final m = ((secs % 3600) ~/ 60).toString().padLeft(2, '0');
     final s = (secs % 60).toString().padLeft(2, '0');
     return '$h:$m:$s';
+  }
+
+  /// กล่อง loading ตอน PrettyQr ยังไม่พร้อม render (qrData ว่าง)
+  /// ป้องกัน 'Unexpected null value' จาก PrettyQr internal assertion
+  Widget _qrLoadingBox(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      alignment: Alignment.center,
+      child: SizedBox(
+        width: size * 0.3,
+        height: size * 0.3,
+        child: const CircularProgressIndicator(strokeWidth: 2.5),
+      ),
+    );
   }
 
   // Future<Null> QrGenRef(
@@ -1313,7 +1570,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       this.activeQrSessionSoftExpire =
           now.add(const Duration(minutes: 15)).toIso8601String();
       this.qrDataNoIntens = (ptser == '7')
-          ? qr_payload.toString()
+          ? (qr_payload ?? '')
           : (ptser == '6')
               ? '|$bno\r$ref1\r$ref2\r${totalBills.replaceAll('.', '')}' // Bill Payment
               : (ptser == '5')
@@ -1907,6 +2164,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       if (matched.isEmpty) {
         if (!mounted) return;
         setState(() => _PayMentModels = []);
+
         return;
       }
 
@@ -1921,6 +2179,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
           _PayMentModels
             ..clear()
             ..addAll(opened);
+          Payment_bno = opened.first.bno;
+          Payment_bname = opened.first.bname;
+          Payment_bname_en = opened.first.bnameEn;
+          Payment_bank_ncode = opened.first.bankNcode;
+          Payment_paytype_ncode = opened.first.paytypeNcode;
+          Payment_remark = opened.first.remark;
         });
       } else {
         // เคลียร์ก่อนเพื่อกันข้อมูลเก่าค้าง
@@ -1995,7 +2259,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
             bill_default = bill_defaultx;
             bill_tser = bill_tserx;
             imglogo_ =
-                '${MyConstant().domain}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
+                '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
             renTalModels.add(renTalModel);
             if (bill_defaultx == 'P') {
               bills_name_ = 'บิลธรรมดา';
@@ -2012,6 +2276,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   String? base64_Slip, fileName_Slip;
   var extension_;
   var file_;
+  String? _lastUploadErrorMessage;
   Future<void> uploadFile_Slip() async {
     final imagePicker = ImagePicker();
     final pickedFile = await imagePicker.pickImage(
@@ -2025,57 +2290,440 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       return;
     } else {
       var imageBytes = await pickedFile.readAsBytes();
+      imageBytes = await compute(_compressImageIsolate, imageBytes);
+      final pngBytes = _convertImageToPng(imageBytes);
 
-      // 3. Encode the image as a base64 string
-      final base64Image = base64Encode(imageBytes);
+      // 3. Encode the PNG image as a base64 string in a background isolate
+      final base64Image = await compute(_base64EncodeIsolate, pngBytes);
+      if (!mounted) return;
+
       setState(() {
         base64_Slip = base64Image;
-        _uploadedSlipData = imageBytes;
-      });
-      // //print(base64_Slip);
-      setState(() {
+        _uploadedSlipData = pngBytes;
+        _slipImageBytes = pngBytes;
         extension_ = 'png';
-        // file_ = file;
       });
     }
   }
 
   String _uniqueSuffix() {
-    final us = DateTime.now()
-        .toUtc()
-        .add(const Duration(hours: 7))
-        .microsecondsSinceEpoch;
-    final r = Random.secure().nextInt(90000000) + 10000000; // 8 digits
-    return '${us}_$r';
+    // ใช้ UUID v4 แทน timestamp+random เพื่อรับประกันไม่ซ้ำ 100%
+    // format: 8-4-4-4-12 → เอาแค่ 8+4+4=16 ตัวแรก (สั้นพอ แต่ยัง unique มาก)
+    final uuid = getUuid(); // มีอยู่แล้วใน class
+    // เอาเฉพาะตัวเลข+ตัวอักษร ลบ dash ออก แล้วตัดเอา 16 ตัวแรก
+    final clean = uuid.replaceAll('-', '');
+    return clean.substring(0, 16);
   }
 
-  Future<void> OKuploadFile_Slip(newValuePDFimg) async {
-    setState(() => extension_ = 'png');
+  String _getExtensionFromName(String? name) {
+    if (name == null || name.isEmpty) return 'jpg';
+    final ext = name.split('.').last.toLowerCase();
+    if (ext == 'jpeg') return 'jpg';
+    if (ext == 'png' || ext == 'jpg') return ext;
+    return 'jpg';
+  }
 
-    final preferences = await SharedPreferences.getInstance();
-    final ciddoc_ = widget.teNantModel == null
-        ? preferences.getString('usercid')
-        : preferences.getString('custno');
+  String _getImageExtensionFromBytes(Uint8List bytes, [String? fallback]) {
+    final mimeType = lookupMimeType('', headerBytes: bytes);
+    if (mimeType == 'image/jpeg') return 'jpg';
+    if (mimeType == 'image/png') return 'png';
+    if (mimeType == 'image/gif') return 'gif';
+    if (fallback != null && fallback.isNotEmpty) {
+      return _getExtensionFromName(fallback);
+    }
+    return 'jpg';
+  }
 
-    final unique = _uniqueSuffix();
+  Uint8List _convertImageToPng(Uint8List bytes) {
+    try {
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return bytes;
+      return Uint8List.fromList(img.encodePng(decoded));
+    } catch (e) {
+      return bytes;
+    }
+  }
 
-    final base = 'slip_${ciddoc_ ?? "NA"}_$unique';
-    fileName_Slip = '$base.$extension_';
+  /// อัปโหลดสลิปไปยังเซิร์ฟเวอร์
+  /// คืนค่า true เมื่ออัปโหลดสำเร็จ (HTTP 200/201) ไม่เช่นนั้น false
+  /// ⚠️ ห้าม catch error เงียบๆ แล้วคืน success — ต้องให้ caller รู้ว่าล้มเหลว
+  ///
+  /// ✅ Retry-safety design (2026-07-02):
+  ///    - ทุกครั้งที่เรียก `OKuploadFile_Slip` จะสร้าง **ชื่อไฟล์ใหม่** ด้วย UUID ใหม่
+  ///    - `_pickSlipImage` รีเซ็ต `fileName_Slip = null` ทันทีที่ผู้ใช้เลือกไฟล์ใหม่
+  ///    - แม้ upload ล้มเหลว → user re-selects ไฟล์ → upload จะได้ filename ใหม่
+  ///    - filename จะไม่หายระหว่างทาง (เก็บไว้ใน state ตลอด)
+  ///    - จะถูก clear เฉพาะตอน `in_Trans_invoice` สำเร็จเท่านั้น
+  Future<bool> OKuploadFile_Slip(newValuePDFimg) async {
+    try {
+      setState(() {
+        extension_ = extension_?.toString() ?? 'png';
+      });
 
-    final url =
-        '${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php?name=$fileName_Slip&Foder=$foder&extension=$extension_';
+      final preferences = await SharedPreferences.getInstance();
+      final ciddoc_ = widget.teNantModel == null
+          ? preferences.getString('usercid')
+          : preferences.getString('custno');
+
+      final unique = _uniqueSuffix();
+
+      final base = 'slip_${ciddoc_ ?? "NA"}_$unique';
+      fileName_Slip = '$base.${extension_ ?? 'png'}';
+      // ✅ safety: even if upload fails below, fileName_Slip is preserved
+      // (the user wants traceability — losing the filename is not acceptable)
+
+      debugPrint(
+          '📎 OKuploadFile_Slip: fileName=$fileName_Slip, foder=$foder, ext=$extension_');
+      debugPrint(
+          '📎 OKuploadFile_Slip: _slipImageBytes=${_slipImageBytes != null ? _slipImageBytes!.length : "null"} bytes');
+      debugPrint(
+          '📎 OKuploadFile_Slip: base64_Slip=${base64_Slip != null ? "${base64_Slip!.length} chars" : "null"}');
+
+      // ✅ ตรวจสอบข้อมูลรูปภาพก่อน — ป้องกันอัปโหลดเปล่า
+      final hasBinary = _slipImageBytes != null && _slipImageBytes!.isNotEmpty;
+      final hasBase64 = base64_Slip != null && base64_Slip!.isNotEmpty;
+      if (!hasBinary && !hasBase64) {
+        debugPrint(
+            '❌ OKuploadFile_Slip: ไม่มีข้อมูลรูปภาพ (_slipImageBytes=null, base64_Slip=null)');
+        return false;
+      }
+      // ต้องมี foder เพื่อให้ PHP รู้จัก path จัดเก็บ
+      if (foder == null || foder!.isEmpty) {
+        debugPrint('❌ OKuploadFile_Slip: foder ว่าง — รอ read_GC_rental()');
+        return false;
+      }
+
+      final normalizedBytes = (_slipImageBytes != null)
+          ? _convertImageToPng(_slipImageBytes!)
+          : null;
+      if (normalizedBytes != null) {
+        _slipImageBytes = normalizedBytes;
+        base64_Slip = base64Encode(normalizedBytes);
+        extension_ = 'png';
+      }
+      final imageBase64 = base64_Slip;
+      if (imageBase64 == null || imageBase64.isEmpty) {
+        debugPrint('❌ OKuploadFile_Slip: imageBase64 is empty');
+        return false;
+      }
+
+      // ✅ V3 NEW (2026-07-16): เปลี่ยนเป็น multipart upload → api_intents_v3.php
+      //    รองรับไฟล์ใหญ่ทุกขนาด (99%) ไม่ผ่าน base64
+      // ❌ ของเดิม (base64 POST ไป File_uploadSlip_NewEdit.php) — คอมเมนต์ไว้ ไม่ลบ
+      /*
+      final uploadUriOld =
+          Uri.parse('${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php')
+              .replace(queryParameters: {
+        'name': fileName_Slip ?? '',
+        'Foder': foder ?? '',
+        'extension': extension_ ?? 'png',
+      });
+      final responseOld = await http.post(
+        uploadUriOld,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        },
+        body: {
+          'image': imageBase64,
+          'Foder': foder ?? '',
+          'name': fileName_Slip ?? '',
+          'ex': extension_?.toString() ?? 'png',
+        },
+      ).timeout(const Duration(seconds: 30));
+      */
+
+      // ✅ NEW: multipart → api_intents_v3.php (PHP จะแปลงเป็น PNG + ตั้งชื่อ + คืน filename/extension)
+      final uploadUri =
+          Uri.parse('${MyConstant().domain_chao}/api_intents_v3.php');
+      debugPrint('📎 OKuploadFile_Slip: uploadUri=$uploadUri');
+      debugPrint(
+          '📎 OKuploadFile_Slip: name=$fileName_Slip, Foder=$foder, extension=$extension_');
+
+      final uploadBytes = normalizedBytes ?? _slipImageBytes ?? Uint8List(0);
+      if (uploadBytes.isEmpty) {
+        debugPrint('❌ OKuploadFile_Slip: ไม่มี bytes ให้อัปโหลด');
+        return false;
+      }
+      final request = http.MultipartRequest('POST', uploadUri)
+        ..fields['Foder'] = foder ?? ''
+        ..fields['name'] = fileName_Slip ?? ''
+        ..fields['ex'] = (extension_?.toString() ?? 'png')
+        ..files.add(http.MultipartFile.fromBytes(
+          'file',
+          uploadBytes,
+          filename: fileName_Slip ?? 'slip.png',
+        ));
+      final streamedResponse =
+          await request.send().timeout(const Duration(seconds: 180));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint(
+          '📎 OKuploadFile_Slip: multipart status=${response.statusCode}, body=${response.body}');
+      final ok = response.statusCode == 200 || response.statusCode == 201;
+      if (!ok) {
+        debugPrint(
+            '❌ OKuploadFile_Slip: base64 failed status=${response.statusCode}');
+        if (response.statusCode == 404) {
+          debugPrint(
+              '❌ OKuploadFile_Slip: 404 endpoint not found URL=$uploadUri');
+        }
+      }
+      return ok;
+    } catch (e, stack) {
+      debugPrint('❌ OKuploadFile_Slip error: $e');
+      debugPrint('🧭 StackTrace:\n$stack');
+      return false;
+    }
+  }
+
+  // New direct upload flow for V3: single-image raw upload without resize/compression.
+  Future<bool> _confirmPaymentNewFlow(BuildContext ctx) async {
+    if (_slipImageBytes == null || _slipImageName == null) {
+      _showMyDialogPay_Error(widget.cuslang == 'EN'
+          ? 'Please select slip image before confirming.'
+          : 'กรุณาเลือกสลิปก่อนยืนยัน');
+      return false;
+    }
+
+    _lastUploadErrorMessage = null;
+    final uploadOk = await _uploadSlipImageDirect();
+    if (!uploadOk) {
+      if (Navigator.of(ctx).canPop()) {
+        Navigator.of(ctx).pop();
+      }
+      return false;
+    }
+
+    final List newValuePDFimg = [];
+    if (renTalModels.isNotEmpty &&
+        renTalModels[0].imglogo != null &&
+        renTalModels[0].imglogo!.trim().isNotEmpty) {
+      newValuePDFimg.add(
+          '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+    }
+
+    await in_Trans_invoice(newValuePDFimg, showSuccess: false);
+    return true;
+  }
+
+  Future<bool> _uploadSlipImageDirect() async {
+    try {
+      if (_slipImageBytes == null || _slipImageName == null) {
+        debugPrint('❌ _uploadSlipImageDirect: no image selected');
+        return false;
+      }
+
+      final preferences = await SharedPreferences.getInstance();
+      final ciddoc_ = widget.teNantModel == null
+          ? preferences.getString('usercid')
+          : preferences.getString('custno');
+      // ✅ ไม่แปลง PNG ใน Flutter — ส่ง bytes ดิบไป PHP (api_intents_v3.php)
+      // ซึ่งมี GD แปลงเป็น PNG + resize 800px ให้เอง (เร็วกว่าทำใน Dart มาก)
+      final normalizedBytes = _slipImageBytes!;
+      final imageBase64 = base64Encode(normalizedBytes);
+      extension_ = 'png';
+      _slipImageBytes = normalizedBytes;
+      base64_Slip = imageBase64;
+      final unique = _uniqueSuffix();
+      final base = 'slip_${ciddoc_ ?? 'NA'}_$unique';
+      fileName_Slip = '$base.${extension_ ?? 'png'}';
+
+      if (imageBase64.isEmpty) {
+        debugPrint('❌ _uploadSlipImageDirect: base64 is empty');
+        return false;
+      }
+      if (foder == null || foder!.isEmpty) {
+        debugPrint('❌ _uploadSlipImageDirect: foder is empty');
+        return false;
+      }
+
+      // ✅ V3 NEW (2026-07-16): multipart upload → api_intents_v3.php
+      //    รองรับไฟล์ใหญ่ 99% (ไม่ผ่าน base64)
+      // ❌ ของเดิม (base64 POST ไป File_uploadSlip_NewEdit.php) — คอมเมนต์ไว้ ไม่ลบ
+      /*
+      final uploadUriOld =
+          Uri.parse('${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php')
+              .replace(queryParameters: {
+        'name': fileName_Slip ?? '',
+        'Foder': foder ?? '',
+        'extension': extension_ ?? '',
+      });
+      final responseOld = await http.post(
+        uploadUriOld,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        },
+        body: {
+          'image': imageBase64,
+          'Foder': foder ?? '',
+          'name': fileName_Slip ?? '',
+          'ex': extension_?.toString() ?? 'jpg',
+        },
+      ).timeout(const Duration(seconds: 45));
+      */
+
+      // ✅ NEW: multipart → api_intents_v3.php
+      final uploadUri =
+          Uri.parse('${MyConstant().domain_chao}/api_intents_v3.php');
+      debugPrint('📎 _uploadSlipImageDirect: uploadUri=$uploadUri');
+      debugPrint(
+          '📎 _uploadSlipImageDirect: fileName=$fileName_Slip, ext=$extension_');
+
+      final request = http.MultipartRequest('POST', uploadUri)
+        ..fields['Foder'] = foder ?? ''
+        ..fields['name'] = fileName_Slip ?? ''
+        ..fields['ex'] = (extension_?.toString() ?? 'jpg')
+        ..files.add(http.MultipartFile.fromBytes(
+          'file',
+          normalizedBytes,
+          filename: _slipImageName ?? fileName_Slip ?? 'slip.png',
+        ));
+      final streamedResponse =
+          await request.send().timeout(const Duration(seconds: 180));
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint(
+          '📎 _uploadSlipImageDirect: multipart status=${response.statusCode}, body=${response.body}');
+      final ok = response.statusCode == 200 || response.statusCode == 201;
+      if (!ok) {
+        _lastUploadErrorMessage =
+            'Upload failed status=${response.statusCode} (${uploadUri.toString()})\n${response.body}';
+        if (response.statusCode == 404) {
+          _lastUploadErrorMessage =
+              'Upload failed 404: endpoint not found. URL=$uploadUri\n${response.body}';
+        }
+        debugPrint('❌ _uploadSlipImageDirect: $_lastUploadErrorMessage');
+      }
+      return ok;
+    } catch (e, stack) {
+      _lastUploadErrorMessage = 'Upload exception: $e';
+      debugPrint('❌ _uploadSlipImageDirect error: $_lastUploadErrorMessage');
+      debugPrint('🧭 StackTrace:\n$stack');
+      return false;
+    }
+  }
+
+  void _showUploadErrorDialog(String message) {
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Upload Error'),
+          content: SingleChildScrollView(
+            child: Text(
+              message,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<bool> _pickSingleSlipImage() async {
+    if (kIsWeb) {
+      final completer = Completer<bool>();
+      final uploadInput = html.FileUploadInputElement();
+      uploadInput.accept = 'image/*';
+      uploadInput.multiple = false;
+      uploadInput.style.display = 'none';
+      html.document.body?.append(uploadInput);
+
+      uploadInput.onAbort.listen((event) {
+        if (!completer.isCompleted) completer.complete(false);
+        uploadInput.remove();
+      });
+      uploadInput.onError.listen((event) {
+        if (!completer.isCompleted) completer.complete(false);
+        uploadInput.remove();
+      });
+
+      uploadInput.onChange.listen((event) async {
+        final files = uploadInput.files;
+        if (files == null || files.isEmpty) {
+          if (!completer.isCompleted) completer.complete(false);
+          uploadInput.remove();
+          return;
+        }
+
+        try {
+          final file = files.first;
+          final reader = html.FileReader();
+          reader.readAsArrayBuffer(file);
+          await reader.onLoadEnd.first;
+          if (reader.result == null) {
+            if (!completer.isCompleted) completer.complete(false);
+            uploadInput.remove();
+            return;
+          }
+
+          final result = reader.result;
+          final bytes = result is Uint8List
+              ? result
+              : Uint8List.view((result as ByteBuffer));
+          // ✅ ไม่แปลง PNG ตอนเลือกรูป (หน่วง) — โชว์ preview ด้วย bytes ดิบก่อน
+          // แปลงเป็น PNG ทีหลังตอนกดอัปโหลด (_uploadSlipImageDirect ทำอยู่แล้ว)
+          final selectedExt = _getExtensionFromName(file.name);
+          final base64Str = base64Encode(bytes);
+
+          if (mounted) {
+            setState(() {
+              _slipImageBytes = bytes;
+              _slipImageName =
+                  file.name.replaceAll(RegExp(r'\.[^\.]*$'), '.$selectedExt');
+              _uploadedSlipData = bytes;
+              base64_Slip = base64Str;
+              fileName_Slip = null;
+              extension_ = selectedExt;
+            });
+          }
+          if (!completer.isCompleted) completer.complete(true);
+        } catch (e) {
+          debugPrint('❌ _pickSingleSlipImage web error: $e');
+          if (!completer.isCompleted) completer.complete(false);
+        } finally {
+          uploadInput.remove();
+        }
+      });
+
+      uploadInput.click();
+      return completer.future;
+    }
 
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        body: {
-          'image': base64_Slip,
-          'Foder': foder,
-          'name': fileName_Slip,
-          'ex': extension_.toString(),
-        },
+      final ImagePicker picker = ImagePicker();
+      final XFile? pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
       );
-    } catch (_) {}
+      if (pickedFile == null) return false;
+      final bytes = await pickedFile.readAsBytes();
+      final selectedExt = _getExtensionFromName(pickedFile.name);
+      final base64Str = base64Encode(bytes);
+
+      if (mounted) {
+        setState(() {
+          _slipImageBytes = bytes;
+          _slipImageName =
+              pickedFile.name.replaceAll(RegExp(r'\.[^\.]*$'), '.$selectedExt');
+          _uploadedSlipData = bytes;
+          base64_Slip = base64Str;
+          fileName_Slip = null;
+          extension_ = selectedExt;
+        });
+      }
+      return true;
+    } catch (e) {
+      debugPrint('❌ _pickSingleSlipImage mobile error: $e');
+      return false;
+    }
   }
 
   ///----------------------------------------------->
@@ -2097,31 +2745,49 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
   Widget _howToBox() {
     Widget step(int i, String t) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.only(bottom: 8),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 26,
-                height: 26,
+                width: 28,
+                height: 28,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: Colors.indigo.withOpacity(.08),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                      color: Colors.indigo.withOpacity(.25), width: .7),
+                  color: Colors.indigo.shade300,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.indigo.shade300.withValues(alpha: 0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                child: Text('$i',
-                    style: TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.indigo.shade700)),
+                child: Text(
+                  '$i',
+                  style: const TextStyle(
+                    fontFamily: Font_.Fonts_T,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
+                ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
-                  child: Text(t,
-                      style: const TextStyle(
-                          fontFamily: Font_.Fonts_T, fontSize: 13.5))),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    t,
+                    style: const TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         );
@@ -2337,6 +3003,15 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     ref1 = return_qr_refapi1 ?? '-';
     ref2 = return_qr_refapi2 ?? '-';
     ref3 = return_qr_refapi3 ?? '-';
+    final bank = (payment_bank ?? '').toString();
+    final bankInfo = bankCodeMap[bank];
+    final bankCode = bankInfo?['code'];
+    final bankEn = bankInfo?['en'];
+    final bankName = widget.cuslang == 'EN' ? (bankEn ?? bank) : bank;
+    final bankCodeText =
+        (bankCode == null || bankCode.isEmpty) ? '' : ' ($bankCode)';
+    final bankDisplayName =
+        '${widget.cuslang == 'EN' ? 'Bank ' : 'ธนาคาร '}$bankName$bankCodeText';
     // qr_payload (class member)
 
     final ptser = '${widget.serptPayment}'; // ช่องทาง
@@ -2371,17 +3046,18 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
         children: [
           Card(
             color: Colors.white,
-            elevation: 4,
+            elevation: 0.4,
+            margin: const EdgeInsets.symmetric(vertical: 4),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
-                // QR Code Area
                 RepaintBoundary(
                   key: useKey,
                   child: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     color: Colors.white,
                     child: Column(
                       children: [
@@ -2451,15 +3127,17 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                         height: qrSize + qrSize,
                                         color: Colors.white, // Safe placeholder
                                       )
-                                    : (payment_img!.isNotEmpty &&
+                                    : (payment_img != null &&
+                                            payment_img!.isNotEmpty &&
                                             payment_img != '' &&
                                             payment_img != 'null')
                                         ? Image.network(
-                                            payment_img!.isNotEmpty &&
+                                            payment_img != null &&
+                                                    payment_img!.isNotEmpty &&
                                                     payment_img != '' &&
                                                     payment_img != 'null'
-                                                ? '${MyConstant().domain_chao}/files/$foder/payment/$payment_img'
-                                                : '${MyConstant().domain_chao}/Awaitdownload/imagenot.png',
+                                                ? '${MyConstant().domain_chao_img}/files/$foder/payment/$payment_img'
+                                                : '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png',
                                             width: double.infinity,
                                             height: qrSize + qrSize,
                                             fit: BoxFit.contain,
@@ -2546,12 +3224,129 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         ] else if (payment_tser == '7' ||
                             payment_tser == '6' ||
                             payment_tser == '5') ...[
-                          Image.asset(
-                            'images/thai_qr_payment.png',
-                            width: double.infinity,
-                            fit: BoxFit.contain,
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(14)),
+                            child: Image.asset(
+                              'images/thai_qr_payment_2.png',
+                              width: double.infinity,
+                              height: 65,
+                              fit: BoxFit.fitWidth,
+                            ),
                           ),
-                          SizedBox(height: isMobile ? 4 : 4),
+                          // Reminder to attach slip — flush with banner
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo.shade50,
+                              border: Border(
+                                bottom: BorderSide(
+                                    color: Colors.indigo.shade100, width: 0.7),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber_outlined,
+                                    size: 14, color: Colors.red.shade700),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Don \'t forget to attach your payment slip after paying.'
+                                          : 'อย่าลืมแนบหลักฐานการชำระเงินหลังจากชำระแล้ว',
+                                      style: TextStyle(
+                                        fontFamily: Font_.Fonts_T,
+                                        fontSize: 11,
+                                        color: Colors.indigo.shade700,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // const SizedBox(height: 2),
+                          if (Payment_remark != 'null' &&
+                              Payment_remark != '' &&
+                              Payment_remark!.isNotEmpty) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.shade50,
+                                border: Border(
+                                  bottom: BorderSide(
+                                      color: Colors.indigo.shade100,
+                                      width: 0.7),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline,
+                                      size: 14, color: Colors.orange.shade700),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Center(
+                                      child: Text(
+                                        widget.cuslang == 'EN'
+                                            ? Payment_remark! ?? ""
+                                            : Payment_remark! ?? "",
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily: Font_.Fonts_T,
+                                          fontSize: 11,
+                                          color: Colors.orange.shade700,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  InkWell(
+                                      onTap: () {
+                                        Clipboard.setData(new ClipboardData(
+                                            text: '$Payment_remark'));
+                                        Fluttertoast.showToast(
+                                            timeInSecForIosWeb: 3,
+                                            msg: widget.cuslang == 'EN'
+                                                ? 'Copy : $Payment_remark'
+                                                : 'คัดลอก : $Payment_remark',
+                                            backgroundColor: Colors.black,
+                                            textColor: Colors.white,
+                                            webPosition: "center",
+                                            webBgColor: "#000000",
+                                            toastLength: Toast.LENGTH_SHORT);
+                                      },
+                                      child: Icon(
+                                        Icons.content_copy_outlined,
+                                        size: 14,
+                                        color: Colors.grey.shade600,
+                                      )),
+                                ],
+                              ),
+                            ),
+                            // Text(
+                            //   widget.cuslang == 'EN'
+                            //       ? 'Remark: ' + Payment_remark! ?? ""
+                            //       : 'หมายเหตุ: ' + Payment_remark! ?? "",
+                            //   textAlign: TextAlign.center,
+                            //   style: TextStyle(
+                            //     fontFamily: Font_.Fonts_T,
+                            //     fontWeight: FontWeight.w700,
+                            //     fontSize: isDesktop ? 12 : 11,
+                            //     color: Colors.black.withOpacity(.65),
+                            //   ),
+                            // ),
+                          ],
+                          const SizedBox(height: 8),
                           (_expireDialogShown == true)
                               ? Container(
                                   width: double.infinity,
@@ -2613,33 +3408,37 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                           width: 150,
                                           height: 150,
                                           fit: BoxFit.contain)
-                                      : PrettyQr(
-                                          // typeNumber: 3,
-                                          image: Image.asset(
-                                            'images/icon_thaiqr.png',
-                                          ).image,
-                                          size: 150,
-                                          data: qrData,
-                                          errorCorrectLevel:
-                                              QrErrorCorrectLevel.M,
-                                          roundEdges: true,
-                                        )
-                                  : (payment_tser == '5' || payment_tser == '6')
-                                      ? (_isExporting && _exportQrBytes != null)
-                                          ? Image.memory(_exportQrBytes!,
-                                              width: 150,
-                                              height: 150,
-                                              fit: BoxFit.contain)
+                                      : (qrData.isEmpty
+                                          ? _qrLoadingBox(150)
                                           : PrettyQr(
+                                              // typeNumber: 3,
+                                              image: Image.asset(
+                                                'images/icon_thaiqr.png',
+                                              ).image,
                                               size: 150,
-                                              // size: qrSize,
                                               data: qrData,
-                                              image: const AssetImage(
-                                                  'images/icon_thaiqr.png'),
                                               errorCorrectLevel:
                                                   QrErrorCorrectLevel.M,
                                               roundEdges: true,
-                                            )
+                                            ))
+                                  : (payment_tser == '5' || payment_tser == '6')
+                                      ? (_isExporting && _exportQrBytes != null)
+                                          ? Image.memory(_exportQrBytes!,
+                                              width: 100,
+                                              height: 100,
+                                              fit: BoxFit.contain)
+                                          : (qrData.isEmpty
+                                              ? _qrLoadingBox(100)
+                                              : PrettyQr(
+                                                  size: 100,
+                                                  // size: qrSize,
+                                                  data: qrData,
+                                                  image: const AssetImage(
+                                                      'images/icon_thaiqr.png'),
+                                                  errorCorrectLevel:
+                                                      QrErrorCorrectLevel.M,
+                                                  roundEdges: true,
+                                                ))
                                       : Container(
                                           width: double.infinity,
                                           height: qrSize + qrSize,
@@ -2692,7 +3491,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             ),
                           ),
                         ],
-                        SizedBox(height: isMobile ? 4 : 6),
+                        SizedBox(height: isMobile ? 2 : 2),
                         Text(
                           '฿${nFormat.format(double.parse(Form_payment1.text))}',
                           textAlign: TextAlign.center,
@@ -2700,17 +3499,19 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             fontFamily: Font_.Fonts_T,
                             fontWeight: FontWeight.w700,
                             fontSize: isDesktop ? 18 : 16,
-                            color: Colors.red.shade900,
+                            color: Colors.red.shade800,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 0),
                         Text(
                           '$payment_bname',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontFamily: Font_.Fonts_T,
                             fontWeight: FontWeight.w700,
-                            fontSize: isDesktop ? 16 : 14,
+                            fontSize: isDesktop ? 15 : 14,
                             color: Colors.black.withOpacity(.65),
                           ),
                         ),
@@ -2720,36 +3521,53 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             Text(
                               '$selectedValue',
                               textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontFamily: Font_.Fonts_T,
                                 fontWeight: FontWeight.w700,
-                                fontSize: isDesktop ? 16 : 14,
+                                fontSize: isDesktop ? 15 : 14,
                                 color: Colors.black.withOpacity(.65),
                               ),
                             ),
-                            InkWell(
-                                onTap: () {
-                                  Clipboard.setData(new ClipboardData(
-                                      text: '$selectedValue'));
-                                  Fluttertoast.showToast(
-                                      timeInSecForIosWeb: 3,
-                                      msg: widget.cuslang == 'EN'
-                                          ? 'Copy : $selectedValue'
-                                          : 'คัดลอก : $selectedValue',
-                                      backgroundColor: Colors.black,
-                                      textColor: Colors.white,
-                                      webPosition: "center",
-                                      webBgColor: "#000000",
-                                      toastLength: Toast.LENGTH_SHORT);
-                                },
-                                child: Icon(
-                                  Icons.content_copy_outlined,
-                                  size: 14,
-                                )),
+                            if (payment_tser != '5' && payment_tser != '6') ...[
+                              const SizedBox(width: 6),
+                              InkWell(
+                                  onTap: () {
+                                    Clipboard.setData(new ClipboardData(
+                                        text: '$selectedValue'));
+                                    Fluttertoast.showToast(
+                                        timeInSecForIosWeb: 3,
+                                        msg: widget.cuslang == 'EN'
+                                            ? 'Copy : $selectedValue'
+                                            : 'คัดลอก : $selectedValue',
+                                        backgroundColor: Colors.black,
+                                        textColor: Colors.white,
+                                        webPosition: "center",
+                                        webBgColor: "#000000",
+                                        toastLength: Toast.LENGTH_SHORT);
+                                  },
+                                  child: Icon(
+                                    Icons.content_copy_outlined,
+                                    size: 16,
+                                    color: Colors.grey.shade600,
+                                  )),
+                            ]
                           ],
                         ),
-                        Divider(height: 2, color: Colors.grey.shade600),
-                        // const SizedBox(height: 2),
+                        const SizedBox(height: 2),
+                        Divider(height: 1, color: Colors.grey.shade300),
+                        const SizedBox(height: 2),
+                        Text(
+                          bankDisplayName,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontWeight: FontWeight.w700,
+                            fontSize: isDesktop ? 12 : 11,
+                            color: Colors.black.withOpacity(.65),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -2767,10 +3585,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   ? 'Pay within ${activeQrSessionSoftExpire != null ? DateFormat('dd-MM-yyyy HH:mm').format(DateTime.parse(activeQrSessionSoftExpire!).toLocal()) : ''}  |  Ref: $ref3'
                                   : 'ชำระภายใน ${activeQrSessionSoftExpire != null ? DateFormat('dd-MM-yyyy HH:mm').format(DateTime.parse(activeQrSessionSoftExpire!).toLocal()) : ''}  |  Ref: $ref3',
                               textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontFamily: Font_.Fonts_T,
                                 fontWeight: FontWeight.w700,
-                                fontSize: isDesktop ? 13 : 11,
+                                fontSize: isDesktop ? 10 : 8,
                                 color: Colors.black.withOpacity(.65),
                               ),
                             ),
@@ -2900,7 +3720,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   payment_img!.isNotEmpty &&
                                   payment_img != 'null') {
                                 final imgUrl =
-                                    '${MyConstant().domain_chao}/files/$foder/payment/$payment_img';
+                                    '${MyConstant().domain_chao_img}/files/$foder/payment/$payment_img';
 
                                 String userAgent = html
                                     .window.navigator.userAgent
@@ -2972,93 +3792,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                 return;
                               }
 
-                              // Special handling for PrettyQR (payment_tser '5' and '6')
-                              // Generate PNG directly from QR data (avoid toImage() issues on iOS Safari)
-                              if (kIsWeb &&
-                                  (payment_tser == '5' ||
-                                      payment_tser == '6')) {
-                                final ua = html.window.navigator.userAgent
-                                    .toLowerCase();
-                                final isIOS = ua.contains('iphone') ||
-                                    ua.contains('ipad') ||
-                                    ua.contains('ipod');
-
-                                // FINAL SAFE MODE: Direct CPU Generation (No Text)
-                                // Avoids all Capture/Canvas issues on iOS Web.
-                                try {
-                                  // Gen QR Data
-                                  final qrData = (payment_tser == '6')
-                                      ? '|$selectedValue\r$QR_Ref1\r$QR_Ref2\r${Form_payment1.text.replaceAll('.', '')}\r'
-                                      : generateQRCode(
-                                          promptPayID: "$selectedValue",
-                                          amount: double.parse(
-                                              Form_payment1.text.isEmpty
-                                                  ? "0"
-                                                  : Form_payment1.text));
-
-                                  // // Prepare footer content
-                                  final bank = _PayMentModels.isNotEmpty
-                                      ? (_PayMentModels[0].bank ?? '')
-                                      : '';
-                                  final bankInfo = bankCodeMap[bank];
-
-                                  final bankCode = bankInfo?['code'];
-
-                                  final cpuQrBytes =
-                                      await buildQrPngWithCenterLogo(
-                                    data: qrData,
-                                    assetLogoPath: 'images/icon_thaiqr.png',
-                                    sizePx: 400,
-                                    bottomText:
-                                        '฿${nFormat.format(double.parse(Form_payment1.text ?? '0'))}',
-                                    bottomname: '$bankCode',
-                                    bottombankno: '$selectedValue',
-                                    bottomRef: '$QR_Ref1',
-                                    activeQrExpire:
-                                        '${activeQrSessionSoftExpire != null ? DateFormat('dd-MM-yyyy HH:mm').format(DateTime.parse(activeQrSessionSoftExpire!).toLocal()) : ''}',
-                                  );
-
-                                  // Save
-                                  if (isIOS) {
-                                    showIOSSaveOverlay(cpuQrBytes,
-                                        isEN: widget.cuslang == 'EN');
-                                  } else {
-                                    final blob =
-                                        html.Blob([cpuQrBytes], 'image/png');
-                                    final url =
-                                        html.Url.createObjectUrlFromBlob(blob);
-                                    final a = html.AnchorElement(href: url)
-                                      ..download = "payment_qr.png";
-                                    html.document.body?.append(a);
-                                    a.click();
-                                    a.remove();
-                                    html.Url.revokeObjectUrl(url);
-                                  }
-
-                                  // Notify User
-                                  if (isIOS) {
-                                    Fluttertoast.showToast(
-                                        msg: widget.cuslang == 'EN'
-                                            ? "Saved (Text not supported on iOS Web)"
-                                            : "บันทึกแล้ว (ไม่รองรับข้อความบน iOS Web)",
-                                        toastLength: Toast.LENGTH_LONG);
-                                  }
-                                } catch (e) {
-                                  debugPrint("CPU SAVE FAIL: $e");
-                                  Fluttertoast.showToast(msg: "Save Error: $e");
-                                } finally {
-                                  // Cleanup
-                                  if (mounted) {
-                                    setState(() {
-                                      _isExporting = false;
-                                      _exportQrBytes = null;
-                                    });
-                                  }
-                                }
-                                return;
-                              }
-
-                              // Fallback: For other cases, use screenshot with iOS-safe approach
+                              // Use screenshot approach for all platforms (iOS + non-iOS)
+                              // The on-screen QR (captured via qrBlockKey) is the scannable one
                               // Wait for frames to ensure fully rendered (critical for iOS Safari)
                               await Future.delayed(
                                   const Duration(milliseconds: 120));
@@ -3265,8 +4000,6 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                   ),
                 ),
 
-                SizedBox(height: 2),
-
                 // Footer: Trouble Paying?
                 // Container(
                 //   width: double.infinity,
@@ -3315,7 +4048,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     // final bankEn = bankInfo?['en'];
     return Card(
       elevation: 0.4,
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -3489,7 +4225,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             isSelected
                                 ? Icons.check_circle_outline
                                 : Icons.highlight_off_outlined,
-                            color: isSelected ? Colors.green : Colors.grey,
+                            color: isSelected ? Colors.indigo : Colors.grey,
                             size: 18,
                           ),
                         ),
@@ -3601,8 +4337,11 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
         return Card(
           elevation: 0.4,
+          color: Colors.white,
+          margin: const EdgeInsets.symmetric(vertical: 4),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          clipBehavior: Clip.antiAlias,
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
@@ -3742,13 +4481,13 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                         : "หลักฐานการชำระ",
                                     style: const TextStyle(
                                         decoration: TextDecoration.underline,
-                                        color: Colors.green,
+                                        color: Colors.indigo,
                                         fontFamily: Font_.Fonts_T,
                                         fontSize: 12.5,
                                         fontWeight: FontWeight.w700)),
                                 const Icon(
                                   Icons.chevron_right,
-                                  color: Colors.green,
+                                  color: Colors.indigo,
                                 )
                               ],
                             ),
@@ -3774,13 +4513,13 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                         : "กดเพื่อยืนยัน",
                                     style: const TextStyle(
                                         decoration: TextDecoration.underline,
-                                        color: Colors.green,
+                                        color: Colors.indigo,
                                         fontFamily: Font_.Fonts_T,
                                         fontSize: 12.5,
                                         fontWeight: FontWeight.w700)),
                                 const Icon(
                                   Icons.chevron_right,
-                                  color: Colors.green,
+                                  color: Colors.indigo,
                                 )
                               ],
                             ),
@@ -3904,6 +4643,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     final bno = _PayMentModels.isNotEmpty ? (_PayMentModels[0].bno ?? '') : '';
     final bname =
         _PayMentModels.isNotEmpty ? (_PayMentModels[0].bname ?? '') : '';
+    final PaymaentRemark =
+        _PayMentModels.isNotEmpty ? (_PayMentModels[0].remark ?? '') : '';
     Widget _invoiceItem({
       required int index,
       required String docNo,
@@ -3920,7 +4661,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
         //   color: Colors.white,
         //   borderRadius: BorderRadius.circular(12),
         //   border: isSelected
-        //       ? Border.all(color: Colors.green.shade500, width: 1.5)
+        //       ? Border.all(color: Colors.indigo.shade500, width: 1.5)
         //       : Border.all(color: Colors.grey.shade200, width: 1),
         //   boxShadow: [
         //     BoxShadow(
@@ -3957,7 +4698,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           isSelected
                               ? Icons.check_circle_outline
                               : Icons.highlight_off_outlined,
-                          color: isSelected ? Colors.green : Colors.grey,
+                          color: isSelected ? Colors.indigo : Colors.grey,
                           size: 18,
                         ),
                       ),
@@ -4089,7 +4830,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
     return Card(
       elevation: 0.4,
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -4218,14 +4962,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 // 6. Discount
                 if ((sum_disamt + sum_disamt_in) > 0)
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.discount, size: 15, color: Colors.green),
+                    const Icon(Icons.discount, size: 15, color: Colors.indigo),
                     const SizedBox(width: 6),
                     Text(
                         '${widget.cuslang == "EN" ? "Discount" : "ส่วนลด"}: ${nFormat.format(sum_disamt + sum_disamt_in)}',
                         style: const TextStyle(
                             fontFamily: Font_.Fonts_T,
                             fontSize: 12.5,
-                            color: Colors.green)),
+                            color: Colors.indigo)),
                   ]),
                 // 7. Total (Net)
                 // Row(mainAxisSize: MainAxisSize.min, children: [
@@ -4259,6 +5003,17 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           fontSize: 13.5,
                           fontWeight: FontWeight.w800)),
                 ]),
+                // 10. Payment Remark
+                if (PaymaentRemark != null && PaymaentRemark.isNotEmpty)
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.info, size: 15, color: Colors.black54),
+                    const SizedBox(width: 6),
+                    Text('${PaymaentRemark}',
+                        style: const TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 12.5,
+                            color: Colors.black54)),
+                  ]),
               ],
             ),
           ),
@@ -4361,7 +5116,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 //  bool tt =false
     return Card(
       elevation: 0.4,
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -4441,6 +5199,30 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
   @override
   Widget build(BuildContext context) {
+    if (_initialLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF2F3F8),
+        body: Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: CircleAvatar(
+                  backgroundColor: Colors.transparent,
+                  radius: 30,
+                  backgroundImage: AssetImage('assets/images/Icon-chao.png'),
+                ),
+              ),
+              LoadingAnimationWidget.inkDrop(
+                color: Colors.indigo,
+                size: 70,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return AnimatedBuilder(
         animation: _effectiveController,
         builder: (BuildContext context, Widget? child) {
@@ -4449,6 +5231,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
           final bool isDesktop = width >= 900;
           final double qrSize = 140.0;
           return Scaffold(
+            backgroundColor: const Color(0xFFF2F3F8),
             appBar: AppBar(
                 backgroundColor: Colors.white,
                 elevation: 0,
@@ -4456,39 +5239,164 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 leading: IconButton(
                   icon: Icon(Icons.arrow_back_ios, color: Colors.black),
                   onPressed: () async {
-                    PanaraConfirmDialog.showAnimatedGrow(
-                      context,
-                      title: widget.cuslang == 'EN' ? "Warning" : "แจ้งเตือน",
-                      message: widget.cuslang == 'EN'
-                          ? "If paid, please attach proof and confirm. Or close to pay later."
-                          : "หากชำระแล้ว กรุณาแนบหลักฐานและยืนยัน",
-                      confirmButtonText: widget.cuslang == 'EN'
-                          ? "Attach Proof"
-                          : "แนบหลักฐาน",
-                      cancelButtonText:
-                          widget.cuslang == 'EN' ? "Pay Later" : "ชำระภายหลัง",
-                      onTapConfirm: () async {
-                        Navigator.of(
-                          context,
-                          rootNavigator: true,
-                        ).pop();
-                        // _showPaymentConfirmationSheet(context);
-                      },
-                      onTapCancel: () async {
-                        SharedPreferences preferences =
-                            await SharedPreferences.getInstance();
-                        var custno = preferences.getString('custno');
-                        Navigator.of(
-                          context,
-                          rootNavigator: true,
-                        ).pop();
-                        Navigator.pushAndRemoveUntil(context,
-                            MaterialPageRoute(builder: (context) {
-                          return FitnessAppHomeScreen(custno_s: custno);
-                        }), (route) => false);
-                      },
-                      panaraDialogType: PanaraDialogType.warning,
+                    showDialog(
+                      context: context,
                       barrierDismissible: true,
+                      builder: (ctx) {
+                        final isEN = widget.cuslang == 'EN';
+                        return Dialog(
+                            backgroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(24)),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxHeight:
+                                    MediaQuery.of(context).size.height * 0.8,
+                              ),
+                              child: SingleChildScrollView(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 28, vertical: 28),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 72,
+                                        height: 72,
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.shade50,
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                              color: Colors.orange.shade200,
+                                              width: 2),
+                                          boxShadow: [
+                                            BoxShadow(
+                                                color: Colors.orange
+                                                    .withValues(alpha: 0.25),
+                                                blurRadius: 14,
+                                                offset: const Offset(0, 4))
+                                          ],
+                                        ),
+                                        child: Icon(Icons.warning_amber_rounded,
+                                            color: Colors.orange.shade700,
+                                            size: 38),
+                                      ),
+                                      const SizedBox(height: 18),
+                                      Text(
+                                        isEN ? 'Warning' : 'แจ้งเตือน',
+                                        style: TextStyle(
+                                            fontSize: 19,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.grey.shade900,
+                                            fontFamily: Font_.Fonts_T),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        isEN
+                                            ? 'If paid, please attach proof and confirm.\nOr close to pay later.'
+                                            : 'หากชำระแล้ว กรุณาแนบหลักฐานและยืนยัน',
+                                        style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade600,
+                                            fontFamily: Font_.Fonts_T,
+                                            height: 1.6),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 24),
+                                      // Primary: แนบหลักฐาน
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 48,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                                colors: [
+                                                  Colors.indigo,
+                                                  Color(0xFF283593)
+                                                ],
+                                                begin: Alignment.centerLeft,
+                                                end: Alignment.centerRight),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                  color: Colors.indigo
+                                                      .withValues(alpha: 0.35),
+                                                  blurRadius: 10,
+                                                  offset: const Offset(0, 4))
+                                            ],
+                                          ),
+                                          child: Material(
+                                            color: Colors.transparent,
+                                            child: InkWell(
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              onTap: () async {
+                                                Navigator.of(ctx,
+                                                        rootNavigator: true)
+                                                    .pop();
+                                              },
+                                              child: Center(
+                                                  child: Text(
+                                                      isEN
+                                                          ? 'Attach Proof'
+                                                          : 'แนบหลักฐาน',
+                                                      style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 15,
+                                                          fontWeight: FontWeight
+                                                              .bold))),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      // Secondary: ชำระภายหลัง
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 48,
+                                        child: OutlinedButton(
+                                          style: OutlinedButton.styleFrom(
+                                            side: BorderSide(
+                                                color: Colors.grey.shade400),
+                                            shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(14)),
+                                          ),
+                                          onPressed: () async {
+                                            final nav = Navigator.of(ctx,
+                                                rootNavigator: true);
+                                            final rootNav =
+                                                Navigator.of(context);
+                                            SharedPreferences preferences =
+                                                await SharedPreferences
+                                                    .getInstance();
+                                            var custno =
+                                                preferences.getString('custno');
+                                            nav.pop();
+                                            rootNav.pushAndRemoveUntil(
+                                                MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        FitnessAppHomeScreen(
+                                                            custno_s: custno)),
+                                                (route) => false);
+                                          },
+                                          child: Text(
+                                              isEN
+                                                  ? 'Pay Later'
+                                                  : 'ชำระภายหลัง',
+                                              style: TextStyle(
+                                                  color: Colors.grey.shade700,
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600)),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ));
+                      },
                     );
                   },
                 ),
@@ -4538,34 +5446,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                           if (!mounted) return;
                                           setState(
                                               () => _expireDialogShown = true);
-                                          PanaraConfirmDialog.showAnimatedGrow(
-                                            context,
-                                            title: widget.cuslang == 'EN'
-                                                ? "Expired"
-                                                : "หมดเวลา",
-                                            message: widget.cuslang == 'EN'
-                                                ? "Payment time expired. If paid, please attach proof. If not, please renew QR."
-                                                : "หมดเวลาการชำระแล้ว หากชำระแล้วกรุณาแนบหลักฐานและชำระและยืนยัน หรือยังไม่ได้ชำระกรุณากดแสดง QR อีกครั้ง",
-                                            confirmButtonText:
-                                                widget.cuslang == 'EN'
-                                                    ? "Attach Proof"
-                                                    : "แนบหลักฐาน",
-                                            cancelButtonText:
-                                                widget.cuslang == 'EN'
-                                                    ? "Close"
-                                                    : "ปิด",
-                                            onTapConfirm: () {
-                                              Navigator.pop(context);
-                                              _showPaymentConfirmationSheet(
-                                                  context);
-                                            },
-                                            onTapCancel: () {
-                                              Navigator.pop(context);
-                                            },
-                                            panaraDialogType:
-                                                PanaraDialogType.warning,
-                                            barrierDismissible: true,
-                                          );
+                                          _showExpiredDialog();
                                         });
                                       }
 
@@ -4807,7 +5688,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           ),
                         ),
                         LoadingAnimationWidget.inkDrop(
-                          color: Colors.green,
+                          color: Colors.indigo,
                           size: 70,
                         ),
                       ],
@@ -4828,86 +5709,125 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                 //     ? null
                 //     :
                 Container(
-              padding: EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.grey.withOpacity(0.3),
-                    spreadRadius: 1,
-                    blurRadius: 10,
-                    offset: Offset(0, -2),
+                    color: Colors.black.withValues(alpha: 0.08),
+                    spreadRadius: 0,
+                    blurRadius: 20,
+                    offset: const Offset(0, -4),
                   ),
                 ],
               ),
               child: SafeArea(
-                child: SizedBox(
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: (_InvoiceModels.length == 0)
-                        ? () {
-                            PanaraInfoDialog.showAnimatedGrow(
-                              context,
-                              title: "Oops",
-                              message: widget.cuslang == 'EN'
-                                  ? "No payment amount!!!"
-                                  : "ไม่มียอดชำระ !!!",
-                              buttonText: widget.cuslang == 'EN'
-                                  ? "acknowledge"
-                                  : "รับทราบ",
-                              onTapDismiss: () async {
-                                Navigator.of(
-                                  context,
-                                  rootNavigator: true,
-                                ).pop();
-                              },
-                              panaraDialogType: PanaraDialogType.error,
-                              barrierDismissible: false,
-                            );
-                          }
-                        : (paymentSer1 != null &&
-                                gopay != 0 &&
-                                qr_expiresAt != null)
-                            ? () async {
-                                _showPaymentConfirmationSheet(context);
-                              }
-                            : () async {
-                                await CreatePaymentItem();
+                child: () {
+                  final bool noInvoice = _InvoiceModels.isEmpty;
+                  final bool isConfirm =
+                      paymentSer1 != null && gopay != 0 && qr_expiresAt != null;
+                  final bool isEN = widget.cuslang == 'EN';
 
-                                return;
-                              },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: Text(
-                      (_InvoiceModels.length == 0)
-                          ? widget.cuslang == 'EN'
-                              ? "No payment amount"
-                              : "ไม่มียอดชำระ"
+                  final List<Color> grad = noInvoice
+                      ? [Colors.grey.shade300, Colors.grey.shade400]
+                      : isConfirm
+                          ? [
+                              const Color(0xFFFF8F00),
+                              const Color(0xFFE65100),
+                            ]
+                          : [
+                              const Color(0xFF43A047),
+                              const Color(0xFF00897B),
+                            ];
+
+                  final IconData icon = noInvoice
+                      ? Icons.remove_circle_outline_rounded
+                      : isConfirm
+                          ? Icons.attach_file_rounded
                           : select_pay == 0
-                              ? (widget.cuslang == 'EN'
-                                  ? 'Payment Next'
-                                  : 'ชำระเงินต่อไป')
-                              : (paymentSer1 != null &&
-                                      gopay != 0 &&
-                                      qr_expiresAt != null)
-                                  ? (widget.cuslang == 'EN'
-                                      ? 'Confirm Payment'
-                                      : 'กดเพื่อ “แนบหลักฐานและยืนยัน”')
-                                  : (widget.cuslang == 'EN'
-                                      ? 'Start Payment'
-                                      : 'กดเพื่อ “เริ่มการชำระ”'),
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: Font_.Fonts_T,
+                              ? Icons.arrow_forward_rounded
+                              : Icons.payment_rounded;
+
+                  final String label = noInvoice
+                      ? (isEN ? 'No Payment Amount' : 'ไม่มียอดชำระ')
+                      : select_pay == 0
+                          ? (isEN ? 'Payment Next' : 'ชำระเงินต่อไป')
+                          : isConfirm
+                              ? (isEN
+                                  ? 'Confirm Payment'
+                                  : 'กดเพื่อ “แนบหลักฐานและยืนยัน”')
+                              : (isEN
+                                  ? 'Start Payment'
+                                  : 'กดเพื่อ “เริ่มการชำระ”');
+
+                  return Container(
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: grad,
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: noInvoice
+                          ? []
+                          : [
+                              BoxShadow(
+                                color: grad.last.withValues(alpha: 0.45),
+                                blurRadius: 14,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: noInvoice
+                            ? () {
+                                PanaraInfoDialog.showAnimatedGrow(
+                                  context,
+                                  title: 'Oops',
+                                  message: isEN
+                                      ? 'No payment amount!!!'
+                                      : 'ไม่มียอดชำระ !!!',
+                                  buttonText: isEN ? 'acknowledge' : 'รับทราบ',
+                                  onTapDismiss: () async {
+                                    Navigator.of(context, rootNavigator: true)
+                                        .pop();
+                                  },
+                                  panaraDialogType: PanaraDialogType.error,
+                                  barrierDismissible: false,
+                                );
+                              }
+                            : isConfirm
+                                ? () async {
+                                    _showPaymentConfirmationSheet(context);
+                                  }
+                                : () async {
+                                    await CreatePaymentItem();
+                                  },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(icon, color: Colors.white, size: 22),
+                            const SizedBox(width: 10),
+                            Text(
+                              label,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: Font_.Fonts_T,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }(),
               ),
             ),
           );
@@ -5404,7 +6324,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       if (renTalModels[0].imglogo!.trim() == '') {
       } else {
         newValuePDFimg.add(
-            '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+            '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
       }
     }
     DateTime now = DateTime.now();
@@ -5413,7 +6333,11 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     int second = now.second;
 
     /////////------------------->
-    String? fileName_Slip_ = fileName_Slip.toString().trim();
+    // ✅ ป้องกันไม่ให้ส่ง 'null' ไปยัง PHP
+    String? fileName_Slip_ =
+        (fileName_Slip != null && fileName_Slip!.isNotEmpty)
+            ? fileName_Slip!.trim()
+            : null;
     ////////////////------------------------------------------------------>
     SharedPreferences preferences = await SharedPreferences.getInstance();
     var custno = preferences.getString('custno');
@@ -5495,10 +6419,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       'payby': payby,
       'paybywidget': paybywidget,
       'user_bill': user_bill,
+      'paymentNote': Form_paymentNote.text.trim(),
     };
 
-    var uri = Uri.parse('${MyConstant().domain_chao}/In_tran_financet_User.php')
-        .replace(queryParameters: queryParams);
+    var uri =
+        Uri.parse('${MyConstant().domain_chao}/In_tran_financet_UserTest.php')
+            .replace(queryParameters: queryParams);
 
     // print('Generated URL: $uri');
     return uri.toString();
@@ -5516,7 +6442,20 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     int second = now.second;
 
     /////////------------------->
-    String? fileName_Slip_ = fileName_Slip.toString().trim();
+    // ✅ ป้องกันไม่ให้ส่ง 'null' ไปยัง PHP — ถ้า fileName_Slip ว่าง/หาย
+    //    ให้ abort ทันที (อย่าสร้าง transaction ที่มี fileNameSlip ผิด)
+    String? fileName_Slip_ =
+        (fileName_Slip != null && fileName_Slip!.isNotEmpty)
+            ? fileName_Slip!.trim()
+            : null;
+    if (fileName_Slip_ == null || fileName_Slip_!.isEmpty) {
+      debugPrint(
+          '❌ in_Trans_invoice: fileName_Slip is empty — abort to avoid bad record');
+      if (mounted) {
+        isLoading = false;
+      }
+      return;
+    }
     ////////////////------------------------------------------------------>
     SharedPreferences preferences = await SharedPreferences.getInstance();
     var custno = preferences.getString('custno');
@@ -5596,10 +6535,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       'payby': payby,
       'paybywidget': paybywidget,
       'user_bill': user_bill,
+      'paymentnote': Form_paymentNote.text.trim(),
     };
 
-    var uri = Uri.parse('${MyConstant().domain_chao}/In_tran_financet_User.php')
-        .replace(queryParameters: queryParams);
+    var uri =
+        Uri.parse('${MyConstant().domain_chao}/In_tran_financet_UserTest.php')
+            .replace(queryParameters: queryParams);
     // print(queryParams);
     print('paybyselect url $uri ');
 
@@ -5650,22 +6591,44 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   // }
 
   Future<bool> _processPaymentConfirmation(BuildContext ctx) async {
-    // Navigator.of(ctx).pop(); // Close the dialog // Removed to handle manually
+    // ✅ null-safe ป้องกัน RangeError ตอน renTalModels ว่าง
+    final imgLogo = (renTalModels.isNotEmpty)
+        ? (renTalModels[0].imglogo?.trim() ?? '')
+        : '';
     List newValuePDFimg = [];
-    for (int index = 0; index < 1; index++) {
-      if (renTalModels[0].imglogo!.trim() != '') {
-        newValuePDFimg.add(
-            '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
-      }
+    if (imgLogo.isNotEmpty) {
+      newValuePDFimg
+          .add('${MyConstant().domain_chao}/files/$foder/logo/$imgLogo');
     }
     try {
-      await OKuploadFile_Slip(newValuePDFimg);
+      // ✅ ตรวจสอบผลอัปโหลดก่อน — ถ้าไฟล์ไม่เข้าเซิร์ฟเวอร์ ห้ามบันทึกรายการ
+      final uploadOk = await OKuploadFile_Slip(newValuePDFimg);
+      if (!uploadOk) {
+        debugPrint(
+            '❌ _processPaymentConfirmation: upload failed, abort invoice');
+        // ✅ ปิด Dialog หลัก (SlideConfirm) ก่อน
+        if (Navigator.of(ctx).canPop()) {
+          Navigator.of(ctx).pop();
+        }
+        // ⚠️ ห้ามเรียก in_Trans_invoice! เพราะไฟล์ยังไม่เข้าเซิร์ฟเวอร์
+        // บังคับให้ user เริ่มทำรายการใหม่ (QR อาจหมดอายุแล้ว)
+        _showMyDialogPay_Error(widget.cuslang == 'EN'
+            ? "Slip upload failed. Please start a new transaction."
+            : 'อัปโหลดหลักฐานไม่สำเร็จ\nกรุณาเริ่มทำรายการใหม่');
+        return false;
+      }
       await in_Trans_invoice(newValuePDFimg, showSuccess: false);
       return true;
     } catch (e) {
+      debugPrint('❌ _processPaymentConfirmation error: $e');
+      // ✅ ปิด Dialog หลัก (SlideConfirm) ก่อน
+      if (Navigator.of(ctx).canPop()) {
+        Navigator.of(ctx).pop();
+      }
+      // ⚠️ ห้ามเรียก in_Trans_invoice!
       _showMyDialogPay_Error(widget.cuslang == 'EN'
-          ? "An error occurred. Please check the information. Please try again!"
-          : 'เกิดข้อผิดพลาด ตรวจสอบความถูกต้อง กรุณาลองอีกครั้ง!');
+          ? "An error occurred. Please start a new transaction."
+          : 'เกิดข้อผิดพลาด\nกรุณาเริ่มทำรายการใหม่');
       return false;
     }
   }
@@ -5676,57 +6639,115 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       context: context, // uses this.context
       barrierDismissible: true,
       builder: (BuildContext ctx) {
-        return AlertDialog(
+        return Dialog(
+          backgroundColor: Colors.white,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          contentPadding: EdgeInsets.zero,
-          content: Container(
-            width: double.maxFinite,
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        widget.cuslang == 'EN'
-                            ? 'Confirm Payment'
-                            : 'ยืนยันการชำระเงิน',
-                        style: TextStyle(
-                            fontFamily: Font_.Fonts_T,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold),
-                      ),
+                      Row(children: [
+                        Container(
+                          width: 4,
+                          height: 22,
+                          margin: const EdgeInsets.only(right: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.indigo,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        Text(
+                          widget.cuslang == 'EN'
+                              ? 'Confirm Payment'
+                              : 'ยืนยันการชำระเงิน',
+                          style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.indigo),
+                        ),
+                      ]),
                       IconButton(
-                        icon: Icon(Icons.close, color: Colors.grey),
+                        icon: const Icon(Icons.close, color: Colors.grey),
                         onPressed: () => Navigator.pop(ctx),
                       ),
                     ],
                   ),
                 ),
-                Divider(height: 1),
-                SizedBox(height: 10),
+                const Divider(height: 1),
+                const SizedBox(height: 14),
                 if (_uploadedSlipData != null)
                   Container(
-                    height: 250,
-                    width: double.infinity,
-                    color: Colors.black12,
-                    child: InteractiveViewer(
-                      panEnabled: true,
-                      minScale: 0.1,
-                      maxScale: 4.0,
-                      child: Image.memory(
-                        _uploadedSlipData!,
-                        fit: BoxFit.contain,
+                    height: 240,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(13),
+                      child: InteractiveViewer(
+                        panEnabled: true,
+                        minScale: 0.1,
+                        maxScale: 4.0,
+                        child: Image.memory(_uploadedSlipData!,
+                            fit: BoxFit.contain),
                       ),
                     ),
                   ),
-                SizedBox(height: 16),
-                Padding(
+                const SizedBox(height: 12),
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.indigo.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded,
+                          color: Colors.indigo, size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.cuslang == 'EN'
+                            ? 'Slip attached'
+                            : 'หลักฐานแนบแล้ว',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.indigo.shade700,
+                            fontFamily: Font_.Fonts_T,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            widget.cuslang == 'EN'
+                                ? "${nFormat.format(double.parse(Form_payment1.text))} THB"
+                                : "${nFormat.format(double.parse(Form_payment1.text))} บาท",
+                            style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.indigo),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
                   child: _SlideToConfirm(
                     label: widget.cuslang == 'EN'
                         ? 'Slide to Confirm'
@@ -5755,7 +6776,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                     ),
                                   ),
                                   LoadingAnimationWidget.inkDrop(
-                                    color: Colors.green,
+                                    color: Colors.indigo,
                                     size: 70,
                                   ),
                                 ],
@@ -5763,41 +6784,39 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             );
                           },
                         );
-                        // _processPaymentConfirmation(ctx);
 
-                        final success = await _processPaymentConfirmation(ctx);
+                        // Use the new direct upload flow for V3
+                        final success = await _confirmPaymentNewFlow(ctx);
 
                         if (!mounted) return;
 
                         // Close loading dialog
                         Navigator.of(context).pop();
 
-                        if (success) {
-                          Navigator.of(ctx).pop(); // Close Alert dialog
+                        if (!success) {
+                          if (mounted) {
+                            _showUploadErrorDialog(
+                              _lastUploadErrorMessage ??
+                                  (widget.cuslang == 'EN'
+                                      ? 'Slip upload failed. Please try again.'
+                                      : 'อัปโหลดสลิปไม่สำเร็จ กรุณาลองอีกครั้ง'),
+                            );
+                          }
+                          return;
+                        }
 
-                          // Show success dialog and navigate
-                          sucress(onDismiss: () {
-                            // Use 'cid' from TeNantModel, or fallback
-                            // Note: In in_Trans_invoice, it used 'custno' from SharedPreferences.
-                            // FitnessAppHomeScreen likely expects 'custno'.
-                            // If TeNantModel.cid isn't the custno, we should grab it from Prefs or use 'cid' if it maps.
-                            // Looking at GetTeNant_Model.dart, 'cid' exists.
-                            // Let's safe bet: fetch custno from prefs again as in_Trans_invoice did,
-                            // OR just use widget.teNantModel?[0].cid if appropriate.
-                            // Given the context, let's use the safer Prefs approach if we can, or just null since
-                            // FitnessAppHomeScreen might handle it.
-                            // But wait, we can't be async here easily in onDismiss without mounting issues?
-                            // Actually, onDismiss is synchronous callback.
-                            // Let's just use widget.teNantModel?[0].cid as a best effort,
-                            // or just pass null if it's optional.
+                        Navigator.of(ctx).pop(); // Close Alert dialog
 
-                            Navigator.pushAndRemoveUntil(context,
-                                MaterialPageRoute(builder: (context) {
+                        sucress(onDismiss: () {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (context) {
                               return FitnessAppHomeScreen(
                                   custno_s: widget.teNantModel?[0].cid);
-                            }), (route) => false);
-                          });
-                        }
+                            }),
+                            (route) => false,
+                          );
+                        });
                       } finally {
                         if (mounted) {
                           setState(() => _isProcessingLink = false);
@@ -5849,7 +6868,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                     // },
                   ),
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -5859,17 +6878,15 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   }
 
   Future<Map<String, dynamic>?> _DetailsPaymentIntentsReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
-
     try {
       final prefs = await SharedPreferences.getInstance();
       final ren = prefs.getString('renTalSer');
       final String custnoLocal =
           _TransModels.isNotEmpty ? '${_TransModels.first.custno ?? ''}' : '';
 
-      final custno16Bit = _toU16(custnoLocal).toString();
-      final ren16Bit = _toU16('$ren').toString();
+      // Keep raw values as-is (preserve leading zeros)
+      final custno16Bit = custnoLocal.trim();
+      final ren16Bit = (ren ?? '').trim();
 
       final intentsUuid = numinvoice.toString();
 
@@ -5895,8 +6912,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
   }
 
   Future<bool> _renewQrAndReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
+    String _toU16(String? v) => (v ?? '0').trim();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -5964,27 +6980,177 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
   Future<dynamic> sucress({VoidCallback? onDismiss}) async {
     if (!mounted) return;
-    return PanaraInfoDialog.show(
-      context,
-      title: widget.cuslang == 'EN' ? 'Completed' : "ดำเนินการเสร็จสิ้น",
-      message: widget.cuslang == 'EN'
-          ? 'You can check your payment within 1-3 business days.'
-          : "สามารถตรวจสอบการชำระภายใน 1-3 วันทำการ",
-      buttonText: widget.cuslang == 'EN' ? 'OK' : "ตกลง",
-      onTapDismiss: () {
-        Navigator.pop(context);
-        if (onDismiss != null) onDismiss();
-      },
-      panaraDialogType: PanaraDialogType.success,
+    final isEN = widget.cuslang == 'EN';
+    return showDialog(
+      context: context,
       barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF43A047), Color(0xFF1B5E20)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.indigo.withValues(alpha: 0.35),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Icon(Icons.check_rounded,
+                    color: Colors.white, size: 44),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isEN ? 'Completed' : 'ดำเนินการเสร็จสิ้น',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade900,
+                  fontFamily: Font_.Fonts_T,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                isEN
+                    ? 'You can check your payment within 1-3 business days.'
+                    : 'สามารถตรวจสอบการชำระภายใน\n1-3 วันทำการ',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                  fontFamily: Font_.Fonts_T,
+                  height: 1.6,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                isEN
+                    ? 'If the slip is not uploaded, please attach the payment slip again.'
+                    : 'หากหลักฐานไม่เข้าในระบบ กรุณาแนบหลักฐานการชำระเงินอีกครั้ง',
+                style: TextStyle(
+                  fontSize: 14,
+                  // fontWeight: FontWeight.bold,
+                  color: Colors.grey.shade900,
+                  fontFamily: Font_.Fonts_T,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 24),
+              // ✅ ปุ่มดูรายการ + ตกลง
+              Row(
+                children: [
+                  // ปุ่มดูรายการ
+                  Expanded(
+                    child: SizedBox(
+                      height: 50,
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          // นำไปยังหน้า Payment receipt (home_status_screen)
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FitnessAppHomeScreen(
+                                pageroot: 'PAYMENT',
+                              ),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(color: Colors.indigo.shade300),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: Text(
+                          isEN ? 'View history' : 'ดูประวัติการชำระ',
+                          style: TextStyle(
+                            color: Colors.indigo.shade700,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: Font_.Fonts_T,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // const SizedBox(width: 12),
+                  // // ปุ่มตกลง
+                  // Expanded(
+                  //   child: SizedBox(
+                  //     height: 50,
+                  //     child: Container(
+                  //       decoration: BoxDecoration(
+                  //         gradient: const LinearGradient(
+                  //           colors: [Colors.indigo, Color(0xFF283593)],
+                  //           begin: Alignment.centerLeft,
+                  //           end: Alignment.centerRight,
+                  //         ),
+                  //         borderRadius: BorderRadius.circular(14),
+                  //         boxShadow: [
+                  //           BoxShadow(
+                  //             color: Colors.indigo.withValues(alpha: 0.35),
+                  //             blurRadius: 12,
+                  //             offset: const Offset(0, 4),
+                  //           ),
+                  //         ],
+                  //       ),
+                  //       child: Material(
+                  //         color: Colors.transparent,
+                  //         child: InkWell(
+                  //           borderRadius: BorderRadius.circular(14),
+                  //           onTap: () {
+                  //             Navigator.pop(ctx);
+                  //             if (onDismiss != null) onDismiss();
+                  //           },
+                  //           child: Center(
+                  //             child: Text(
+                  //               isEN ? 'OK' : 'ตกลง',
+                  //               style: const TextStyle(
+                  //                 color: Colors.white,
+                  //                 fontSize: 16,
+                  //                 fontWeight: FontWeight.bold,
+                  //               ),
+                  //             ),
+                  //           ),
+                  //         ),
+                  //       ),
+                  //     ),
+                  //   ),
+                  // ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Future<bool> _pickSlipImage() async {
     final completer = Completer<bool>();
+    var isProcessingVisible = false;
 
     // Helper to show loading
     void _showProcessing() {
+      if (isProcessingVisible || !mounted) return;
+      isProcessingVisible = true;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -6021,122 +7187,121 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
     // Helper to request close loading
     void _hideProcessing() {
+      if (!isProcessingVisible || !mounted) return;
+      isProcessingVisible = false;
       Navigator.of(context, rootNavigator: true).pop();
     }
 
     if (kIsWeb) {
-      // Web: use FileUploadInputElement
+      // Web: use FileUploadInputElement and allow only one image.
       final uploadInput = html.FileUploadInputElement();
       uploadInput.accept = 'image/*';
-      uploadInput.multiple = true; // Allow multiple files
-      uploadInput.click();
+      uploadInput.multiple = false;
+      uploadInput.style.display = 'none';
+
+      html.document.body?.append(uploadInput);
+
+      uploadInput.onAbort.listen((event) {
+        if (!completer.isCompleted) {
+          completer.complete(false);
+        }
+        uploadInput.remove();
+      });
+      uploadInput.onError.listen((event) {
+        if (!completer.isCompleted) {
+          completer.complete(false);
+        }
+        uploadInput.remove();
+      });
 
       uploadInput.onChange.listen((e) async {
         final files = uploadInput.files;
         if (files == null || files.isEmpty) {
-          return; // Cancelled or empty
+          if (!completer.isCompleted) {
+            completer.complete(false);
+          }
+          uploadInput.remove();
+          return;
         }
 
         _showProcessing();
 
         try {
-          List<Uint8List> images = [];
-          for (var file in files) {
-            final reader = html.FileReader();
-            reader.readAsArrayBuffer(file);
-            await reader.onLoadEnd.first;
-            if (reader.result != null) {
-              images.add(reader.result as Uint8List);
-            }
+          final file = files.first;
+          final reader = html.FileReader();
+          reader.readAsArrayBuffer(file);
+          await reader.onLoadEnd.first;
+          if (reader.result == null) {
+            if (!completer.isCompleted) completer.complete(false);
+            return;
           }
 
-          if (images.isNotEmpty) {
-            Uint8List? finalImage;
-            // Merge images (always, to include footer)
-            finalImage = await mergeImagesReceiptStyle(
-              images,
-              ref1: return_qr_refapi1,
-              ref2: return_qr_refapi2,
-              ref3: return_qr_refapi3,
-            );
+          final result = reader.result;
+          final imageBytes = result is Uint8List
+              ? result
+              : Uint8List.view((result as ByteBuffer));
+          // ✅ ไม่แปลง PNG ตอนเลือกรูป (หน่วง) — โชว์ preview ด้วย bytes ดิบก่อน
+          // แปลงเป็น PNG ทีหลังตอนกดอัปโหลด (PHP แปลงให้)
+          final base64Str = await compute(_base64EncodeIsolate, imageBytes);
+          final selectedExt = _getExtensionFromName(file.name);
 
-            if (finalImage != null) {
-              if (mounted) {
-                setState(() {
-                  _slipImageBytes = finalImage;
-                  _slipImageName =
-                      files.length > 1 ? "merged_slip.jpg" : files[0].name;
-                  base64_Slip = base64Encode(_slipImageBytes!);
-                  _uploadedSlipData = _slipImageBytes;
-                });
-                _hideProcessing();
-              }
-              completer.complete(true);
-            } else {
-              if (mounted) {
-                _hideProcessing();
-                Fluttertoast.showToast(msg: "Failed to process images");
-              }
-              completer.complete(false);
-            }
-          } else {
-            _hideProcessing();
-            completer.complete(false);
+          if (mounted) {
+            setState(() {
+              _slipImageBytes = imageBytes;
+              _slipImageName =
+                  file.name.replaceAll(RegExp(r'\.[^\.]*$'), '.$selectedExt');
+              _uploadedSlipData = imageBytes;
+              base64_Slip = base64Str;
+              fileName_Slip = null;
+              extension_ = selectedExt;
+            });
           }
+          completer.complete(true);
         } catch (e) {
-          debugPrint("Error picking web images: $e");
+          debugPrint("Error picking web image: $e");
+          if (!completer.isCompleted) completer.complete(false);
+        } finally {
           _hideProcessing();
-          completer.complete(false);
+          uploadInput.remove();
         }
       });
+
+      uploadInput.click();
     } else {
-      // Mobile/Desktop: use ImagePicker
+      // Mobile/Desktop: use ImagePicker and allow only one image.
       final ImagePicker picker = ImagePicker();
       try {
-        final List<XFile> images = await picker.pickMultiImage();
+        final XFile? pickedFile = await picker.pickImage(
+          source: ImageSource.gallery,
+        );
 
-        if (images.isNotEmpty) {
-          _showProcessing();
-
-          List<Uint8List> imageBytesList = [];
-          for (var imgFile in images) {
-            imageBytesList.add(await imgFile.readAsBytes());
-          }
-
-          Uint8List? finalImage;
-          // Merge images (always, to include footer)
-          finalImage = await mergeImagesReceiptStyle(
-            imageBytesList,
-            ref1: return_qr_refapi1,
-            ref2: return_qr_refapi2,
-            ref3: return_qr_refapi3,
-          );
-
-          if (finalImage != null) {
-            if (mounted) {
-              setState(() {
-                _slipImageBytes = finalImage;
-                _slipImageName =
-                    images.length > 1 ? "merged_slip.jpg" : images[0].name;
-                base64_Slip = base64Encode(_slipImageBytes!);
-                _uploadedSlipData = _slipImageBytes;
-              });
-              _hideProcessing();
-            }
-            completer.complete(true);
-          } else {
-            if (mounted) {
-              _hideProcessing();
-              Fluttertoast.showToast(msg: "Failed to merge images");
-            }
-            completer.complete(false);
-          }
-        } else {
+        if (pickedFile == null) {
           completer.complete(false);
+          return completer.future;
         }
+
+        _showProcessing();
+        final fileBytes = await pickedFile.readAsBytes();
+        final base64Str = await compute(_base64EncodeIsolate, fileBytes);
+        final selectedExt = _getExtensionFromName(pickedFile.name);
+
+        if (mounted) {
+          setState(() {
+            _slipImageBytes = fileBytes;
+            _slipImageName = pickedFile.name
+                .replaceAll(RegExp(r'\.[^\.]*$'), '.$selectedExt');
+            _uploadedSlipData = _slipImageBytes;
+            base64_Slip = base64Str;
+            fileName_Slip = null;
+            extension_ = selectedExt;
+          });
+        }
+        _hideProcessing();
+        completer.complete(true);
       } catch (e) {
-        debugPrint("Error picking mobile images: $e");
-        completer.complete(false);
+        debugPrint("Error picking mobile image: $e");
+        _hideProcessing();
+        if (!completer.isCompleted) completer.complete(false);
       }
     }
 
@@ -6189,6 +7354,12 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
           bankname: bankCode ?? "-",
           banknumber: selectedValue ?? "-",
         ),
+      ).timeout(
+        const Duration(seconds: 12),
+        onTimeout: () {
+          debugPrint('Slip image processing timed out');
+          return images.isNotEmpty ? images.first : null;
+        },
       );
     } catch (e) {
       debugPrint('Error initiates merge compute: $e');
@@ -6264,8 +7435,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
       request.headers.addAll(headers);
 
-      // Send request
-      final response = await request.send();
+      // Send request with timeout to avoid hanging
+      final response =
+          await request.send().timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final responseBody = await response.stream.bytesToString();
@@ -6280,9 +7452,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
         });
 
         if (!mounted) return false;
-        int _toU16(String? v) =>
-            (int.tryParse((v ?? '0').trim()) ?? 0) +
-            65535; // ✅ 16-bit unsigned (0..65535)
+        String _toU16(String? v) => (v ?? '0').trim();
 
         String? custno16Bit = _toU16('$custno').toString();
         final ren16Bit = _toU16('$renTal_user');
@@ -6437,33 +7607,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                     Future.microtask(() async {
                                       if (!mounted) return;
                                       setState(() => _expireDialogShown = true);
-                                      PanaraConfirmDialog.showAnimatedGrow(
-                                        context,
-                                        title: widget.cuslang == 'EN'
-                                            ? "Expired"
-                                            : "หมดเวลา",
-                                        message: widget.cuslang == 'EN'
-                                            ? "Payment time expired. If paid, please attach proof. If not, please renew QR."
-                                            : "หมดเวลาการชำระแล้ว หากชำระแล้วกรุณาแนบหลักฐานและชำระและยืนยัน หรือยังไม่ได้ชำระกรุณากดแสดง QR อีกครั้ง",
-                                        confirmButtonText:
-                                            widget.cuslang == 'EN'
-                                                ? "Attach Proof"
-                                                : "แนบหลักฐาน",
-                                        cancelButtonText: widget.cuslang == 'EN'
-                                            ? "Close"
-                                            : "ปิด",
-                                        onTapConfirm: () {
-                                          Navigator.pop(context);
-                                          _showPaymentConfirmationSheet(
-                                              context);
-                                        },
-                                        onTapCancel: () {
-                                          Navigator.pop(context);
-                                        },
-                                        panaraDialogType:
-                                            PanaraDialogType.warning,
-                                        barrierDismissible: true,
-                                      );
+                                      _showExpiredDialog();
                                     });
                                   }
 
@@ -6529,7 +7673,113 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
     );
   }
 
+  void _showExpiredDialog() {
+    final isEN = widget.cuslang == 'EN';
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (dCtx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.indigo.shade50,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.indigo.shade200, width: 2),
+                  ),
+                  child: Icon(Icons.timer_off_rounded,
+                      color: Colors.indigo.shade700, size: 38),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isEN ? 'Expired' : 'หมดเวลา',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.indigo.shade900,
+                    fontFamily: Font_.Fonts_T,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isEN
+                      ? 'Payment time expired. If paid, please attach proof. If not, please renew QR.'
+                      : 'หมดเวลาการชำระแล้ว หากชำระแล้วกรุณาแนบหลักฐานและยืนยัน หรือยังไม่ได้ชำระกรุณากดแสดง QR อีกครั้ง',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: Colors.grey.shade700,
+                    height: 1.5,
+                    fontFamily: Font_.Fonts_T,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(color: Colors.indigo.shade200),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () => Navigator.pop(dCtx),
+                        child: Text(
+                          isEN ? 'Close' : 'ปิด',
+                          style: TextStyle(
+                              color: Colors.indigo.shade700,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: Font_.Fonts_T),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.indigo,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(dCtx);
+                          _showPaymentConfirmationSheet(context);
+                        },
+                        child: Text(
+                          isEN ? 'Attach Proof' : 'แนบหลักฐาน',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontFamily: Font_.Fonts_T),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showPaymentConfirmationSheet(BuildContext parentContext) {
+    // Get screen size before opening bottom sheet
+    final screenHeight = MediaQuery.of(parentContext).size.height;
+
     Widget chip(String text, Color bg, Color fg) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
@@ -6557,7 +7807,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
               return StatefulBuilder(
                   builder: (BuildContext context, StateSetter setStateSheet) {
                 return Container(
-                  height: MediaQuery.of(context).size.height * 0.85,
+                  constraints: BoxConstraints(
+                    maxHeight: screenHeight * 0.95,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius:
@@ -6572,17 +7824,31 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              widget.cuslang == 'EN'
-                                  ? 'Payment Confirmation'
-                                  : 'ยืนยันการชำระเงิน',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: Font_.Fonts_T),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 22,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigo,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                Text(
+                                  widget.cuslang == 'EN'
+                                      ? 'Payment Confirmation'
+                                      : 'ยืนยันการชำระเงิน',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.indigo,
+                                      fontFamily: Font_.Fonts_T),
+                                ),
+                              ],
                             ),
                             IconButton(
-                              icon: Icon(Icons.close, color: Colors.grey),
+                              icon: const Icon(Icons.close, color: Colors.grey),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
@@ -6595,6 +7861,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                               padding: EdgeInsets.all(16),
                               child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     // Instructions
                                     Container(
@@ -6610,7 +7877,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                           Row(
                                             children: [
                                               Icon(Icons.check_circle,
-                                                  color: Colors.green.shade800),
+                                                  color:
+                                                      Colors.indigo.shade800),
                                               SizedBox(width: 10),
                                               Expanded(
                                                 child: Text(
@@ -6633,6 +7901,14 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                     SizedBox(height: 20),
                                     const SizedBox(height: 8),
                                     Card(
+                                      color: Colors.white,
+                                      elevation: 0.4,
+                                      margin: const EdgeInsets.symmetric(
+                                          vertical: 4),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                      clipBehavior: Clip.antiAlias,
                                       child: Column(
                                         children: [
                                           _slipInfoRow(
@@ -6677,7 +7953,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                   });
                                                   // Trigger file picker
                                                   final success =
-                                                      await _pickSlipImage();
+                                                      await _pickSingleSlipImage();
                                                   if (success &&
                                                       _slipImageBytes != null) {
                                                     if (!mounted) return;
@@ -6711,7 +7987,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                               LoadingAnimationWidget
                                                                   .inkDrop(
                                                                 color: Colors
-                                                                    .green,
+                                                                    .indigo,
                                                                 size: 70,
                                                               ),
                                                             ],
@@ -6720,9 +7996,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                       },
                                                     );
                                                     final successUp =
-                                                        await _uploadSlipImage(
-                                                            amtRawSlip: sum_amt
-                                                                .toString());
+                                                        await _uploadSlipImageDirect();
                                                     if (mounted) {
                                                       Navigator.of(context)
                                                           .pop(); // Close dialog
@@ -6737,7 +8011,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                                 ? 'Slip upload successful!'
                                                                 : 'อัปโหลดสลิปสำเร็จ!'),
                                                             backgroundColor:
-                                                                Colors.green,
+                                                                Colors.indigo,
                                                           ),
                                                         );
                                                       }
@@ -6977,7 +8251,9 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
               return StatefulBuilder(
                   builder: (BuildContext context, StateSetter setStateSheet) {
                 return Container(
-                  height: MediaQuery.of(context).size.height * 0.85,
+                  constraints: BoxConstraints(
+                    maxHeight: screenHeight * 0.95,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius:
@@ -6992,17 +8268,31 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              widget.cuslang == 'EN'
-                                  ? 'Payment Confirmation'
-                                  : 'ยืนยันการชำระเงิน',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: Font_.Fonts_T),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 4,
+                                  height: 22,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigo,
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                Text(
+                                  widget.cuslang == 'EN'
+                                      ? 'Payment Confirmation'
+                                      : 'ยืนยันการชำระเงิน',
+                                  style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.indigo,
+                                      fontFamily: Font_.Fonts_T),
+                                ),
+                              ],
                             ),
                             IconButton(
-                              icon: Icon(Icons.close, color: Colors.grey),
+                              icon: const Icon(Icons.close, color: Colors.grey),
                               onPressed: () => Navigator.pop(context),
                             ),
                           ],
@@ -7016,49 +8306,517 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           padding: EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               // Instructions
-                              Container(
-                                padding: EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border:
-                                      Border.all(color: Colors.orange.shade200),
-                                ),
-                                child: Column(
-                                  children: [
-                                    Row(
+                              StatefulBuilder(
+                                builder: (context, setExpandState) {
+                                  final isExpanded = _isInfoExpanded;
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.orange.shade100,
+                                          Colors.orange.shade50
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: Colors.orange.shade300,
+                                          width: 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.orange
+                                              .withValues(alpha: 0.18),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Icon(Icons.info_outline,
-                                            color: Colors.orange.shade800),
-                                        SizedBox(width: 10),
-                                        Expanded(
-                                          child: Text(
-                                            widget.cuslang == 'EN'
-                                                ? "Please upload proof of payment to complete the transaction."
-                                                : "กรุณาแนบหลักฐานการโอนเงินเพื่อดำเนินการให้เสร็จสมบูรณ์",
-                                            style: TextStyle(
-                                                color: Colors.orange.shade900,
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Container(
+                                              margin: const EdgeInsets.only(
+                                                  top: 1, right: 12),
+                                              padding: const EdgeInsets.all(6),
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange.shade200,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: Icon(Icons.info_rounded,
+                                                  color: Colors.orange.shade800,
+                                                  size: 18),
+                                            ),
+                                            Expanded(
+                                              child: Text(
+                                                widget.cuslang == 'EN'
+                                                    ? "Please upload proof of payment to complete the transaction and confirm your payment."
+                                                    : "กรุณาแนบหลักฐานการโอนเงินเพื่อดำเนินการให้เสร็จสมบูรณ์ และยืนยันการชำระเงิน",
+                                                style: TextStyle(
+                                                  color: Colors.orange.shade900,
+                                                  fontFamily: Font_.Fonts_T,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13.5,
+                                                  height: 1.5,
+                                                ),
+                                                maxLines: isExpanded ? null : 2,
+                                                overflow: isExpanded
+                                                    ? null
+                                                    : TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: InkWell(
+                                            onTap: () {
+                                              setExpandState(() {
+                                                _isInfoExpanded =
+                                                    !_isInfoExpanded;
+                                              });
+                                            },
+                                            child: Text(
+                                              isExpanded
+                                                  ? (widget.cuslang == 'EN'
+                                                      ? 'Show less'
+                                                      : 'ย่อ')
+                                                  : (widget.cuslang == 'EN'
+                                                      ? 'Show more'
+                                                      : 'ดูเพิ่มเติม'),
+                                              style: TextStyle(
+                                                color: Colors.orange.shade800,
                                                 fontFamily: Font_.Fonts_T,
-                                                fontWeight: FontWeight.bold),
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 12,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
                               SizedBox(height: 20),
                               Row(children: [
-                                Text(
-                                  widget.cuslang == 'EN'
-                                      ? "Upload Slip"
-                                      : "อัปโหลดสลิป",
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: Font_.Fonts_T,
-                                      fontSize: 16),
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.upload_file_rounded,
+                                          color: Colors.indigo, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        widget.cuslang == 'EN'
+                                            ? "Upload Slip"
+                                            : "อัปโหลดสลิป",
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.indigo,
+                                            fontSize: 16),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          border: Border.all(
+                                              color: Colors.red.shade200),
+                                        ),
+                                        child: Text(
+                                          widget.cuslang == 'EN'
+                                              ? 'Required'
+                                              : 'จำเป็น',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.red.shade700,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Expanded(
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: InkWell(
+                                      onTap: () async {
+                                        await showDialog(
+                                          context: context,
+                                          builder: (dCtx) => StatefulBuilder(
+                                            builder: (_, setDialog) => Dialog(
+                                              shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          16)),
+                                              child: ConstrainedBox(
+                                                constraints: BoxConstraints(
+                                                  maxWidth: 420,
+                                                  maxHeight: MediaQuery.of(dCtx)
+                                                          .size
+                                                          .height *
+                                                      0.8,
+                                                ),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    // Header
+                                                    Padding(
+                                                      padding: const EdgeInsets
+                                                          .fromLTRB(
+                                                          16, 14, 8, 8),
+                                                      child: Row(
+                                                        children: [
+                                                          Container(
+                                                            width: 4,
+                                                            height: 20,
+                                                            margin:
+                                                                const EdgeInsets
+                                                                    .only(
+                                                                    right: 10),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color:
+                                                                  Colors.indigo,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          2),
+                                                            ),
+                                                          ),
+                                                          Expanded(
+                                                            child: Text(
+                                                              widget.cuslang ==
+                                                                      'EN'
+                                                                  ? 'Help'
+                                                                  : 'ช่วยเหลือ',
+                                                              style: const TextStyle(
+                                                                  fontSize: 17,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  color: Colors
+                                                                      .indigo),
+                                                            ),
+                                                          ),
+                                                          IconButton(
+                                                            icon: const Icon(
+                                                                Icons.close,
+                                                                color: Colors
+                                                                    .grey),
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                                    dCtx),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const Divider(height: 1),
+                                                    Flexible(
+                                                      child:
+                                                          SingleChildScrollView(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .all(12),
+                                                        child: Column(
+                                                          children: [
+                                                            ClipRRect(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          12),
+                                                              child: Theme(
+                                                                data: Theme.of(
+                                                                        dCtx)
+                                                                    .copyWith(
+                                                                  dividerColor:
+                                                                      Colors
+                                                                          .transparent,
+                                                                ),
+                                                                child:
+                                                                    ExpansionTile(
+                                                                  backgroundColor:
+                                                                      Colors
+                                                                          .indigo
+                                                                          .shade50,
+                                                                  collapsedBackgroundColor:
+                                                                      Colors
+                                                                          .indigo
+                                                                          .shade50,
+                                                                  iconColor:
+                                                                      Colors
+                                                                          .indigo,
+                                                                  collapsedIconColor:
+                                                                      Colors
+                                                                          .indigo,
+                                                                  shape: RoundedRectangleBorder(
+                                                                      borderRadius:
+                                                                          BorderRadius.circular(
+                                                                              12)),
+                                                                  collapsedShape:
+                                                                      RoundedRectangleBorder(
+                                                                          borderRadius:
+                                                                              BorderRadius.circular(12)),
+                                                                  title: Text(
+                                                                    widget.cuslang ==
+                                                                            'EN'
+                                                                        ? 'Already paid but forgot to attach proof'
+                                                                        : 'ชำระแล้วแต่ลืมแนบหลักฐาน',
+                                                                    style: const TextStyle(
+                                                                        fontSize:
+                                                                            14,
+                                                                        fontWeight:
+                                                                            FontWeight
+                                                                                .bold,
+                                                                        color: Colors
+                                                                            .indigo),
+                                                                  ),
+                                                                  children: [
+                                                                    Padding(
+                                                                      padding: const EdgeInsets
+                                                                          .fromLTRB(
+                                                                          14,
+                                                                          0,
+                                                                          14,
+                                                                          14),
+                                                                      child:
+                                                                          Column(
+                                                                        crossAxisAlignment:
+                                                                            CrossAxisAlignment.start,
+                                                                        children: [
+                                                                          Text(
+                                                                            widget.cuslang == 'EN'
+                                                                                ? 'If you have already paid but forgot to attach proof of payment, please select the actual payment date below.'
+                                                                                : 'หากท่านได้ชำระเงินไปแล้ว แต่ลืมแนบหลักฐานการชำระ กรุณาเลือกวันที่ชำระจริงด้านล่าง',
+                                                                            style: TextStyle(
+                                                                                fontSize: 13,
+                                                                                color: Colors.black87,
+                                                                                height: 1.5),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 12),
+                                                                          // Selected date display
+                                                                          Container(
+                                                                            padding:
+                                                                                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                                            decoration:
+                                                                                BoxDecoration(
+                                                                              color: Colors.white,
+                                                                              borderRadius: BorderRadius.circular(8),
+                                                                              border: Border.all(color: Colors.indigo.shade200),
+                                                                            ),
+                                                                            child:
+                                                                                Row(
+                                                                              children: [
+                                                                                const Icon(Icons.event, size: 18, color: Colors.indigo),
+                                                                                const SizedBox(width: 8),
+                                                                                Expanded(
+                                                                                  child: Text(
+                                                                                    '${widget.cuslang == 'EN' ? 'Payment date: ' : 'วันที่ชำระ: '}${Value_newDateD ?? '-'}',
+                                                                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                                                                  ),
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 12),
+                                                                          // Pick date button
+                                                                          SizedBox(
+                                                                            width:
+                                                                                double.infinity,
+                                                                            child:
+                                                                                ElevatedButton.icon(
+                                                                              style: ElevatedButton.styleFrom(
+                                                                                backgroundColor: Colors.indigo,
+                                                                                foregroundColor: Colors.white,
+                                                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                                              ),
+                                                                              icon: const Icon(Icons.calendar_month, size: 18),
+                                                                              label: Text(
+                                                                                widget.cuslang == 'EN' ? 'Select date' : 'เลือกวันที่',
+                                                                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                                                              ),
+                                                                              onPressed: () async {
+                                                                                final picked = await showDatePicker(
+                                                                                  context: dCtx,
+                                                                                  locale: const Locale('th', 'TH'),
+                                                                                  helpText: widget.cuslang == 'EN' ? 'Select payment date' : 'เลือกวันที่ชำระ',
+                                                                                  confirmText: widget.cuslang == 'EN' ? 'OK' : 'ตกลง',
+                                                                                  cancelText: widget.cuslang == 'EN' ? 'Cancel' : 'ยกเลิก',
+                                                                                  initialDate: newDatetime,
+                                                                                  firstDate: DateTime.now().subtract(const Duration(days: 63)),
+                                                                                  lastDate: DateTime.now().add(const Duration(days: 120)), // TEST: future 120 days
+                                                                                  // lastDate: DateTime.now(), // production
+                                                                                  builder: (ctx, child) => Theme(
+                                                                                    data: Theme.of(ctx).copyWith(
+                                                                                      colorScheme: const ColorScheme.light(
+                                                                                        primary: Colors.indigo,
+                                                                                        onPrimary: Colors.white,
+                                                                                        onSurface: Colors.black87,
+                                                                                      ),
+                                                                                    ),
+                                                                                    child: child!,
+                                                                                  ),
+                                                                                );
+                                                                                if (picked != null) {
+                                                                                  newDatetime = picked;
+                                                                                  Value_newDateY = DateFormat('yyyy-MM-dd').format(picked);
+                                                                                  Value_newDateD = DateFormat('dd-MM-yyyy').format(picked);
+                                                                                  setDialog(() {});
+                                                                                  setStateSheet(() {});
+                                                                                  if (mounted) setState(() {});
+                                                                                }
+                                                                              },
+                                                                            ),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 14),
+                                                                          // Note label + required chip
+                                                                          Row(
+                                                                            children: [
+                                                                              Text(
+                                                                                widget.cuslang == 'EN' ? 'Note' : 'หมายเหตุ',
+                                                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.indigo),
+                                                                              ),
+                                                                              const SizedBox(width: 6),
+                                                                              Container(
+                                                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                                                decoration: BoxDecoration(
+                                                                                  color: Colors.red.shade50,
+                                                                                  borderRadius: BorderRadius.circular(6),
+                                                                                  border: Border.all(color: Colors.red.shade200),
+                                                                                ),
+                                                                                child: Text(
+                                                                                  widget.cuslang == 'EN' ? 'Min 10 chars' : 'อย่างน้อย 10 ตัว',
+                                                                                  style: TextStyle(fontSize: 11, color: Colors.red.shade700, fontWeight: FontWeight.bold),
+                                                                                ),
+                                                                              ),
+                                                                            ],
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 6),
+                                                                          TextField(
+                                                                            controller:
+                                                                                Form_paymentNote,
+                                                                            maxLines:
+                                                                                3,
+                                                                            maxLength:
+                                                                                200,
+                                                                            decoration:
+                                                                                InputDecoration(
+                                                                              hintText: widget.cuslang == 'EN' ? 'e.g. Transferred from another account, slip lost...' : 'เช่น โอนจากบัญชีอื่น, สลิปหาย...',
+                                                                              hintStyle: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                                                                              filled: true,
+                                                                              fillColor: Colors.white,
+                                                                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                                              border: OutlineInputBorder(
+                                                                                borderRadius: BorderRadius.circular(10),
+                                                                                borderSide: BorderSide(color: Colors.indigo.shade200),
+                                                                              ),
+                                                                              enabledBorder: OutlineInputBorder(
+                                                                                borderRadius: BorderRadius.circular(10),
+                                                                                borderSide: BorderSide(color: Colors.indigo.shade200),
+                                                                              ),
+                                                                              focusedBorder: OutlineInputBorder(
+                                                                                borderRadius: BorderRadius.circular(10),
+                                                                                borderSide: const BorderSide(color: Colors.indigo, width: 1.5),
+                                                                              ),
+                                                                            ),
+                                                                            onChanged: (_) =>
+                                                                                setDialog(() {}),
+                                                                          ),
+                                                                          const SizedBox(
+                                                                              height: 8),
+                                                                          // Confirm button
+                                                                          SizedBox(
+                                                                            width:
+                                                                                double.infinity,
+                                                                            child:
+                                                                                ElevatedButton.icon(
+                                                                              style: ElevatedButton.styleFrom(
+                                                                                backgroundColor: Colors.indigo.shade600,
+                                                                                foregroundColor: Colors.white,
+                                                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                                              ),
+                                                                              icon: const Icon(Icons.check_circle_outline, size: 18),
+                                                                              label: Text(
+                                                                                widget.cuslang == 'EN' ? 'Confirm' : 'ยืนยัน',
+                                                                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                                                              ),
+                                                                              onPressed: () {
+                                                                                final note = Form_paymentNote.text.trim();
+                                                                                if (note.length < 10) {
+                                                                                  Fluttertoast.showToast(
+                                                                                    msg: widget.cuslang == 'EN' ? 'Please enter at least 10 characters' : 'กรุณากรอกหมายเหตุอย่างน้อย 10 ตัวอักษร',
+                                                                                    backgroundColor: Colors.red,
+                                                                                    textColor: Colors.white,
+                                                                                  );
+                                                                                  return;
+                                                                                }
+                                                                                Navigator.pop(dCtx);
+                                                                                setStateSheet(() {});
+                                                                                if (mounted) setState(() {});
+                                                                              },
+                                                                            ),
+                                                                          ),
+                                                                        ],
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.indigo.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          border: Border.all(
+                                              color: Colors.indigo.shade200),
+                                        ),
+                                        child: Text(
+                                          widget.cuslang == 'EN'
+                                              ? 'Help'
+                                              : 'ช่วยเหลือ',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.indigo.shade700,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ]),
                               // Upload Section Check
@@ -7451,7 +9209,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
 
                                   try {
                                     // await uploadFile_Slip();
-                                    final success = await _pickSlipImage();
+                                    final success =
+                                        await _pickSingleSlipImage();
 
                                     if (!mounted) return;
 
@@ -7472,37 +9231,57 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                 },
                                 child: Container(
                                   width: double.infinity,
-                                  height: 250,
+                                  height: 180,
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(12),
+                                    color: Colors.indigo.shade50,
+                                    borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
-                                        color: Colors.grey.shade300, width: 2),
+                                        color: Colors.indigo.shade200,
+                                        width: 1.5),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.indigo
+                                            .withValues(alpha: 0.06),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
                                   ),
                                   child: base64_Slip == null
                                       ? Column(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            Icon(
-                                              Icons.cloud_upload_outlined,
-                                              size: 60,
-                                              color: Colors.blue.shade300,
+                                            Container(
+                                              width: 72,
+                                              height: 72,
+                                              decoration: BoxDecoration(
+                                                color: Colors.indigo
+                                                    .withValues(alpha: 0.1),
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.cloud_upload_outlined,
+                                                size: 38,
+                                                color: Colors.indigo,
+                                              ),
                                             ),
-                                            SizedBox(height: 10),
+                                            const SizedBox(height: 14),
                                             Text(
                                               widget.cuslang == 'EN'
                                                   ? "Tap to upload payment slip"
                                                   : "กดเพื่ออัปโหลดสลิป",
                                               style: TextStyle(
-                                                  color: Colors.grey.shade600,
+                                                  color: Colors.indigo.shade700,
                                                   fontFamily: Font_.Fonts_T,
-                                                  fontWeight: FontWeight.bold),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 15),
                                             ),
+                                            const SizedBox(height: 4),
                                             Text(
                                               "JPG, PNG (Max 10MB)",
                                               style: TextStyle(
-                                                  color: Colors.grey.shade400,
+                                                  color: Colors.indigo.shade300,
                                                   fontSize: 12),
                                             ),
                                           ],
@@ -7518,8 +9297,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                 minScale: 0.1,
                                                 maxScale: 4.0,
                                                 child: Image.memory(
-                                                  base64Decode(
-                                                      base64_Slip.toString()),
+                                                  _uploadedSlipData ??
+                                                      base64Decode(base64_Slip
+                                                          .toString()),
+                                                  cacheWidth: 1080,
                                                   fit: BoxFit.cover,
                                                 ),
                                               ),
@@ -7570,18 +9351,179 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           ),
                         ),
                       ),
-                      SizedBox(height: 2),
-                      Text(
-                        widget.cuslang == 'EN'
-                            ? "Total amount to be paid: ${nFormat.format(double.parse(Form_payment1.text ?? "0"))} THB"
-                            : "รวมจำนวนเงินที่ต้องชำระ: ${nFormat.format(double.parse(Form_payment1.text ?? "0"))} บาท",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                          fontFamily: Font_.Fonts_T,
-                        ),
+                      const SizedBox(height: 8),
+                      // Payment Info Section with Expand/Collapse
+                      StatefulBuilder(
+                        builder: (context, setExpandState) {
+                          final isExpanded = _isPaymentInfoExpanded;
+                          return Column(
+                            children: [
+                              InkWell(
+                                onTap: () {
+                                  setExpandState(() {
+                                    _isPaymentInfoExpanded =
+                                        !_isPaymentInfoExpanded;
+                                  });
+                                },
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigo.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: Colors.indigo.shade200,
+                                        width: 1),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Row(children: [
+                                        const Icon(Icons.receipt_long_rounded,
+                                            color: Colors.indigo, size: 20),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          widget.cuslang == 'EN'
+                                              ? 'Payment Details'
+                                              : 'รายละเอียดการชำระ',
+                                          style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.indigo.shade700,
+                                              fontFamily: Font_.Fonts_T,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ]),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            isExpanded
+                                                ? (widget.cuslang == 'EN'
+                                                    ? 'Hide'
+                                                    : 'ย่อ')
+                                                : (widget.cuslang == 'EN'
+                                                    ? 'Show'
+                                                    : 'ดูเพิ่มเติม'),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.indigo.shade600,
+                                              fontFamily: Font_.Fonts_T,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Icon(
+                                            isExpanded
+                                                ? Icons.keyboard_arrow_up
+                                                : Icons.keyboard_arrow_down,
+                                            color: Colors.indigo.shade600,
+                                            size: 20,
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              if (isExpanded) ...[
+                                const SizedBox(height: 8),
+                                // Payment Date Row
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20, vertical: 4),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Row(children: [
+                                          Icon(Icons.event_rounded,
+                                              color: Colors.indigo.shade400,
+                                              size: 16),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              widget.cuslang == 'EN'
+                                                  ? 'Payment Received Date'
+                                                  : 'วันที่รับชำระ',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey.shade700,
+                                                  fontFamily: Font_.Fonts_T),
+                                            ),
+                                          ),
+                                        ]),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        Value_newDateD ?? '-',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.indigo.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                // Total Amount Row
+                                const SizedBox(height: 4),
+                                Container(
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.indigo.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: Colors.indigo.shade200,
+                                        width: 1),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: Row(children: [
+                                          const Icon(Icons.receipt_long_rounded,
+                                              color: Colors.indigo, size: 20),
+                                          const SizedBox(width: 8),
+                                          Flexible(
+                                            child: Text(
+                                              widget.cuslang == 'EN'
+                                                  ? 'Total Amount'
+                                                  : 'จำนวนที่ต้องชำระ',
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.indigo.shade700,
+                                                  fontFamily: Font_.Fonts_T),
+                                            ),
+                                          ),
+                                        ]),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        widget.cuslang == 'EN'
+                                            ? "${nFormat.format(double.parse(Form_payment1.text))} THB"
+                                            : "${nFormat.format(double.parse(Form_payment1.text))} บาท",
+                                        style: const TextStyle(
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.indigo,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
-                      SizedBox(height: 2),
+                      const SizedBox(height: 8),
                       // Footer Action
                       Container(
                         padding: EdgeInsets.all(16),
@@ -7603,7 +9545,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                             child: _SlideToConfirm(
                               label: widget.cuslang == 'EN'
                                   ? 'Slide to Confirm'
-                                  : 'เลื่อนเพื่อยืนยันการชำระเงิน1234',
+                                  : 'เลื่อนเพื่อยืนยันการชำระเงิน',
                               enabled: base64_Slip != null,
                               onConfirmation: () async {
                                 if (_isProcessingLink) return;
@@ -7630,7 +9572,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                               ),
                                             ),
                                             LoadingAnimationWidget.inkDrop(
-                                              color: Colors.green,
+                                              color: Colors.indigo,
                                               size: 70,
                                             ),
                                           ],
@@ -7639,40 +9581,27 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                     },
                                   );
 
-                                  // Confirm Logic
-                                  List newValuePDFimg = [];
-                                  for (int index = 0; index < 1; index++) {
-                                    if ((renTalModels.isNotEmpty) &&
-                                        (renTalModels[0].imglogo?.trim() ??
-                                                '') !=
-                                            '') {
-                                      newValuePDFimg.add(
-                                          '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo?.trim() ?? ''}');
-                                    }
-                                  }
-
-                                  // sucress(); // Removed early call
-                                  await OKuploadFile_Slip(newValuePDFimg);
-                                  await in_Trans_invoice(newValuePDFimg,
-                                      showSuccess: false);
-
+                                  // Confirm Logic: use the new direct upload flow
+                                  final success = await _confirmPaymentNewFlow(
+                                      parentContext);
                                   if (!mounted) return;
 
                                   // Close Loading Dialog
                                   Navigator.of(context).pop();
+
+                                  if (!success) {
+                                    // Close Sheet and do not continue
+                                    Navigator.pop(context);
+                                    return;
+                                  }
 
                                   // Close Sheet
                                   Navigator.pop(context);
 
                                   // Show Success Dialog
                                   sucress(onDismiss: () {
-                                    // Use a valid context for navigation
                                     Navigator.pushAndRemoveUntil(parentContext,
                                         MaterialPageRoute(builder: (context) {
-                                      // Fix potential null safety issue by falling back to empty string or handling null
-                                      // FitnessAppHomeScreen member 'custno_s' is nullable, so passing null is fine.
-                                      // But if 'Unexpected null value' occurred, maybe it was because of ! usage elsewhere or inside that widget.
-                                      // I will use ?.cid and ensure no bang operator is involved.
                                       return FitnessAppHomeScreen(
                                           custno_s: widget.teNantModel?[0].cid);
                                     }), (route) => false);
@@ -7681,9 +9610,10 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   // Close Loading Dialog
                                   Navigator.of(context).pop();
 
+                                  // ⚠️ ห้ามเรียก in_Trans_invoice!
                                   _showMyDialogPay_Error(widget.cuslang == 'EN'
-                                      ? "An error occurred. Please check the information. Please try again!"
-                                      : 'เกิดข้อผิดพลาด ตรวจสอบความถูกต้อง กรุณาลองอีกครั้ง!');
+                                      ? "An error occurred. Please start a new transaction."
+                                      : 'เกิดข้อผิดพลาด\nกรุณาเริ่มทำรายการใหม่');
                                 } finally {
                                   if (mounted) {
                                     setStateSheet(
@@ -7798,16 +9728,16 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.green.shade50,
+              color: Colors.indigo.shade50,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.green.shade200),
+              border: Border.all(color: Colors.indigo.shade200),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    Icon(Icons.check_circle, color: Colors.indigo, size: 20),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -7816,7 +9746,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           fontFamily: Font_.Fonts_T,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
-                          color: Colors.green.shade700,
+                          color: Colors.indigo.shade700,
                         ),
                       ),
                     ),
@@ -7843,7 +9773,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                           _uploadedSlipData = null;
                         });
                         // Trigger file picker
-                        final success = await _pickSlipImage();
+                        final success = await _pickSingleSlipImage();
                         if (success && _slipImageBytes != null) {
                           if (!mounted) return;
                           showDialog(
@@ -7864,7 +9794,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                       ),
                                     ),
                                     LoadingAnimationWidget.inkDrop(
-                                      color: Colors.green,
+                                      color: Colors.indigo,
                                       size: 70,
                                     ),
                                   ],
@@ -7872,17 +9802,19 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                               );
                             },
                           );
-                          final successUp =
-                              await _uploadSlipImage(amtRawSlip: amount);
+                          final successUp = await _uploadSlipImageDirect();
                           if (mounted) {
                             Navigator.of(context).pop(); // Close dialog
                             if (successUp) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('อัปโหลดสลิปสำเร็จ!'),
-                                  backgroundColor: Colors.green,
+                                  backgroundColor: Colors.indigo,
                                 ),
                               );
+                            } else {
+                              _showUploadErrorDialog(_lastUploadErrorMessage ??
+                                  'อัปโหลดสลิปไม่สำเร็จ กรุณาลองอีกครั้ง');
                             }
                           }
                         }
@@ -8012,7 +9944,7 @@ class _SlideToConfirm extends StatefulWidget {
     Key? key,
     required this.onConfirmation,
     required this.label,
-    this.color = Colors.green,
+    this.color = Colors.indigo,
     this.enabled = true,
   }) : super(key: key);
 
@@ -8023,98 +9955,132 @@ class _SlideToConfirm extends StatefulWidget {
 class __SlideToConfirmState extends State<_SlideToConfirm> {
   double _position = 0.0;
   bool _confirmed = false;
-  final double _height = 55.0;
-  final double _handleWidth = 55.0;
+  bool _isDragging = false;
+  final double _height = 56.0;
+  final double _handleWidth = 48.0;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final maxDrag = maxWidth - _handleWidth;
+        const double pad = 4.0;
+        final double maxDrag = constraints.maxWidth - _handleWidth - pad * 2;
+        final double pct = (_position / maxDrag).clamp(0.0, 1.0);
 
         return Container(
           height: _height,
-          width: maxWidth,
           decoration: BoxDecoration(
-            color: widget.enabled
-                ? widget.color.withOpacity(0.2)
-                : Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(30),
+            gradient: LinearGradient(
+              colors: widget.enabled
+                  ? [
+                      Color.lerp(Colors.indigo, Colors.indigo.shade800, pct)!,
+                      Colors.indigo.shade800,
+                    ]
+                  : [Colors.grey.shade500, Colors.grey.shade700],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(_height / 2),
+            boxShadow: [
+              BoxShadow(
+                color: (widget.enabled ? Colors.indigo : Colors.grey.shade600)
+                    .withValues(alpha: 0.35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Stack(
             children: [
               Center(
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: widget.enabled ? widget.color : Colors.grey,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: Font_.Fonts_T,
-                    fontSize: 16,
+                child: Opacity(
+                  opacity: (1.0 - pct * 2).clamp(0.0, 1.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
               ),
               if (!_confirmed)
-                Positioned(
-                  left: _position,
+                AnimatedPositioned(
+                  duration: _isDragging
+                      ? Duration.zero
+                      : const Duration(milliseconds: 300),
+                  curve: Curves.elasticOut,
+                  left: pad + _position,
+                  top: (_height - _handleWidth) / 2,
                   child: GestureDetector(
                     onHorizontalDragUpdate: (details) {
                       if (!widget.enabled) return;
                       setState(() {
-                        _position += details.delta.dx;
-                        _position = _position.clamp(0.0, maxDrag);
+                        _isDragging = true;
+                        _position =
+                            (_position + details.delta.dx).clamp(0.0, maxDrag);
                       });
                     },
-                    onHorizontalDragEnd: (details) {
+                    onHorizontalDragEnd: (_) {
                       if (!widget.enabled) return;
-                      if (_position >= maxDrag * 0.85) {
+                      if (_position >= maxDrag * 0.72) {
                         setState(() {
+                          _isDragging = false;
                           _position = maxDrag;
                           _confirmed = true;
                         });
                         widget.onConfirmation();
                       } else {
                         setState(() {
+                          _isDragging = false;
                           _position = 0.0;
                         });
                       }
                     },
                     child: Container(
-                      height: _height,
                       width: _handleWidth,
-                      decoration: BoxDecoration(
-                        color: widget.enabled ? widget.color : Colors.grey,
+                      height: _handleWidth,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 4,
-                            offset: Offset(2, 2),
-                          )
+                              color: Colors.black26,
+                              blurRadius: 6,
+                              offset: Offset(2, 2))
                         ],
                       ),
                       child: Icon(
-                        Icons.chevron_right,
-                        color: Colors.white,
-                        size: 30,
+                        Icons.arrow_forward_rounded,
+                        color: widget.enabled ? Colors.indigo : Colors.grey,
+                        size: 24,
                       ),
                     ),
                   ),
                 ),
               if (_confirmed)
                 Positioned(
-                  right: 0,
+                  right: pad,
+                  top: (_height - _handleWidth) / 2,
                   child: Container(
-                    height: _height,
-                    width: _height,
-                    decoration: BoxDecoration(
-                      color: widget.color,
+                    width: _handleWidth,
+                    height: _handleWidth,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.check, color: Colors.white),
+                    child: const Icon(Icons.check_rounded,
+                        color: Colors.indigo, size: 26),
                   ),
-                )
+                ),
             ],
           ),
         );
@@ -8174,6 +10140,63 @@ String _isolateFullWidthLineByChar(int width, img.BitmapFont font, String ch) {
 
 String _isolateDoubleLine(int width, img.BitmapFont font) =>
     _isolateFullWidthLineByChar(width, font, '=');
+
+// Top-level function for background base64 encoding (avoids UI hang on large images)
+String _base64EncodeIsolate(Uint8List bytes) {
+  return base64Encode(bytes);
+}
+
+// Top-level function for compressing image to max 300KB (runs in background isolate)
+Uint8List _compressImageIsolate(Uint8List bytes) {
+  const int maxSizeBytes = 300 * 1024; // 300 KB
+  const int maxWidth = 1200;
+
+  // If already small enough, return as-is
+  if (bytes.length <= maxSizeBytes) {
+    return bytes;
+  }
+
+  try {
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return bytes;
+
+    // Resize if too large
+    img.Image resized = decoded;
+    if (decoded.width > maxWidth) {
+      resized = img.copyResize(decoded, width: maxWidth);
+    }
+
+    // Loop to find optimal quality (start high, reduce)
+    Uint8List result = bytes;
+    for (int q = 85; q >= 40; q -= 10) {
+      result = Uint8List.fromList(img.encodeJpg(resized, quality: q));
+      if (result.length <= maxSizeBytes) {
+        return result;
+      }
+    }
+
+    // If still too large, resize to smaller width
+    if (result.length > maxSizeBytes && resized.width > 800) {
+      final smaller = img.copyResize(resized, width: 800);
+      for (int q = 80; q >= 40; q -= 10) {
+        result = Uint8List.fromList(img.encodeJpg(smaller, quality: q));
+        if (result.length <= maxSizeBytes) {
+          return result;
+        }
+      }
+    }
+
+    // Last resort: very small size
+    if (result.length > maxSizeBytes) {
+      final tiny = img.copyResize(resized, width: 600);
+      result = Uint8List.fromList(img.encodeJpg(tiny, quality: 50));
+    }
+
+    return result;
+  } catch (e) {
+    return bytes; // Return original if compression fails
+  }
+}
 
 // Background Isolate Function
 Future<Uint8List?> _processMergeImages(MergeParams params) async {
@@ -8426,7 +10449,7 @@ Future<Uint8List?> _processMergeImages(MergeParams params) async {
 
           for (int x = 0; x < moduleCount; x++) {
             for (int y = 0; y < moduleCount; y++) {
-              if (qrImage.isDark(y, x)) {
+              if (qrImage.isDark(x, y)) {
                 img.fillRect(
                   merged,
                   x1: qrX + (x * scale),
@@ -8444,7 +10467,7 @@ Future<Uint8List?> _processMergeImages(MergeParams params) async {
       }
     }
 
-    return Uint8List.fromList(img.encodeJpg(merged, quality: 50));
+    return Uint8List.fromList(img.encodeJpg(merged, quality: 35));
   } catch (e) {
     debugPrint('Error merging images in isolate: $e');
     return null;
@@ -8461,19 +10484,28 @@ Future<Uint8List> buildQrPngWithCenterLogo({
   String? activeQrExpire,
   int sizePx = 400, // Higher res for clear small text
 }) async {
-  // 1) QR matrix
-  final qrCode = qr_lib.QrCode(10, qr_lib.QrErrorCorrectLevel.M);
-  qrCode.addData(data);
-  // qrCode.make(); // ✅ สำคัญมาก
-  final qrImage = qr_lib.QrImage(qrCode);
-
-  final moduleCount = qrImage.moduleCount;
-  const int quietModule = 4;
-  final int totalModules = moduleCount + (quietModule * 2);
-
-  int scale = (sizePx / totalModules).floor();
-  if (scale < 1) scale = 1;
-  final int qrSize = totalModules * scale;
+  // 1) QR — use QrPainter (same renderer as on-screen QrImageView) → guaranteed scannable
+  final qrPainter = QrPainter(
+    data: data,
+    version: QrVersions.auto,
+    errorCorrectionLevel: qr_lib.QrErrorCorrectLevel.H,
+    gapless: true,
+    color: const Color(0xFF000000),
+    emptyColor: const Color(0xFFFFFFFF),
+  );
+  final qrImageData = await qrPainter.toImageData(
+    sizePx.toDouble(),
+    format: ui.ImageByteFormat.png,
+  );
+  if (qrImageData == null) {
+    throw Exception('Failed to render QR via QrPainter');
+  }
+  final qrPngBytes = qrImageData.buffer.asUint8List();
+  final qrImg = img.decodePng(qrPngBytes);
+  if (qrImg == null) {
+    throw Exception('Failed to decode QR PNG');
+  }
+  final int qrSize = qrImg.width;
 
   // Fonts (large/small)
   final fontTitle = img.arial14; // Big header
@@ -8533,23 +10565,8 @@ Future<Uint8List> buildQrPngWithCenterLogo({
   img.fill(qrCanvas, color: img.ColorRgba8(255, 255, 255, 255));
   final black = img.ColorRgba8(0, 0, 0, 255);
 
-  // 3) draw modules
-  for (int y = 0; y < moduleCount; y++) {
-    for (int x = 0; x < moduleCount; x++) {
-      if (qrImage.isDark(y, x)) {
-        final xPos = (quietModule + x) * scale;
-        final yPos = (quietModule + y) * scale;
-        img.fillRect(
-          qrCanvas,
-          x1: xPos,
-          y1: yPos,
-          x2: xPos + scale - 1,
-          y2: yPos + scale - 1,
-          color: black,
-        );
-      }
-    }
-  }
+  // 3) composite the pre-rendered QR (from QrPainter) onto the canvas
+  img.compositeImage(qrCanvas, qrImg, dstX: 0, dstY: 0);
 
   // Draw Footer
   if (refs.isNotEmpty) {
@@ -8654,34 +10671,7 @@ Future<Uint8List> buildQrPngWithCenterLogo({
     drawLine();
   }
 
-  // 4) center logo
-  try {
-    final bytes = await rootBundle.load(assetLogoPath);
-    final logoInput = img.decodePng(bytes.buffer.asUint8List());
-    if (logoInput != null) {
-      final int logoW = (qrSize * 0.22).round();
-      final logoResized =
-          img.copyResize(logoInput, width: logoW, height: logoW);
-
-      final int qrCenter = (qrSize / 2).round();
-      final int half = (logoW / 2).round();
-      final int bgPad = (logoW * 0.10).round();
-
-      img.fillRect(
-        qrCanvas,
-        x1: qrCenter - half - bgPad,
-        y1: qrCenter - half - bgPad,
-        x2: qrCenter + half + bgPad,
-        y2: qrCenter + half + bgPad,
-        color: img.ColorRgba8(255, 255, 255, 255),
-      );
-
-      img.compositeImage(qrCanvas, logoResized,
-          dstX: qrCenter - half, dstY: qrCenter - half);
-    }
-  } catch (e) {
-    debugPrint("Logo CPU Error: $e");
-  }
+  // 4) center logo — removed (logo blocks QR scan)
 
   // 5) Draw Footer Icon (if space permits)
   // try {

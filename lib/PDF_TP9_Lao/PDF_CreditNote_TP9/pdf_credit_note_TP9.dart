@@ -1,5 +1,6 @@
-import 'dart:convert';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -9,17 +10,10 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
+
 import '../../CRC_16_Prompay/generate_qrcode.dart';
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../Model/GetInvoice_history_Model.dart';
-import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
 
 class Pdfgen_credit_notel_TP9_Lao {
 //////////---------------------------------------------------->(ใบลดหนี้/ใบกำกับภาษี)   ใช้  //
@@ -130,7 +124,7 @@ class Pdfgen_credit_notel_TP9_Lao {
         netImage_QR.add(iconImage);
       } else {
         netImage_QR.add(await networkImage(
-            '${MyConstant().domain_chao}/files/$foder/payment/${finnancetransModels[i].img}'));
+            '${MyConstant().domain_chao_img}/files/$foder/payment/${finnancetransModels[i].img}'));
       }
     }
 
@@ -2946,23 +2940,14 @@ class Pdfgen_credit_notel_TP9_Lao {
     } else if (Preview_ser.toString() == 'File') {
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
-      // await FlutterFileDialog.saveFile(
-      //   params: SaveFileDialogParams(
-      //     data: data,
-      //     fileName: (numdoctax.toString() == '')
+      // MimeType type = MimeType.PDF;
+      // final dir = await FileSaver.instance.saveFile(
+      //     (numdoctax.toString() == '')
       //         ? 'ใบเสร็จรับเงิน-ໃບຮັບເງິນ$numinvoice'
       //         : 'ใบเสร็จรับเงิน/ใบกำกับภาษี-ໃບຮັບເງິນ/ໃບເກັບພາສີ$numdoctax',
-      //   ),
-      // );
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      final dir = await FileSaver.instance.saveFile(
-          name: (numdoctax.toString() == '')
-              ? 'ใบเสร็จรับเงิน-ໃບຮັບເງິນ$numinvoice'
-              : 'ใบเสร็จรับเงิน/ใบกำกับภาษี-ໃບຮັບເງິນ/ໃບເກັບພາສີ$numdoctax',
-          bytes: data,
-          ext: "pdf",
-          mimeType: MimeType.other);
+      //     data,
+      //     "pdf",
+      //     mimeType: type);
     } else {
       Navigator.push(
           context,

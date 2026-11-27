@@ -232,12 +232,12 @@ class _MitterScreenState extends State<MitterScreen>
         tType = d.ctype;
 
         if ((d.sdate ?? '').isNotEmpty) {
-          tStart.text = DateFormat('dd-MM-yyyy')
-              .format(DateTime.parse('${d.sdate} 00:00:00'));
+          final sd = DateTime.parse('${d.sdate} 00:00:00');
+          tStart.text = '${DateFormat('dd-MM').format(sd)}-${sd.year + 543}';
         }
         if ((d.ldate ?? '').isNotEmpty) {
-          tEnd.text = DateFormat('dd-MM-yyyy')
-              .format(DateTime.parse('${d.ldate} 00:00:00'));
+          final ld = DateTime.parse('${d.ldate} 00:00:00');
+          tEnd.text = '${DateFormat('dd-MM').format(ld)}-${ld.year + 543}';
         }
         tPeriod.text = d.period ?? '';
       }
@@ -334,7 +334,9 @@ class _MitterScreenState extends State<MitterScreen>
                         child: Text(
                           isEN ? 'Tenants' : 'ผู้เช่า',
                           style: const TextStyle(
-                              fontWeight: FontWeight.w800, fontSize: 16),
+                              fontFamily: Font_.Fonts_T,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15),
                         ),
                       ),
                       Container(
@@ -477,7 +479,7 @@ class _MitterScreenState extends State<MitterScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       LoadingAnimationWidget.inkDrop(
-                          color: Colors.green, size: 64),
+                          color: Colors.indigo, size: 64),
                       const SizedBox(height: 12),
                       Text(isEN ? 'Loading...' : 'กำลังโหลด...',
                           style: const TextStyle(color: Colors.black54)),
@@ -506,7 +508,7 @@ class _MitterScreenState extends State<MitterScreen>
     if (_rentalSettings.isNotEmpty &&
         (_rentalSettings.first.imglogo?.trim().isNotEmpty ?? false)) {
       imgs.add(
-          '${MyConstant().domain_chao}/files/${_folderDb}/logo/${_rentalSettings.first.imglogo!.trim()}');
+          '${MyConstant().domain_chao_img}/files/${_folderDb}/logo/${_rentalSettings.first.imglogo!.trim()}');
     }
 
     final sp = await SharedPreferences.getInstance();
@@ -735,7 +737,9 @@ class _Section extends StatelessWidget {
                 children: [
                   Text(title,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 16)),
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
                   const SizedBox(height: 10),
                   child,
                 ],
@@ -919,6 +923,7 @@ class _ServiceFeeList extends StatelessWidget {
                                   content: Image.network(
                                     '${MyConstant().domain_chao_img}/files/$folder/meters/${t.img}',
                                     fit: BoxFit.contain,
+                                    cacheWidth: 500,
                                     loadingBuilder:
                                         (context, child, loadingProgress) {
                                       if (loadingProgress == null) return child;

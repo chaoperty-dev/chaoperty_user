@@ -138,6 +138,10 @@ class _RepaeScreenState extends State<RepaeScreen>
         setState(() {
           isLoading = false;
         });
+        // forward animation ครั้งเดียวหลังโหลดข้อมูลเสร็จ
+        if (widget.animationController?.status == AnimationStatus.dismissed) {
+          widget.animationController?.forward();
+        }
       }
     }
   }
@@ -281,8 +285,6 @@ class _RepaeScreenState extends State<RepaeScreen>
         scrollDirection: Axis.horizontal,
         itemCount: teNantModels.length,
         itemBuilder: (context, index) {
-          // Animation logic here
-          widget.animationController?.forward();
           return _buildTenantCard(index);
         },
       ),
@@ -512,7 +514,7 @@ class _RepaeScreenState extends State<RepaeScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '${DateFormat('dd/MM/yyyy').format(DateTime.parse('${item.mdate} 00:00:00'))}',
+                      '${DateFormat('dd/MM').format(DateTime.parse('${item.mdate} 00:00:00'))}/${DateTime.parse('${item.mdate} 00:00:00').year + 543}',
                       style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
@@ -590,7 +592,7 @@ class _RepaeScreenState extends State<RepaeScreen>
         body: isLoading
             ? Center(
                 child: LoadingAnimationWidget.inkDrop(
-                    color: Colors.green, size: 50))
+                    color: Colors.indigo, size: 50))
             : CustomScrollView(
                 controller: scrollController,
                 slivers: <Widget>[

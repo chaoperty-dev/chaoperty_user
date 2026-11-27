@@ -30,28 +30,47 @@ class MyConstant {
   ///////////------------------------------------------------------------->
   ///
   String get _baseUrl {
-    final url = Uri.base.toString();
+    final uri = Uri.base;
+    final url = uri.toString();
+
+    // Web app ย้ายไป https://user.chaoperties.com/ แต่ API ยังอยู่ host เดิม
+    // ห้าม return user.chaoperties.com ที่นี่ เพราะ MyConstant().domain ถูกใช้
+    // สร้าง URL API ไม่ใช่ URL ของ Flutter web app
+    //
+    // แยก condition ให้ชัด แม้ else เดิมจะ return ค่าเดียวกันอยู่แล้ว เพื่อกัน
+    // การแก้ fallback ภายหลังแล้ว request API กลายเป็น subdomain ที่ไม่มี API
+    if (uri.host == 'user.chaoperties.com') {
+      return 'https://chaoperties.com/user/';
+    }
+
     if (url.contains('/user_test/')) {
       return 'https://chaoperties.com/user_test/';
     } else if (url.contains('/Choice/user/')) {
       return 'https://chaoperties.com/Choice/user/';
+    } else if (url.contains('/user_intents/')) {
+      return 'https://chaoperties.com/user_intents/';
     } else {
-      return 'https://chaoperties.com/user/';
+      // return 'http://192.168.1.227/';
+      return 'https://chaoperties.com/Choice/user/';
     }
   }
 
   String get domain => _baseUrl + 'chao_api_user';
-  String get domain_img => 'https://chaoperties.com/chao_api';
-  String get domain_chao => 'https://chaoperties.com/chao_api';
+  String get domain_img =>
+      'https://choice-pics.chaoperties.com/Choice/chao_api';
+  String get domain_chao => 'https://chaoperties.com/Choice/chao_api';
 
   ///////////------------------------------------------------------------->
+  ///
   ///
   // String domain = 'https://chaoperties.com/user/chao_api_user';
   // String domain_img = 'https://chaoperties.com/chao_api';
   // String domain_chao = 'https://chaoperties.com/chao_api';
-  String domain_chaoV2 = 'https://chaoperties.com/chao_api/v2/choice';
+  String domain_chaoV2 = 'https://chaoperties.com/Choice/chao_api/v2/choice';
+  String domain_chaoV3 = 'https://chaoperties.com/Choice/chao_api/v3/choice';
   String domain_choice = 'https://chaoperties.com/Choice/chao_api';
-  String domain_chao_img = 'https://chaoperties.com/chao_api';
+  String domain_chao_img =
+      'https://choice-pics.chaoperties.com/Choice/chao_api';
   // String domain_chao_test = 'https://chaoperties.com/Admin_Test/chao_api';
 
   ///////////------------------------------------------------------------->

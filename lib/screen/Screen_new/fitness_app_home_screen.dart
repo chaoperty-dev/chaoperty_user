@@ -14,6 +14,7 @@ import '../pay_bill_screen_Choice.dart';
 import '../pay_screen.dart';
 import '../personalinfo_screen.dart';
 import '../status_screen.dart';
+import '../../color.dart';
 // import 'bottom_navigation_view/bottom_bar_view.dart';
 import 'fitness_app_theme.dart';
 import 'invoice/home_Invoice_screen.dart';
@@ -31,7 +32,9 @@ import 'package:floating_bottom_navigation_bar/floating_bottom_navigation_bar.da
 class FitnessAppHomeScreen extends StatefulWidget {
   final String? pageroot;
   final String? custno_s;
-  const FitnessAppHomeScreen({super.key, this.pageroot, this.custno_s});
+  final String? initialCid;
+  const FitnessAppHomeScreen(
+      {super.key, this.pageroot, this.custno_s, this.initialCid});
 
   @override
   State<FitnessAppHomeScreen> createState() => _FitnessAppHomeScreenState();
@@ -53,7 +56,7 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
 
     if (widget.pageroot == 'INFO') {
       _currentIndex = 2;
-    } else if (widget.pageroot == 'PAY') {
+    } else if (widget.pageroot == 'PAY' || widget.pageroot == 'PAYCONTACT') {
       _currentIndex = 1;
     } else {
       _currentIndex = 0;
@@ -64,7 +67,10 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
 
     // หน้าเริ่มต้นตาม pageroot
     tabBody = switch (widget.pageroot) {
-      'PAY' => TrainingPayScreen(animationController: animationController),
+      'PAY' => TrainingPayScreen(
+          animationController: animationController,
+          initialCid: widget.initialCid,
+        ),
       'INFO' => TrainingScreen(animationController: animationController),
       'MITER' => MitterScreen(animationController: animationController),
       'PAYMENT' => ReceiptPayScreen(animationController: animationController),
@@ -90,7 +96,7 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
 
   Future<void> _loadPreference() async {
     final prefs = await SharedPreferences.getInstance();
-    final base = MyConstant().domain_chao;
+    final base = MyConstant().domain_chao_img;
     cus_photo = prefs.getString('photo');
     cus_foder = prefs.getString('foder');
     setState(() {
@@ -116,17 +122,11 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
         }),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          body: FutureBuilder<bool>(
-            future: getData(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox();
-              return Stack(
-                children: [
-                  tabBody,
-                  // bottomBar(),
-                ],
-              );
-            },
+          body: Stack(
+            children: [
+              tabBody,
+              // bottomBar(),
+            ],
           ),
           extendBody: true,
           bottomNavigationBar: bottomBar(),
@@ -135,74 +135,66 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
     );
   }
 
-  Future<bool> getData() async {
-    await Future.delayed(const Duration(milliseconds: 200));
-    return true;
-  }
-
   Widget bottomBar() {
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-        child: Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.92), // Frosted glass effect
-            border: Border(
-                top: BorderSide(
-                    color: Colors.grey.withOpacity(0.3), width: 0.5)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                offset: const Offset(0, -2),
-                blurRadius: 10.0,
-              ),
-            ],
+    // Removed BackdropFilter(ImageFilter.blur) on 2026-07-08:
+    // its web fallback forces an offscreen render of the full bottom bar
+    // on every frame, which dominates scroll FPS. The translucent color
+    // below gives a near-identical look without the blur cost.
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.95), // Opaque-ish instead of blur
+        border: Border(
+            top: BorderSide(color: Colors.grey.withOpacity(0.3), width: 0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            offset: const Offset(0, -2),
+            blurRadius: 10.0,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: EdgeInsets.only(
-                    top: 10,
-                    bottom: 10 + MediaQuery.of(context).padding.bottom),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildBottomBarItem(
-                      0,
-                      _currentIndex == 0
-                          ? 'assets/fitness_app/tab_1s.png'
-                          : 'assets/fitness_app/tab_1.png',
-                      cus_lang == 'EN' ? 'Home' : 'หน้าหลัก',
-                    ),
-                    _buildBottomBarItem(
-                      1,
-                      _currentIndex == 1
-                          ? 'assets/fitness_app/tab_2s.png'
-                          : 'assets/fitness_app/tab_2.png',
-                      cus_lang == 'EN' ? 'Payment' : 'การชำระ',
-                    ),
-                    _buildBottomBarItem(
-                      2,
-                      _currentIndex == 2
-                          ? 'assets/fitness_app/tab_1sx.png'
-                          : 'assets/fitness_app/tab_1x.png',
-                      cus_lang == 'EN' ? 'Other' : 'อื่นๆ',
-                    ),
-                    _buildBottomBarItem(
-                      3,
-                      _currentIndex == 3
-                          ? 'assets/fitness_app/tab_3s.png'
-                          : 'assets/fitness_app/tab_3.png',
-                      cus_lang == 'EN' ? 'Settings' : 'ตั้งค่า',
-                    ),
-                  ],
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: EdgeInsets.only(
+                top: 10, bottom: 10 + MediaQuery.of(context).padding.bottom),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildBottomBarItem(
+                  0,
+                  _currentIndex == 0
+                      ? 'assets/fitness_app/tab_1s.png'
+                      : 'assets/fitness_app/tab_1.png',
+                  cus_lang == 'EN' ? 'Home' : 'หน้าหลัก',
                 ),
-              ),
-            ],
+                _buildBottomBarItem(
+                  1,
+                  _currentIndex == 1
+                      ? 'assets/fitness_app/tab_2s.png'
+                      : 'assets/fitness_app/tab_2.png',
+                  cus_lang == 'EN' ? 'Payment' : 'การชำระ',
+                ),
+                _buildBottomBarItem(
+                  2,
+                  _currentIndex == 2
+                      ? 'assets/fitness_app/tab_1sx.png'
+                      : 'assets/fitness_app/tab_1x.png',
+                  cus_lang == 'EN' ? 'Other' : 'อื่นๆ',
+                ),
+                _buildBottomBarItem(
+                  3,
+                  _currentIndex == 3
+                      ? 'assets/fitness_app/tab_3s.png'
+                      : 'assets/fitness_app/tab_3.png',
+                  cus_lang == 'EN' ? 'Settings' : 'ตั้งค่า',
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -225,16 +217,16 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
           children: [
             Image.asset(
               iconPath,
-              width: 22,
-              height: 22,
+              width: 24,
+              height: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                fontFamily: FitnessAppTheme.fontName,
-                fontWeight: FontWeight.w600,
-                fontSize: 10,
+                fontFamily: Font_.Fonts_T,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
                 color: _currentIndex == index
                     ? FitnessAppTheme.nearlyDarkBlue
                     : FitnessAppTheme.grey,

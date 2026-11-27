@@ -358,7 +358,7 @@ class _PaybillMainScreenState extends State<PaybillMainScreen> {
     if (iso == null || iso.isEmpty) return '-';
     final d = DateTime.tryParse(iso);
     if (d == null) return iso;
-    return DateFormat('dd-MM-yyyy').format(d);
+    return '${DateFormat('dd-MM').format(d)}-${d.year + 543}';
   }
 
 // แท็บสีตามสถานะสัญญา (ถ้าต้องการ)
@@ -909,7 +909,7 @@ class _PaybillMainScreenState extends State<PaybillMainScreen> {
                 backgroundImage: AssetImage('assets/images/Icon-chao.png'),
               ),
             ),
-            LoadingAnimationWidget.inkDrop(color: Colors.green, size: 70),
+            LoadingAnimationWidget.inkDrop(color: Colors.indigo, size: 70),
           ],
         ),
       ),

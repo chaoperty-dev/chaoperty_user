@@ -168,6 +168,11 @@ class _StatusScreenState extends State<StatusScreen>
                       parent: widget.animationController!,
                       curve: Interval(0, 0.5, curve: Curves.fastOutSlowIn)));
               addAllListData();
+              // forward animation ครั้งเดียว ไม่ใช่ทุก itemBuilder
+              if (widget.animationController?.status ==
+                  AnimationStatus.dismissed) {
+                widget.animationController?.forward();
+              }
 
               scrollController.addListener(() {
                 if (scrollController.offset >= 24) {
@@ -202,7 +207,7 @@ class _StatusScreenState extends State<StatusScreen>
 
   Future<Null> checkPreferance() async {
     DateTime currentDate = DateTime.now();
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
 
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
 
@@ -300,7 +305,9 @@ class _StatusScreenState extends State<StatusScreen>
             bill_default = billDefaultx;
             bill_tser = billTserx;
             tem_page_ser = renTalModel.tem_page!.trim();
+
             renTalModels.add(renTalModel);
+
             if (billDefaultx == 'P') {
               bills_name_ = 'บิลธรรมดา';
             } else {
@@ -581,35 +588,11 @@ class _StatusScreenState extends State<StatusScreen>
                   double width_x = 100;
                   double height_x = 50;
 
-                  if (kIsWeb) {
-                    // เฉพาะบน Web/Desktop
-                    if (constraints.maxWidth >= 1400) {
-                      crossAxisCount = 4;
-                      aspectRatio = 3.85;
-                      padding = 2;
-                      width_x = 70;
-                      height_x = 50;
-                    } else if (constraints.maxWidth >= 1000) {
-                      crossAxisCount = 3;
-                      aspectRatio = 3.9;
-                      padding = 2;
-                      bottom_x = 20;
-                      width_x = 70;
-                      height_x = 50;
-                    } else if (constraints.maxWidth >= 800) {
-                      crossAxisCount = 2;
-                      aspectRatio = 3.0;
-                      bottom_x = 40;
-                      width_x = 80;
-                      height_x = 50;
-                    } else if (constraints.maxWidth >= 400) {
-                      crossAxisCount = 1;
-                      aspectRatio = 8.0;
-                      bottom_x = 40;
-                      width_x = 80;
-                      height_x = 50;
-                    }
-                  }
+                  crossAxisCount = 1;
+                  aspectRatio = 3.2;
+                  bottom_x = 40;
+                  width_x = 80;
+                  height_x = 50;
                   // เช็คว่าหน้าจอกว้างพอที่จะเป็น 2 คอลัมน์ไหม
                   final isWideScreen = constraints.maxWidth > 600;
 
@@ -640,7 +623,7 @@ class _StatusScreenState extends State<StatusScreen>
 
                                   red_Invoice(index).then((value) {
                                     print(
-                                        '${MyConstant().domain_chao}/files/$foder/slip/$Slip_history');
+                                        '${MyConstant().domain_chao_img}/files/$foder/slip/$Slip_history');
 
                                     showDialog(
                                       context: context,
@@ -844,8 +827,9 @@ class _StatusScreenState extends State<StatusScreen>
                                                   borderRadius:
                                                       BorderRadius.circular(8),
                                                   child: Image.network(
-                                                    '${MyConstant().domain_chao}/files/$foder/slip/$Slip_history',
+                                                    '${MyConstant().domain_chao_img}/files/$foder/slip/$Slip_history',
                                                     fit: BoxFit.fill,
+                                                    cacheWidth: 500,
                                                     errorBuilder: (context,
                                                         error, stackTrace) {
                                                       return Container(
@@ -1196,8 +1180,8 @@ class _StatusScreenState extends State<StatusScreen>
                                                               null)
                                                           ? '??'
                                                           : cus_lang == 'EN'
-                                                              ? '${DateFormat('dd-MM-yyyy').format((DateTime.parse('${limitedList_TransReBillModels_[index].dateacc} 00:00:00')))}'
-                                                              : '${DateFormat('dd-MM').format((DateTime.parse('${limitedList_TransReBillModels_[index].dateacc} 00:00:00')))}-${DateTime.parse('${limitedList_TransReBillModels_[index].dateacc} 00:00:00').year + 0}',
+                                                              ? '${DateFormat('dd-MM').format((DateTime.parse('${limitedList_TransReBillModels_[index].dateacc} 00:00:00')))}-${DateTime.parse('${limitedList_TransReBillModels_[index].dateacc} 00:00:00').year + 543}'
+                                                              : '${DateFormat('dd-MM').format((DateTime.parse('${limitedList_TransReBillModels_[index].dateacc} 00:00:00')))}-${DateTime.parse('${limitedList_TransReBillModels_[index].dateacc} 00:00:00').year + 543}',
                                                       maxLines: 1,
                                                       overflow:
                                                           TextOverflow.ellipsis,
@@ -1426,7 +1410,7 @@ class _StatusScreenState extends State<StatusScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                      color: Colors.green,
+                      color: Colors.indigo,
                       size: 70,
                     ),
                   ],
@@ -1463,7 +1447,6 @@ class _StatusScreenState extends State<StatusScreen>
             itemCount: listViews.length,
             scrollDirection: Axis.vertical,
             itemBuilder: (BuildContext context, int index) {
-              widget.animationController?.forward();
               return listViews[index];
             },
           );

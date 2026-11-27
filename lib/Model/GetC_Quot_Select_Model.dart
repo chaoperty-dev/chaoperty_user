@@ -58,6 +58,15 @@ class QuotxSelectModel {
   String? is_sun;
   String? price_type;
   String? trans_array;
+  String? totals;
+  String? charge_type;
+  // ขนาด/ค่าเช่าพื้นที่ที่ API เพิ่มเข้ามา
+  String? area;
+  String? area_rent;
+  String? area_size;
+  String? area_width;
+  String? area_length;
+  String? area_unit_th;
 
   QuotxSelectModel({
     this.ser,
@@ -118,68 +127,84 @@ class QuotxSelectModel {
     this.is_sun,
     this.price_type,
     this.trans_array,
+    this.totals,
+    this.charge_type,
+    this.area,
+    this.area_rent,
+    this.area_size,
+    this.area_width,
+    this.area_length,
+    this.area_unit_th,
   });
 
   QuotxSelectModel.fromJson(Map<String, dynamic> json) {
-    ser = json['ser'];
-    datex = json['datex'];
-    qser = json['qser'];
-    docno = json['docno'];
-    expser = json['expser'];
-    expname = json['expname'];
-    exptser = json['exptser'];
-    sunit = json['sunit'];
-    unit = json['unit'];
-    unitser = json['unitser'];
-    day = json['day'];
-    sday = json['sday'];
-    term = json['term'];
-    sdate = json['sdate'];
-    meter = json['meter'];
-    qty = json['qty'];
-    ldate = json['ldate'];
-    amt = json['amt'];
-    vtype = json['vtype'];
-    wtype = json['wtype'];
-    nvat = json['nvat'];
-    vat = json['vat'];
-    pvat = json['pvat'];
-    nwht = json['nwht'];
-    wht = json['wht'];
-    fine = json['fine'];
-    fineUnit = json['fine_unit'];
-    fineLate = json['fine_late'];
-    fineCal = json['fine_cal'];
-    finePri = json['fine_pri'];
-    st = json['st'];
-    total = json['total'];
-    dataUpdate = json['data_update'];
-    dtype = json['dtype'];
-    etype = json['etype'];
-    ele_ty = json['ele_ty'];
-    amt_ty = json['amt_ty'];
-    fine_three = json['fine_three'];
-    fine_late_three = json['fine_late_three'];
-    fine_cal_three = json['fine_cal_three'];
-    fine_max = json['fine_max'];
-    fine_max_cal = json['fine_max_cal'];
-    pay_pakan = json['pay_pakan'];
-    first_total = json['first_total'];
-    cfid = json['cfid'];
-    pdate = json['pdate'];
-    exp_array = json['exp_array'];
-    pri = json['pri'];
-    total_prev = json['total_prev'];
+    ser = json['ser']?.toString();
+    datex = json['datex']?.toString();
+    qser = json['qser']?.toString();
+    docno = json['docno']?.toString();
+    expser = json['expser']?.toString();
+    expname = json['expname']?.toString();
+    exptser = json['exptser']?.toString();
+    sunit = json['sunit']?.toString();
+    unit = json['unit']?.toString();
+    unitser = json['unitser']?.toString();
+    day = json['day']?.toString();
+    sday = json['sday']?.toString();
+    term = json['term']?.toString();
+    sdate = json['sdate']?.toString();
+    meter = json['meter']?.toString();
+    qty = json['qty']?.toString();
+    ldate = json['ldate']?.toString();
+    amt = json['amt']?.toString();
+    vtype = json['vtype']?.toString();
+    wtype = json['wtype']?.toString();
+    nvat = json['nvat']?.toString();
+    vat = json['vat']?.toString();
+    pvat = json['pvat']?.toString();
+    nwht = json['nwht']?.toString();
+    wht = json['wht']?.toString();
+    fine = json['fine']?.toString();
+    fineUnit = json['fine_unit']?.toString();
+    fineLate = json['fine_late']?.toString();
+    fineCal = json['fine_cal']?.toString();
+    finePri = json['fine_pri']?.toString();
+    st = json['st']?.toString();
+    total = json['total']?.toString();
+    dataUpdate = json['data_update']?.toString();
+    dtype = json['dtype']?.toString();
+    etype = json['etype']?.toString();
+    ele_ty = json['ele_ty']?.toString();
+    amt_ty = json['amt_ty']?.toString();
+    fine_three = json['fine_three']?.toString();
+    fine_late_three = json['fine_late_three']?.toString();
+    fine_cal_three = json['fine_cal_three']?.toString();
+    fine_max = json['fine_max']?.toString();
+    fine_max_cal = json['fine_max_cal']?.toString();
+    pay_pakan = json['pay_pakan']?.toString();
+    first_total = json['first_total']?.toString();
+    cfid = json['cfid']?.toString();
+    pdate = json['pdate']?.toString();
+    exp_array = json['exp_array']?.toString();
+    pri = json['pri']?.toString();
+    total_prev = json['total_prev']?.toString();
 
-    is_mon = json['is_mon'];
-    is_tue = json['is_tue'];
-    is_wed = json['is_wed'];
-    is_thu = json['is_thu'];
-    is_fri = json['is_fri'];
-    is_sat = json['is_sat'];
-    is_sun = json['is_sun'];
-    price_type = json['price_type'];
-    trans_array = json['trans_array'];
+    is_mon = json['is_mon']?.toString();
+    is_tue = json['is_tue']?.toString();
+    is_wed = json['is_wed']?.toString();
+    is_thu = json['is_thu']?.toString();
+    is_fri = json['is_fri']?.toString();
+    is_sat = json['is_sat']?.toString();
+    is_sun = json['is_sun']?.toString();
+    price_type = json['price_type']?.toString();
+    trans_array = json['trans_array']?.toString();
+    totals = json['totals']?.toString();
+    charge_type = json['charge_type']?.toString();
+    area = json['area']?.toString();
+    area_rent = json['area_rent']?.toString();
+    area_size = json['area_size']?.toString();
+    area_width = json['area_width']?.toString();
+    area_length = json['area_length']?.toString();
+    area_unit_th = json['area_unit_th']?.toString();
   }
 
   Map<String, dynamic> toJson() {
@@ -243,7 +268,14 @@ class QuotxSelectModel {
     data['is_sun'] = this.is_sun;
     data['price_type'] = this.price_type;
     data['trans_array'] = this.trans_array;
-
+    data['totals'] = this.totals;
+    data['charge_type'] = this.charge_type;
+    data['area'] = this.area;
+    data['area_rent'] = this.area_rent;
+    data['area_size'] = this.area_size;
+    data['area_width'] = this.area_width;
+    data['area_length'] = this.area_length;
+    data['area_unit_th'] = this.area_unit_th;
     return data;
   }
 }

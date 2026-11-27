@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../Constant/Myconstant.dart';
+import '../Constant/session_service.dart';
 import '../Model/GetRenTal_Model.dart';
 import '../Model/GetTeNant_Model.dart';
 import '../Model/GetTranBill_model.dart';
@@ -23,6 +24,7 @@ import 'editaccount_screen.dart';
 import 'home_screen.dart';
 import 'home_select_cid.dart';
 import 'loginscreen.dart';
+import 'provider/payprovider.dart';
 import 'metercheck_screen.dart';
 import 'model/Home_Model.dart';
 import 'package:http/http.dart' as http;
@@ -136,7 +138,7 @@ class _ButtonNavBarState extends State<ButtonNavBar> {
 
     // Format the date as 'YYYY-MM-DD'
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
     //  '${Uri.base.toString().substring(0, Uri.base.toString().length - 8)}/chao_api';
 
     SharedPreferences preferences = await SharedPreferences.getInstance();
@@ -1070,10 +1072,15 @@ class _ButtonNavBarState extends State<ButtonNavBar> {
                         padding: const EdgeInsets.all(8.0),
                         child: TextButton(
                           onPressed: () async {
-                            // widget.navigateToMeter(1);
-                            SharedPreferences preferences =
-                                await SharedPreferences.getInstance();
-                            await preferences.clear();
+                            // ✅ Clear ทุกอย่าง: SharedPreferences, ApiSession,
+                            //    AppMarkets, web localStorage, Provider state
+                            await SessionService.clearAll(
+                                providers: <ChangeNotifier>[
+                                  context.read<WaitPayListProvider>(),
+                                  context.read<PayFormProvider>(),
+                                  context.read<PayHisProvider>(),
+                                ]);
+                            if (!context.mounted) return;
                             MaterialPageRoute route = MaterialPageRoute(
                               builder: (context) => const LoginScreen(),
                             );

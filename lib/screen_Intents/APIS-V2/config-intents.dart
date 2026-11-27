@@ -8,20 +8,72 @@ import '../../Constant/Myconstant.dart';
 import '../../Constant/api_session.dart';
 import '../../Constant/global_http.dart';
 
+///
+/// ✅ Global gate for pay-api.chaoperties.com API calls.
+/// When `_hasIntentsAuth != true`, the API must NOT be called —
+/// otherwise the server returns 401 and the browser pops up the
+/// "Sign in" Basic Auth dialog (see screenshot).
+///
+/// Set by [MyHeadersIntents.checkauthpaymentintents].
+/// Read by [MyHeadersIntents.build] and [getCustomerToken].
+/// Exposed via [MyHeadersIntents.hasIntentsAuth] getter/setter for external use.
+///
+bool? _hasIntentsAuth;
+
 class MyHeadersIntents {
   MyHeadersIntents._(); // private constructor
 
+  /// ✅ Public getter/setter so external files (e.g. payment-intents.dart)
+  /// can read AND write the private top-level [_hasIntentsAuth] flag.
+  static bool? get hasIntentsAuth => _hasIntentsAuth;
+  static set hasIntentsAuth(bool? value) => _hasIntentsAuth = value;
+
   /// Build headers for Payment API v1
   /// Always refreshes token before making API calls
+  ///
+  static Future<bool> checkauthpaymentintents() async {
+    final prefs = await SharedPreferences.getInstance();
+    final ren = prefs.getString('renTalSer') ?? '';
+    final payEncoded64 = prefs.getString('pay_encoded64') ?? '';
+    final custno = prefs.getString('custno') ?? '';
+
+    // ✅ ห้ามยิง API ไปที่ pay-api.chaoperties.com ถ้าเงื่อนไขไม่ครบ
+    // เพราะถ้ายิงแล้ว server จะตอบ 401 → browser เด้ง popup Basic Auth
+    if (ren.toString() != '146' && ren.toString() != '148') {
+      _hasIntentsAuth = false;
+      debugPrint(
+          '🚫 checkauthpaymentintents: ren=$ren is not 146/148 → skip API');
+      return false;
+    }
+    if (payEncoded64.isEmpty || payEncoded64 == 'null' || custno.isEmpty) {
+      _hasIntentsAuth = false;
+      debugPrint(
+          '🚫 checkauthpaymentintents: missing pay_encoded64/custno → skip API');
+      return false;
+    }
+
+    // ✅ เงื่อนไขครบ ค่อยเรียก API จริง
+    final token = await _refreshCustomerToken() ?? ApiSession.bearerToken;
+    _hasIntentsAuth = token.isNotEmpty;
+    debugPrint('🔐 checkauthpaymentintents: _hasIntentsAuth=$_hasIntentsAuth');
+    return _hasIntentsAuth == true;
+  }
+
   static Future<Map<String, String>> build() async {
+    // ✅ ห้ามยิง API ถ้า _hasIntentsAuth ไม่เท่ากับ true
+    // เพื่อป้องกัน browser เด้ง popup Basic Auth (Sign in)
+    if (_hasIntentsAuth != true) {
+      debugPrint(
+          '🚫 MyHeadersIntents.build: _hasIntentsAuth != true → return empty headers');
+      return <String, String>{};
+    }
+
     final uuid = const Uuid().v4();
 
     // Always refresh token to ensure it's valid
     debugPrint('🔑 Refreshing token before API call...');
     final token = await _refreshCustomerToken() ?? ApiSession.bearerToken;
     debugPrint('🔑 MyHeadersIntents.build() - Token length: ${token.length}');
-    debugPrint(
-        '🔑 Token starts with: ${token.isNotEmpty ? token.substring(0, min(50, token.length)) : "EMPTY"}...');
 
     final headers = {
       'Accept': 'application/json',
@@ -30,7 +82,7 @@ class MyHeadersIntents {
       'Authorization': 'Bearer $token',
     };
 
-    debugPrint('📤 Headers: $headers');
+    debugPrint('📤 Headers prepared (Auth token attached)');
     return headers;
   }
 
@@ -44,12 +96,12 @@ class MyHeadersIntents {
 
       if (payEncoded64.isEmpty || custno.isEmpty || ren.isEmpty) {
         debugPrint('❌ Cannot refresh token: missing credentials');
+        _hasIntentsAuth = false;
         return null;
       }
 
-      // Convert to 16-bit format
-      int _toU16(String? v) => (int.tryParse((v ?? '0').trim()) ?? 0) + 65535;
-      final customerNo16 = _toU16(custno).toString();
+      // Keep raw custno as-is (preserve leading zeros)
+      final customerNo16 = custno.trim();
 
       final url = Uri.parse(
         '${MyconfigIntents().domainIntents}/v1/payment/customer-token',
@@ -77,9 +129,11 @@ class MyHeadersIntents {
       }
 
       debugPrint('❌ Failed to refresh token: ${response.statusCode}');
+      _hasIntentsAuth = false;
       return null;
     } catch (e) {
       debugPrint('❌ Exception refreshing token: $e');
+      _hasIntentsAuth = false;
       return null;
     }
   }
@@ -116,10 +170,12 @@ class MyHeadersIntents2 {
 //       ...Security.generateAuthHeaders(),
 //       // 'Authorization': 'Bearer $token',
 //     };
-//   }
+//  ;
 // }
 
 class MyconfigIntents {
-  var domainIntents = 'https://pay-stg-api.chaoperties.com/api';
+  var domainIntents = 'https://pay-api.chaoperties.com/api';
+
+  // 'https://pay-stg-api.chaoperties.com/api';
   // var domainIntents = 'http://192.168.1.89:3004/api';
 }

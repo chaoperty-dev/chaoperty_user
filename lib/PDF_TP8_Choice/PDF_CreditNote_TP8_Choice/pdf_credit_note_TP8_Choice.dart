@@ -1,26 +1,27 @@
 import 'dart:convert';
+import 'dart:io';
+
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
-import 'package:universal_html/html.dart';
+
 import '../../CRC_16_Prompay/generate_qrcode.dart';
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../Model/GetInvoice_history_Model.dart';
-import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+
+import 'package:http/http.dart' as http;
+import 'dart:html' as html;
 
 class Pdfgen_credit_note_TP8_Choice {
 //////////---------------------------------------------------->(ใบลดหนี้)   ใช้  //
@@ -121,7 +122,7 @@ class Pdfgen_credit_note_TP8_Choice {
     var refid = 'LLJZX20241';
 
     final imageBytes_manager = await loadAndCacheImage(
-        '${MyConstant().domain}/gen_licence_img.php?isAdd=true&ren=106&ref_id=$refid&name_id=$licence_name1&doc_id=$docid&extension=.png');
+        '${MyConstant().domain_choice}/gen_licence_img.php?isAdd=true&ren=106&ref_id=$refid&name_id=$licence_name1&doc_id=$docid&extension=.png');
     // final imageBytes_Payee = await loadAndCacheImage(
     //     '${MyConstant().domain}/gen_licence_img.php?isAdd=true&ren=50&ref_id=$refid&name_id=$licence_name2&doc_id=$docid&extension=.png');
 
@@ -148,7 +149,7 @@ class Pdfgen_credit_note_TP8_Choice {
         netImage_QR.add(iconImage);
       } else {
         netImage_QR.add(await networkImage(
-            '${MyConstant().domain_chao}/files/$foder/payment/${finnancetransModels[i].img}'));
+            '${MyConstant().domain_choice}/files/$foder/payment/${finnancetransModels[i].img}'));
       }
     }
 
@@ -3754,24 +3755,14 @@ class Pdfgen_credit_note_TP8_Choice {
     } else if (Preview_ser.toString() == 'File') {
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
-      // await FlutterFileDialog.saveFile(
-      //   params: SaveFileDialogParams(
-      //     data: data,
-      //     fileName: (numdoctax.toString() == '')
+      // MimeType type = MimeType.PDF;
+      // final dir = await FileSaver.instance.saveFile(
+      //     (numdoctax.toString() == '')
       //         ? 'ใบลดหนี้ $numinvoice'
       //         : 'ใบลดหนี้ $numdoctax',
-      //   ),
-      // );
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      MimeType type = MimeType.other;
-      final dir = await FileSaver.instance.saveFile(
-          name: (numdoctax.toString() == '')
-              ? 'ใบลดหนี้ $numinvoice'
-              : 'ใบลดหนี้ $numdoctax',
-          bytes: data,
-          ext: "pdf",
-          mimeType: type);
+      //     data,
+      //     "pdf",
+      //     mimeType: type);
     } else {
       Navigator.push(
           context,

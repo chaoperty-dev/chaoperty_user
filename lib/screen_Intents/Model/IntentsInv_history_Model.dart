@@ -44,8 +44,10 @@ class IntentsInvoiceHistoryModel {
   String? zn;
   String? zser;
   String? scname;
+  String? cname;
   String? ln;
   String? tf;
+  String? aser;
   String? ele_ty;
   String? paper;
   String? paper_run;
@@ -66,6 +68,7 @@ class IntentsInvoiceHistoryModel {
   String? vser;
   String? vtype;
   String? etype;
+  String? sname;
 
   IntentsInvoiceHistoryModel({
     this.ser,
@@ -113,8 +116,10 @@ class IntentsInvoiceHistoryModel {
     this.zn,
     this.zser,
     this.scname,
+    this.cname,
     this.ln,
     this.tf,
+    this.aser,
     this.ele_ty,
     this.paper,
     this.paper_run,
@@ -133,6 +138,7 @@ class IntentsInvoiceHistoryModel {
     this.vser,
     this.vtype,
     this.etype,
+    this.sname,
   });
 
   IntentsInvoiceHistoryModel.fromJson(Map<String, dynamic> json) {
@@ -181,8 +187,10 @@ class IntentsInvoiceHistoryModel {
     zn = json['zn'];
     zser = json['zser'];
     scname = json['scname'];
+    cname = json['cname'];
     ln = json['ln'];
     tf = json['tf'];
+    aser = json['aser'];
     ele_ty = json['ele_ty'];
     paper = json['paper'];
     paper_run = json['paper_run'];
@@ -203,6 +211,7 @@ class IntentsInvoiceHistoryModel {
     vser = json['vser'];
     vtype = json['vtype'];
     etype = json['etype'];
+    sname = json['sname'];
   }
 
   Map<String, dynamic> toJson() {
@@ -254,6 +263,7 @@ class IntentsInvoiceHistoryModel {
     data['scname'] = this.scname;
     data['ln'] = this.ln;
     data['tf'] = this.tf;
+    data['aser'] = this.aser;
     data['ele_ty'] = this.ele_ty;
     data['paper'] = this.paper;
     data['paper_run'] = this.paper_run;
@@ -274,6 +284,7 @@ class IntentsInvoiceHistoryModel {
     data['vser'] = this.vser;
     data['vtype'] = this.vtype;
     data['etype'] = this.etype;
+    data['sname'] = this.sname;
 
     return data;
   }

@@ -1,15 +1,15 @@
 import 'package:chaoperty_user/File_s.dart';
 import 'package:chaoperty_user/PDF/ThaiBaht.dart';
-import 'package:chaoperty_user/color.dart';
+import 'package:chaoperty_user/PDF/pdf_constants.dart';
 import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:intl/intl.dart';
 import 'dart:typed_data';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:image/image.dart' as img;
+import 'package:http/http.dart' as http;
 
 import 'package:flutter/material.dart'
     show BuildContext, MaterialPageRoute, Navigator;
@@ -70,7 +70,9 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
       com_ment,
       fonts_pdf,
       Preview_ser,
-      Con_remark) async {
+      Con_remark,
+      signature,
+      [String billingFormat = 'แบบเต็ม']) async {
     ////
     //// ------------>(ใบเสร็จรับเงินชั่วคราว paySrsscreen_)
     // ------------------------------------------------------->
@@ -139,13 +141,35 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
     DateTime dateTime = DateTime.parse(date_Transaction);
     int newYear = dateTime.year + 543;
 
-    final thaiDate2 = DateTime.parse(dayfinpay);
+    final _isValidFinpay = dayfinpay != null &&
+        dayfinpay.toString().isNotEmpty &&
+        dayfinpay.toString() != 'null';
+    final thaiDate2 =
+        _isValidFinpay ? DateTime.parse(dayfinpay.toString()) : null;
     final formatter2 = DateFormat('d MMMM', 'th_TH');
-    final formattedDate2 = formatter2.format(thaiDate2);
+    final formattedDate2 =
+        thaiDate2 != null ? formatter2.format(thaiDate2) : '';
 
     var nFormat = NumberFormat("#,##0.00", "en_US");
     var nFormat2 = NumberFormat("###0.00", "en_US");
     Uint8List? resizedLogo = await getResizedLogoForSize(targetPx: _logoPx);
+
+    ///---------------------> โหลด signature image
+    Uint8List? signatureBytes;
+    if (signature != null &&
+        signature.toString().isNotEmpty &&
+        signature.toString() != 'null') {
+      try {
+        final sigUrl = '${MyConstant().domain_img}/${signature}';
+        print('signature URL: $sigUrl');
+        final sigRes = await http.get(Uri.parse(sigUrl));
+        if (sigRes.statusCode == 200) {
+          signatureBytes = sigRes.bodyBytes;
+        }
+      } catch (_) {
+        signatureBytes = null;
+      }
+    }
 
     // ── buildFormat logic ───────────────────────────────────────
     PdfPageFormat buildFormat() {
@@ -313,6 +337,25 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
       (e) => e.exp_dtype.toString() != 'KD',
     );
 
+    //--------> จำนวนรายการ KD (แสดงแยกบรรทัดเสมอ)
+    final int kdCount =
+        TransReBillHistory.where((e) => e.exp_dtype.toString() == 'KD').length;
+
+    ///---------------------> จำนวน "บรรทัดที่ถูกวาดจริง" ในตาราง (Rendered row count)
+    /// ต้องนับตาม billingFormat เพราะแบบย่อมีการรวบรายการ
+    ///  - แบบเต็ม : วาดทุกรายการ 1 บรรทัด/รายการ
+    ///  - แบบย่อ  : รวมรายการที่ไม่ใช่ KD เหลือ 1 บรรทัด + KD อีกรายการละ 1 บรรทัด
+    final int rowCount = (billingFormat == 'แบบเต็ม')
+        ? TransReBillHistory.length
+        : ((hasNotKd ? 1 : 0) + kdCount);
+
+    /// จำนวนบรรทัดสูงสุดที่ใส่ได้ในครึ่งหน้า A4 (ต้นฉบับ+คู่ฉบับ อยู่หน้าเดียวกัน)
+    /// เกินกว่านี้ pw.Page จะตัดเนื้อหาทิ้งเพราะขยายหน้าไม่ได้
+    /// → ต้องสลับไปใช้ MultiPage แยกเป็นหน้าเต็มอย่างละ 1 ชุดแทน
+    const int kMaxRowsHalfPage = 4;
+
+    final bool isCompactLayout = rowCount <= kMaxRowsHalfPage;
+
     final totalqty = "1";
 
     final totalpri = TransReBillHistory.fold<double>(0, (sum, e) {
@@ -347,13 +390,19 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
     });
 
     // หาวันที่จาก KR ก่อน ถ้าไม่มีค่อยหาจาก exp_dtype != 'KD'
-    final targetRecord = TransReBillHistory.firstWhere(
-      (e) => e.exp_dtype.toString() == 'KR' && e.date != null,
-      orElse: () => TransReBillHistory.firstWhere(
-        (e) => e.exp_dtype.toString() != 'KD' && e.date != null,
-        orElse: () => TransReBillHistory.first, // ถ้าไม่เจอเลย
-      ),
-    );
+    // กัน list ว่าง: .first บน list ว่างจะ throw "Bad state: No element"
+    // -> เช็ค isNotEmpty ก่อน ถ้าไม่มีเลยคืน null ให้ totallist ขึ้น '-'
+    final kr = TransReBillHistory.where(
+        (e) => e.exp_dtype.toString() == 'KR' && e.date != null);
+    final notKd = TransReBillHistory.where(
+        (e) => e.exp_dtype.toString() != 'KD' && e.date != null);
+    final targetRecord = kr.isNotEmpty
+        ? kr.first
+        : notKd.isNotEmpty
+            ? notKd.first
+            : (TransReBillHistory.isNotEmpty
+                ? TransReBillHistory.first // ถ้าไม่เจอเลย
+                : null);
 
     final totallist = (targetRecord != null && targetRecord.duedate != null)
         ? '${DateFormat('MMM', 'th').format(DateTime.parse(targetRecord.duedate!))} ${DateTime.parse(targetRecord.duedate!).year + 543}'
@@ -553,7 +602,7 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
         pw.Row(
           children: [
             pw.Container(
-              width: 200,
+              width: 400,
               child: pw.Column(
                 mainAxisAlignment: pw.MainAxisAlignment.start,
                 mainAxisSize: pw.MainAxisSize.min,
@@ -615,7 +664,7 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
                   ),
                   pw.Text(
                     'ที่อยู่ : $bill_addr',
-                    maxLines: 1,
+                    maxLines: 2,
                     textAlign: pw.TextAlign.left,
                     style: pw.TextStyle(
                       fontSize: font_Size,
@@ -692,7 +741,7 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
                         ? 'ที่อยู่ : -'
                         : 'ที่อยู่ : $addr',
                     textAlign: pw.TextAlign.justify,
-                    maxLines: 1,
+                    maxLines: 2,
                     style: pw.TextStyle(
                       fontSize: font_Size,
                       font: ttf,
@@ -855,7 +904,7 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
                             dayfinpay.toString() == 'null' ||
                             dayfinpay == null)
                         ? 'วันที่ชำระ : -'
-                        : 'วันที่ชำระ : $formattedDate2 ${DateTime.parse('${dayfinpay}').year + 543}',
+                        : 'วันที่ชำระ : $formattedDate2 ${thaiDate2!.year + 543}',
                     // (dayfinpay.toString() == '' ||
                     //         dayfinpay.toString() == 'null' ||
                     //         dayfinpay == null)
@@ -959,20 +1008,86 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
       );
     }
 
-    pw.Widget _signCol(String title) {
+    // ความสูงแถว "ลงชื่อ" ของทั้ง 2 คอลัมน์ (มีลายเซ็น = สูงเท่ารูป)
+    final double _signRowH =
+        (signatureBytes != null && signatureBytes.isNotEmpty)
+            ? 20
+            : font_Size * 1.6;
+
+    pw.Widget _signCol1(String title) {
       return pw.Expanded(
         child: pw.Column(
           mainAxisAlignment: pw.MainAxisAlignment.start,
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
-            pw.Text(
-                'ลงชื่อ..................................................................($title)',
-                style: pw.TextStyle(
-                    font: ttf, fontSize: font_Size, color: PdfColors.grey800)),
+            // สูงเท่าแถวลายเซ็นของ _signCol2 -> บรรทัดทั้ง 2 ฝั่งตรงกัน
+            pw.Container(
+              height: _signRowH,
+              alignment: pw.Alignment.bottomCenter,
+              child: pw.Text(
+                  'ลงชื่อ..................................................................($title)',
+                  style: pw.TextStyle(
+                      font: ttf,
+                      fontSize: font_Size,
+                      color: PdfColors.grey800)),
+            ),
             pw.Text(
                 '(........................................................)',
                 style: pw.TextStyle(
                     font: ttf, fontSize: font_Size, color: PdfColors.grey800)),
+            pw.Text(
+                'วันที่/Date........................................................',
+                style: pw.TextStyle(
+                    font: ttf, fontSize: font_Size, color: PdfColors.grey800)),
+          ],
+        ),
+      );
+    }
+
+    pw.Widget _signCol2(String title) {
+      final signStyle = pw.TextStyle(
+          font: ttf, fontSize: font_Size, color: PdfColors.grey800);
+      final hasSign = signatureBytes != null && signatureBytes.isNotEmpty;
+      return pw.Expanded(
+        child: pw.Column(
+          mainAxisAlignment: pw.MainAxisAlignment.start,
+          crossAxisAlignment: pw.CrossAxisAlignment.center,
+          children: [
+            // แถวเดียว: ลงชื่อ ....[ลายเซ็นทับเส้นจุด].... (ผู้รับเงิน)
+            // เส้นจุดแสดงเสมอ -> ความยาวเท่าฝั่งผู้จัดการทั้งมี/ไม่มีลายเซ็น
+            pw.Container(
+              height: _signRowH,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.center,
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('ลงชื่อ', style: signStyle),
+                  pw.Stack(
+                    alignment: pw.Alignment.bottomCenter,
+                    children: [
+                      pw.Text(
+                          '..................................................................',
+                          style: signStyle),
+                      if (hasSign)
+                        pw.Padding(
+                          // ยกรูปขึ้นนิดให้ลายเซ็นวางบนเส้นจุด
+                          padding: pw.EdgeInsets.only(bottom: font_Size * 0.3),
+                          child: pw.Image(
+                            pw.MemoryImage(signatureBytes),
+                            width: 80,
+                            height: _signRowH,
+                            fit: pw.BoxFit.contain,
+                          ),
+                        ),
+                    ],
+                  ),
+                  pw.Text('($title)', style: signStyle),
+                ],
+              ),
+            ),
+            pw.Text(
+                '(........................................................)',
+                style: signStyle),
             pw.Text(
                 'วันที่/Date........................................................',
                 style: pw.TextStyle(
@@ -1011,8 +1126,8 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
           pw.Row(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              _signCol('ผู้จัดการ'),
-              _signCol('ผู้รับเงิน'),
+              _signCol1('ผู้จัดการ'),
+              _signCol2('ผู้รับเงิน'),
             ],
           ),
         ],
@@ -1045,56 +1160,97 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
                 }).toList(),
               ),
             ),
-            if (hasNotKd)
-              pw.Row(
-                children: [
-                  _cell('1',
-                      w: isPos ? 18.0 : 30.0, align: pw.Alignment.center),
-                  _cell('ค่าเช่า ประจําเดือน $totallist', flex: 6),
-                  if (!isPos) ...[
-                    _cell(_fmt(totalPvat),
-                        flex: 2, align: pw.Alignment.centerRight),
-                    _cell(_fmt(totalVat),
-                        flex: 1, align: pw.Alignment.centerRight),
-                    _cell(_fmt(totalWht),
-                        flex: 1, align: pw.Alignment.centerRight),
-                  ],
-                  _cell(_fmt(totalsum),
-                      flex: 2, align: pw.Alignment.centerRight),
-                ],
+            // ─── แบบเต็ม: แสดงทุกรายการทีละบรรทัด ───────────────────
+            if (billingFormat == 'แบบเต็ม')
+              pw.Column(
+                children: TransReBillHistory.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final expText = (item.unitser.toString() == '6')
+                      ? '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.duedate!))} ${DateTime.parse('${item.duedate}').year + 543} [ หน่วยที่ใช้ไป ${item.ovalue}-${item.nvalue} ]'
+                      : '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.duedate!))} ${DateTime.parse('${item.duedate}').year + 543}';
+                  return pw.Row(
+                    children: [
+                      _cell('${index + 1}',
+                          w: isPos ? 18.0 : 30.0,
+                          align: pw.Alignment.center,
+                          borderBottom: false),
+                      _cell(expText, flex: 6, borderBottom: false),
+                      if (!isPos) ...[
+                        _cell(_fmt(item.pvat),
+                            flex: 2,
+                            align: pw.Alignment.centerRight,
+                            borderBottom: false),
+                        _cell(_fmt(item.vat),
+                            flex: 1,
+                            align: pw.Alignment.centerRight,
+                            borderBottom: false),
+                        _cell(_fmt(item.wht),
+                            flex: 1,
+                            align: pw.Alignment.centerRight,
+                            borderBottom: false),
+                      ],
+                      _cell(_fmt(item.total),
+                          flex: 2,
+                          align: pw.Alignment.centerRight,
+                          borderBottom: false),
+                    ],
+                  );
+                }).toList(),
               ),
-            pw.Column(
-              children: TransReBillHistory.where(
-                      (e) => e.exp_dtype.toString() == 'KD')
-                  .toList()
-                  .asMap()
-                  .entries
-                  .map((entry) {
-                final index = entry.key;
-                final item = entry.value;
-                final rowIdx = hasNotKd ? index + 2 : index + 1;
-                final _expText = (item.unitser.toString() == '6')
-                    ? '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.date!))} ${DateTime.parse('${item.date}').year + 543} [ หน่วยที่ใช้ไป ${item.ovalue}-${item.nvalue} ]'
-                    : '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.date!))} ${DateTime.parse('${item.date}').year + 543}';
-                return pw.Row(
+            // ─── แบบย่อ: รวม non-KD เป็น 1 บรรทัด + แสดง KD แยก ──────
+            if (billingFormat != 'แบบเต็ม') ...[
+              if (hasNotKd)
+                pw.Row(
                   children: [
-                    _cell('$rowIdx',
+                    _cell('1',
                         w: isPos ? 18.0 : 30.0, align: pw.Alignment.center),
-                    _cell(_expText, flex: 6),
+                    _cell('ค่าเช่า ประจําเดือน $totallist', flex: 6),
                     if (!isPos) ...[
-                      _cell(_fmt(item.pvat),
+                      _cell(_fmt(totalPvat),
                           flex: 2, align: pw.Alignment.centerRight),
-                      _cell(_fmt(item.vat),
+                      _cell(_fmt(totalVat),
                           flex: 1, align: pw.Alignment.centerRight),
-                      _cell(_fmt(item.wht),
+                      _cell(_fmt(totalWht),
                           flex: 1, align: pw.Alignment.centerRight),
                     ],
-                    _cell(_fmt(item.total),
+                    _cell(_fmt(totalsum),
                         flex: 2, align: pw.Alignment.centerRight),
                   ],
-                );
-              }).toList(),
-            ),
+                ),
+              pw.Column(
+                children: TransReBillHistory.where(
+                        (e) => e.exp_dtype.toString() == 'KD')
+                    .toList()
+                    .asMap()
+                    .entries
+                    .map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  final rowIdx = hasNotKd ? index + 2 : index + 1;
+                  final expText = (item.unitser.toString() == '6')
+                      ? '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.duedate!))} ${DateTime.parse('${item.duedate}').year + 543} [ หน่วยที่ใช้ไป ${item.ovalue}-${item.nvalue} ]'
+                      : '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.date!))} ${DateTime.parse('${item.date}').year + 543}';
+                  return pw.Row(
+                    children: [
+                      _cell('$rowIdx',
+                          w: isPos ? 18.0 : 30.0, align: pw.Alignment.center),
+                      _cell(expText, flex: 6),
+                      if (!isPos) ...[
+                        _cell(_fmt(item.pvat),
+                            flex: 2, align: pw.Alignment.centerRight),
+                        _cell(_fmt(item.vat),
+                            flex: 1, align: pw.Alignment.centerRight),
+                        _cell(_fmt(item.wht),
+                            flex: 1, align: pw.Alignment.centerRight),
+                      ],
+                      _cell(_fmt(item.total),
+                          flex: 2, align: pw.Alignment.centerRight),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ],
             pw.Container(
               decoration: const pw.BoxDecoration(
                 border: pw.Border(
@@ -1158,41 +1314,49 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
     }
 
     // ── Document Generation ──────────────────────────────────────────
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: buildFormat(),
-        build: (context) {
-          if (isPos) return [Body_data(1)];
-
-          if (pageMode == 'a3' || pageMode == 'a4' || pageMode == 'a5') {
-            return [
-              pw.Container(
-                  height: (buildFormat().height - 50) / 2, child: Body_data(1)),
-              pw.Divider(
-                  color: PdfColors.grey400, borderStyle: pw.BorderStyle.dashed),
-              pw.Container(
-                  height: (buildFormat().height - 50) / 2, child: Body_data(2)),
-            ];
-          } else {
-            return [Body_data(1)];
-          }
-        },
-        footer: (context) {
-          if (isPos) return pw.SizedBox.shrink();
-          return pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Text('พิมพ์เมื่อ : $date ($pageMode)',
-                  style:
-                      pw.TextStyle(fontSize: 7.0, font: ttf, color: Colors_pd)),
-              pw.Text('หน้าที่ ${context.pageNumber} / ${context.pagesCount}',
-                  style:
-                      pw.TextStyle(fontSize: 7.0, font: ttf, color: Colors_pd)),
-            ],
-          );
-        },
-      ),
-    );
+    if (isPos) {
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: buildFormat(),
+          build: (context) => [Body_data(1)],
+          footer: (context) {
+            return pw.SizedBox.shrink();
+          },
+        ),
+      );
+    } else if (isCompactLayout) {
+      // รายการน้อย → ต้นฉบับ(บน) + คู่ฉบับ(ล่าง) อยู่ในหน้าเดียว
+      // Expanded แบ่งครึ่งจากพื้นที่ใช้งานจริง จึงไม่เกิดหน้าเปล่าท้ายเอกสาร
+      pdf.addPage(
+        pw.Page(
+          pageFormat: buildFormat(),
+          build: (context) {
+            return pw.Column(
+              children: [
+                pw.Expanded(child: Body_data(1)),
+                pw.SizedBox(height: 4),
+                pw.Divider(
+                    color: PdfColors.grey400,
+                    borderStyle: pw.BorderStyle.dashed),
+                pw.SizedBox(height: 4),
+                pw.Expanded(child: Body_data(2)),
+              ],
+            );
+          },
+        ),
+      );
+    } else {
+      // รายการเยอะ → แยกต้นฉบับ/คู่ฉบับ เป็นหน้าเต็มคนละชุด
+      // ใช้ MultiPage เพื่อให้ขยายหน้าต่อเองได้ ไม่ตัดรายการทิ้งแบบ pw.Page
+      for (final serpang in [1, 2]) {
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: buildFormat(),
+            build: (context) => [Body_data(serpang)],
+          ),
+        );
+      }
+    }
 
     ///-------------------------------------------------->
     // final List<int> bytes = await pdf.save();
@@ -1212,16 +1376,6 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
       // Upload the file
       await uploadFile(data, name_1);
     } else if (Preview_ser.toString() == 'File') {
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      await FlutterFileDialog.saveFile(
-        params: SaveFileDialogParams(
-          data: data,
-          fileName: (numdoctax.toString() == '')
-              ? 'ใบเสร็จรับเงิน $numinvoice'
-              : 'ใบเสร็จรับเงิน/ใบกำกับภาษี $numdoctax',
-        ),
-      );
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
       // MimeType type = MimeType.PDF;

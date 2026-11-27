@@ -1,23 +1,16 @@
-import 'package:auto_size_text/auto_size_text.dart';
+import 'dart:html';
 
-import 'package:flutter/cupertino.dart';
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+// import 'package:htmltopdfwidgets/htmltopdfwidgets.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'dart:math' as math;
-import 'package:intl/intl.dart';
-import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
-import '../../CRC_16_Prompay/generate_qrcode.dart';
-
-import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
-import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Bills_INV.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../Model/GetInvoice_history_Model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
 
 class Pdfgen_Reduce_debt_TP3 {
   static void exportPDF_Reduce_debt_TP3(

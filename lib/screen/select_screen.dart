@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:auto_size_text/auto_size_text.dart';
-import 'package:ficonsax/ficonsax.dart';
+// import 'package:ficonsax/ficonsax.dart';  // ถอด 2026-09-19: เปลี่ยนเป็น Icons.info_outline แล้ว
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/src/widgets/framework.dart';
@@ -180,7 +180,7 @@ class _SelectScreenState extends State<SelectScreen> {
             bill_tser = bill_tserx;
             imgl = renTalModel.imglogo;
             imglogo_ =
-                'https://chaoperties.com/chao_api/files/$foder/logo/${renTalModel.imglogo!.trim()}';
+                'https://pics.chaoperties.com/chao_api/files/$foder/logo/${renTalModel.imglogo!.trim()}';
             renTalModels.add(renTalModel);
             if (bill_defaultx == 'P') {
               bills_name_ = 'บิลธรรมดา';
@@ -456,8 +456,11 @@ class _SelectScreenState extends State<SelectScreen> {
         foregroundColor: Colors.black54,
         backgroundColor: Colors.black54,
         child: const Icon(
-          IconsaxBold.information,
-          // Icons.support_agent,
+          // เปลี่ยนจาก IconsaxBold.information (2026-09-19) เพื่อถอด ficonsax
+          // ออก — package นั้น bundle ฟอนต์ 3 ตัว (Bold/Outline/Bulk) ~676K
+          // ทั้งที่ใช้ icon เดียว 2 จุด; MaterialIcons bundle อยู่แล้ว
+          Icons.info_outline,
+          // Icons.support_agent,   // ของเดิมก่อนเปลี่ยนเป็น Iconsax
           color: Colors.white,
         ),
       ),

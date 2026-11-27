@@ -104,7 +104,7 @@ class ManPay_ReceiptMarket_PDF {
           pos = finnancetransModel.pos.toString();
           pay_ptset = finnancetransModel.ptser.toString();
           url = (finnancetransModel.ptser.toString() != '7')
-              ? '${MyConstant().domain}/files/$foder/slip/${finnancetransModel.slip}'
+              ? '${MyConstant().domain_chao_img}/files/$foder/slip/${finnancetransModel.slip}'
               : finnancetransModel.slip.toString();
           bno1 = finnancetransModel.bno.toString();
           bank1 = finnancetransModel.bank.toString();

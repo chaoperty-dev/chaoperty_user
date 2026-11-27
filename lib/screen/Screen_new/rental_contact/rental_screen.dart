@@ -16,6 +16,7 @@ import '../../../Model/GetTeNant_rental_Model.dart';
 import '../../../PDF/PDF_Agreement/pdf_RentalInforma.dart';
 
 import '../../../main.dart';
+import '../../../color.dart';
 import '../../model/electricity_history_model.dart';
 import '../fitness_app_home_screen.dart';
 import '../fitness_app_theme.dart';
@@ -265,12 +266,12 @@ class _RentalScreenState extends State<RentalScreen>
         tType = d.ctype;
 
         if ((d.sdate ?? '').isNotEmpty) {
-          tStart.text = DateFormat('dd-MM-yyyy')
-              .format(DateTime.parse('${d.sdate} 00:00:00'));
+          final sd = DateTime.parse('${d.sdate} 00:00:00');
+          tStart.text = '${DateFormat('dd-MM').format(sd)}-${sd.year + 543}';
         }
         if ((d.ldate ?? '').isNotEmpty) {
-          tEnd.text = DateFormat('dd-MM-yyyy')
-              .format(DateTime.parse('${d.ldate} 00:00:00'));
+          final ld = DateTime.parse('${d.ldate} 00:00:00');
+          tEnd.text = '${DateFormat('dd-MM').format(ld)}-${ld.year + 543}';
         }
         tPeriod.text = d.period ?? '';
       }
@@ -627,7 +628,7 @@ class _RentalScreenState extends State<RentalScreen>
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       LoadingAnimationWidget.inkDrop(
-                          color: Colors.green, size: 64),
+                          color: Colors.indigo, size: 64),
                       const SizedBox(height: 12),
                       Text(isEN ? 'Loading...' : 'กำลังโหลด...',
                           style: const TextStyle(color: Colors.black54)),
@@ -656,7 +657,7 @@ class _RentalScreenState extends State<RentalScreen>
     if (_rentalSettings.isNotEmpty &&
         (_rentalSettings.first.imglogo?.trim().isNotEmpty ?? false)) {
       imgs.add(
-          '${MyConstant().domain_chao}/files/${_folderDb}/logo/${_rentalSettings.first.imglogo!.trim()}');
+          '${MyConstant().domain_chao_img}/files/${_folderDb}/logo/${_rentalSettings.first.imglogo!.trim()}');
     }
 
     final sp = await SharedPreferences.getInstance();
@@ -876,7 +877,9 @@ class _Section extends StatelessWidget {
             children: [
               Text(title,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 16)),
+                      fontFamily: Font_.Fonts_T,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15)),
               const SizedBox(height: 10),
               child,
             ],

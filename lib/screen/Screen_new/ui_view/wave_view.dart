@@ -1,7 +1,4 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
-import 'package:vector_math/vector_math.dart' as vector;
 
 import '../fitness_app_theme.dart';
 
@@ -35,34 +32,11 @@ class _WaveViewState extends State<WaveView> with TickerProviderStateMixin {
           animationController?.forward();
         }
       });
-    waveAnimationController!.addListener(() {
-      animList1.clear();
-      for (int i = -2 - bottleOffset1.dx.toInt(); i <= 60 + 2; i++) {
-        animList1.add(
-          new Offset(
-            i.toDouble() + bottleOffset1.dx.toInt(),
-            math.sin((waveAnimationController!.value * 360 - i) %
-                        360 *
-                        vector.degrees2Radians) *
-                    4 +
-                (((100 - widget.percentageValue) * 160 / 100)),
-          ),
-        );
-      }
-      animList2.clear();
-      for (int i = -2 - bottleOffset2.dx.toInt(); i <= 60 + 2; i++) {
-        animList2.add(
-          new Offset(
-            i.toDouble() + bottleOffset2.dx.toInt(),
-            math.sin((waveAnimationController!.value * 360 - i) %
-                        360 *
-                        vector.degrees2Radians) *
-                    4 +
-                (((100 - widget.percentageValue) * 160 / 100)),
-          ),
-        );
-      }
-    });
+    // 2026-07-08: removed the addListener block that recomputed
+    // animList1/animList2 (~128 sin() calls) every frame and rebuilt
+    // the entire subtree. The wave math now runs only inside
+    // WaveClipper.getClip when shouldReclip fires (animation value
+    // changes), which Flutter skips when the value is unchanged.
     waveAnimationController?.repeat();
     animationController?.forward();
     super.initState();

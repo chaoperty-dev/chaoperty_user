@@ -10,6 +10,7 @@ import 'package:path/path.dart' as path;
 import '../../Responsive/responsive.dart';
 import '../../color.dart';
 import 'WatermarkPainter.dart';
+import 'web_download_helper.dart';
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:html' if (dart.library.io) 'package:chaoperty_user/fake_html.dart'
     as html;
@@ -54,11 +55,19 @@ class _PreviewPdfgen_BillsState extends State<PreviewPdfgen_Bills> {
     _loadPermission();
   }
 
+  @override
+  void reassemble() {
+    super.reassemble();
+    // hot reload: initState ไม่ rerun -> ต้องเช็คสิทธิ์ใหม่ทุกครั้งที่ hot reload
+    _loadPermission();
+  }
+
   Future<void> _loadPermission() async {
     final prefs = await SharedPreferences.getInstance();
+    final rentalId = prefs.getString('renTalSer')?.trim();
     final allowed = prefs.getBool('allowedBill');
     setState(() {
-      _allowed = (allowed == null) ? true : allowed;
+      _allowed = rentalId == '106' ? false : ((allowed == null) ? true : allowed);
     });
   }
 
@@ -125,15 +134,7 @@ class _PreviewPdfgen_BillsState extends State<PreviewPdfgen_Bills> {
   Future<void> _downloadPdf() async => _withBusy(() async {
         if (!await _checkAllowed()) return;
         final bytes = await _pdfBytes();
-        final blob = html.Blob([bytes], 'application/pdf');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final a = html.AnchorElement(href: url)
-          ..download = _pdfName()
-          ..style.display = 'none';
-        html.document.body?.append(a);
-        a.click();
-        a.remove();
-        html.Url.revokeObjectUrl(url);
+        WebDownloadHelper.downloadOrOpen(bytes, 'application/pdf', _pdfName());
       });
 
   Future<void> downloadPdfPageAsPng({int page = 1, double dpi = 144}) async =>
@@ -146,15 +147,10 @@ class _PreviewPdfgen_BillsState extends State<PreviewPdfgen_Bills> {
           i++;
           if (i != page) continue;
           final png = await pageRaster.toPng();
-          final blob = html.Blob([png], 'image/png');
-          final url = html.Url.createObjectUrlFromBlob(blob);
-          final a = html.AnchorElement(href: url)
-            ..download = '${_pdfName().replaceAll(".pdf", "_p$page.png")}'
-            ..style.display = 'none';
-          html.document.body?.append(a);
-          a.click();
-          a.remove();
-          html.Url.revokeObjectUrl(url);
+          WebDownloadHelper.downloadOrOpen(
+              Uint8List.fromList(png),
+              'image/png',
+              _pdfName().replaceAll(".pdf", "_p$page.png"));
           break;
         }
       });
@@ -168,15 +164,10 @@ class _PreviewPdfgen_BillsState extends State<PreviewPdfgen_Bills> {
         await for (final pageRaster in stream) {
           index++;
           final png = await pageRaster.toPng();
-          final blob = html.Blob([png], 'image/png');
-          final url = html.Url.createObjectUrlFromBlob(blob);
-          final a = html.AnchorElement(href: url)
-            ..download = '${_pdfName().replaceAll(".pdf", "_p$index.png")}'
-            ..style.display = 'none';
-          html.document.body?.append(a);
-          a.click();
-          a.remove();
-          html.Url.revokeObjectUrl(url);
+          WebDownloadHelper.downloadOrOpen(
+              Uint8List.fromList(png),
+              'image/png',
+              _pdfName().replaceAll(".pdf", "_p$index.png"));
           await Future.delayed(const Duration(milliseconds: 30));
         }
       });

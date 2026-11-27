@@ -21,6 +21,24 @@ class WaitPayListProvider with ChangeNotifier {
   bool ischecked = false, dps_check = false;
   String market_name = "";
   int selected = 0;
+
+  /// รีเซ็ต state ทั้งหมด (เรียกตอน logout เพื่อล้างข้อมูล user เก่า)
+  void reset() {
+    ListItem = <WaitHome>[];
+    ListDF = <dynamic>[];
+    date_pre = <dynamic>[];
+    date_pre_single = <DateTime>[];
+    stt = null;
+    endd = null;
+    amount = 0;
+    count = 0;
+    ischecked = false;
+    dps_check = false;
+    market_name = "";
+    selected = 0;
+    notifyListeners();
+  }
+
   //ดึงข้อมูล
   List<WaitHome> getTransaction() {
     return ListItem;

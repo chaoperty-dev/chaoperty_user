@@ -146,23 +146,23 @@ class _PaybillMainScreenChoiceState extends State<PaybillMainScreenChoice> {
       return;
     }
 
-    String url = '${MyConstant().domain_chaoV2}/check_genqr_new.php';
+    String url = '${MyConstant().domain_chaoV3}/check_genqr_new.php';
     // 'http://192.168.1.227/test_chao/chao_api/v2/check_genqr_new.php';
     // print('API URL >>>> $url');
 
     try {
-      final response = await http.post(
-        Uri.parse(url),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: jsonEncode({
-          "isAdd": true,
-          "ren": ren,
-          "invoice": formattedDocnos,
-          "custno": custno,
-        }),
-      );
+      final response = await http.post(Uri.parse(url), headers: {
+        "Content-Type": "application/json",
+      }, body:
+              // jsonEncode(
+              {
+        "isAdd": true,
+        "ren": ren,
+        "invoice": formattedDocnos,
+        "custno": custno,
+      }
+          // ),
+          );
 
       print("=== Response Status Code: ${response.statusCode} ===");
       // print("=== Response Body: ${response.body} ===");
@@ -396,7 +396,7 @@ class _PaybillMainScreenChoiceState extends State<PaybillMainScreenChoice> {
                         ),
                       ),
                       LoadingAnimationWidget.inkDrop(
-                        color: Colors.green,
+                        color: Colors.indigo,
                         size: 70,
                       ),
                     ],
@@ -868,7 +868,7 @@ class _PaybillMainScreenChoiceState extends State<PaybillMainScreenChoice> {
                                                                   child:
                                                                       Padding(
                                                                     padding: const EdgeInsets
-                                                                            .only(
+                                                                        .only(
                                                                         top: 20,
                                                                         left:
                                                                             16,
@@ -1002,7 +1002,7 @@ class _PaybillMainScreenChoiceState extends State<PaybillMainScreenChoice> {
                                                                                     ? widget.cuslang == 'EN'
                                                                                         ? 'Overdue.'
                                                                                         : 'เกินกำหนดชำระ'
-                                                                                    : DateFormat('dd-MM-yyyy').format(nowDateOnly);
+                                                                                    : '${DateFormat('dd-MM').format(nowDateOnly)}-${nowDateOnly.year + 543}';
                                                                               }
 
 // เหลือเวลากี่วัน ชม. นาที
@@ -1041,7 +1041,8 @@ class _PaybillMainScreenChoiceState extends State<PaybillMainScreenChoice> {
                                                                         flex: 2,
                                                                         child:
                                                                             Padding(
-                                                                          padding: const EdgeInsets.fromLTRB(
+                                                                          padding: const EdgeInsets
+                                                                              .fromLTRB(
                                                                               0,
                                                                               0,
                                                                               4,

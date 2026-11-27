@@ -1,7 +1,7 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:chaoperty_user/File_s.dart';
 import 'package:chaoperty_user/PDF/ThaiBaht.dart';
-import 'package:chaoperty_user/color.dart';
+import 'package:chaoperty_user/PDF/pdf_constants.dart';
 import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
@@ -113,13 +113,13 @@ class Pdfgen_BillingNoteInvlice_TP7_nim {
     if (img1 == null || img1.toString().isEmpty) {
       netImage_QR.add(
         await networkImage(
-          '${MyConstant().domain}/Awaitdownload/imagenot.png',
+          '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png',
         ),
       );
     } else {
       netImage_QR.add(
         await networkImage(
-          '${MyConstant().domain}/files/$foder/payment/$img1',
+          '${MyConstant().domain_chao_img}/files/$foder/payment/$img1',
         ),
       );
     }

@@ -74,14 +74,6 @@ class _AreaListViewState extends State<AreaListView>
       pageRoot: 'REPAE',
       tooltip: 'แจ้งซ่อม',
     ),
-    AreaItem(
-      imagePath: 'assets/fitness_app/Smarthome.png',
-      titleTh: 'สมาร์ทโฮม',
-      titleEn: 'Smart Home',
-      pageRoot: 'SMART_HOME',
-      tooltip: 'สมาร์ทโฮม',
-      comingSoon: true,
-    ),
   ];
 
   @override
@@ -298,9 +290,9 @@ class _AreaCardState extends State<AreaCard> {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontFamily: FitnessAppTheme.fontName,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
                           height: 1.25,
                           color: FitnessAppTheme.nearlyDarkBlue,
                         ),

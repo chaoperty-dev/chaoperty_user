@@ -70,6 +70,11 @@ class _TrainingScreenState extends State<TrainingScreen>
                       parent: widget.animationController!,
                       curve: Interval(0, 0.5, curve: Curves.fastOutSlowIn)));
               addAllListData();
+              // forward animation ครั้งเดียว ไม่ใช่ทุก itemBuilder
+              if (widget.animationController?.status ==
+                  AnimationStatus.dismissed) {
+                widget.animationController?.forward();
+              }
 
               scrollController.addListener(() {
                 if (!mounted) return;
@@ -103,7 +108,7 @@ class _TrainingScreenState extends State<TrainingScreen>
 
   Future<Null> checkPreferance() async {
     DateTime currentDate = DateTime.now();
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
 
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
 
@@ -341,7 +346,7 @@ class _TrainingScreenState extends State<TrainingScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                      color: Colors.green,
+                      color: Colors.indigo,
                       size: 70,
                     ),
                   ],
@@ -378,7 +383,6 @@ class _TrainingScreenState extends State<TrainingScreen>
             itemCount: listViews.length,
             scrollDirection: Axis.vertical,
             itemBuilder: (BuildContext context, int index) {
-              widget.animationController?.forward();
               return listViews[index];
             },
           );

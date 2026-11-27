@@ -1,3 +1,9 @@
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/PDF/pdf_constants.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -6,15 +12,13 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+import 'package:http/http.dart' as http;
+
 import '../../CRC_16_Prompay/generate_qrcode.dart';
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
+import '../../Man_PDF/Man_Pay_Receipt_PDF.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
 import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
 
 class Pdfgen_his_statusbill_TP7 {
 //////////---------------------------------------------------->(ใบเสร็จรับเงิน/ใบกำกับภาษี)   ใช้  //
@@ -65,10 +69,18 @@ class Pdfgen_his_statusbill_TP7 {
       com_ment,
       fonts_pdf,
       Preview_ser,
-      Con_remark) async {
+      Con_remark,
+      signature,
+      fullname,
+      billingFormat) async {
     ////
     //// ------------>(ใบเสร็จรับเงินชั่วคราว paySrsscreen_)
-    ///////
+    // ------------------------------------------------------->
+    // แสดง Dialog เลือกขนาดกระดาษก่อน Export
+    final String? _selectedMode =
+        await ManPay_Receipt_PDF.showPageFormatDialog(context as BuildContext);
+    if (_selectedMode == null) return; // ผู้ใช้กด Cancel → หยุดทันที
+    // ------------------------------------------------------->
     final pdf = pw.Document();
     final font = await rootBundle.load("${fonts_pdf}");
     var Colors_pd = PdfColors.black;
@@ -76,8 +88,36 @@ class Pdfgen_his_statusbill_TP7 {
 
     int pageCount = 1; // Initialize the page count
     final ttf = pw.Font.ttf(font);
+    // ─────────────────────────────────────────────────────
+    // โหมดกระดาษจาก Dialog
+    // 'pos80' | 'pos58' | 'a3' | 'a4' | 'a5'
+    final String pageMode = _selectedMode;
+    final bool isPos = pageMode == 'pos80' || pageMode == 'pos58';
 
-    double font_Size = 10.0;
+    // ── Responsive layout variables ─────────────────────
+    // font_Size  : ขนาดตัวอักษรหลัก
+    // logoSize   : ขนาด logo สี่เหลี่ยม
+    // infoGapMm  : ช่องว่างระหว่าง logo กับ info text
+    // ────────────────────────────────────────────────────
+    final double font_Size = () {
+      switch (pageMode) {
+        case 'pos58':
+          return 5.5;
+        case 'pos80':
+          return 7.5;
+        case 'a3':
+          return 11.0;
+        case 'a5':
+          return 7.0;
+        case 'a4':
+        default:
+          return 10.0; // A4 — ค่าเดิม ไม่เปลี่ยน
+      }
+    }();
+
+    final double logoSize = isPos ? 32.0 : 60.0;
+    final double infoGapMm = isPos ? 1.5 : 6.0;
+
     //////--------------------------------------------->
     DateTime date = DateTime.now();
     // var formatter = new DateFormat.MMMMd('th_TH');
@@ -99,10 +139,26 @@ class Pdfgen_his_statusbill_TP7 {
         (await rootBundle.load('images/LOGO.png')).buffer.asUint8List();
     List netImage = [];
     List netImage_QR = [];
-    Uint8List? resizedLogo = await getResizedLogo();
+    //////--------------------------------------------->
+    // targetPx ปรับตามขนาดหน้า: A3 ใหญ่สุด → px สูง → คมชัด
+    // PNG (lossless) ไม่เบลอเหมือน JPEG
+    final int _logoPx = () {
+      switch (_selectedMode) {
+        case 'a3':
+          return 300;
+        case 'pos58':
+          return 96;
+        case 'pos80':
+          return 120;
+        case 'a5':
+          return 150;
+        case 'a4':
+        default:
+          return 180;
+      }
+    }();
+    Uint8List? resizedLogo = await getResizedLogoForSize(targetPx: _logoPx);
 
-    ///
-    ///
 ////////////////------------------------------->
     double Total_CASH = double.parse(
       '${finnancetransModels.where((model) => model.ptser == '1' && model.dtype == 'KP').fold<double>(
@@ -126,7 +182,7 @@ class Pdfgen_his_statusbill_TP7 {
         netImage_QR.add(iconImage);
       } else {
         netImage_QR.add(await networkImage(
-            '${MyConstant().domain_chao}/files/$foder/payment/${finnancetransModels[i].img}'));
+            '${MyConstant().domain_chao_img}/files/$foder/payment/${finnancetransModels[i].img}'));
       }
     }
 //////////---------------------------->
@@ -168,10 +224,10 @@ class Pdfgen_his_statusbill_TP7 {
     /// ///---------------------> Table header columns (หัวคอลัมน์ของตาราง)
     final headerColumns = [
       {
-        'label': 'ลำดับ(#)',
+        'label': 'ลำดับ (No.)',
         'flex': 0,
         'align': pw.Alignment.center,
-        'width': 30.0
+        'width': 35.0
       },
       // {
       //   'label': 'กำหนดชำระ(Description)',
@@ -211,28 +267,34 @@ class Pdfgen_his_statusbill_TP7 {
       });
     }
 
+    const PdfColor PDF_Border_Color = PDFConstants.borderColor;
 ///////------------------------------->
+    // ฟังก์ชันปัดเศษทศนิยม 2 ตำแหน่ง
+    double roundMoney(double value) {
+      return (value * 100).round() / 100;
+    }
 
-    final totalAmt = getTotalByField(
-        _TransReBillHistoryModels, (e) => e.amt.toString() ?? '0');
-    final totalPvat = getTotalByField(
-        _TransReBillHistoryModels, (e) => e.pvat.toString() ?? '0');
-    final totalVat = getTotalByField(
-        _TransReBillHistoryModels, (e) => e.vat.toString() ?? '0');
-    final totalWht = getTotalByField(
-        _TransReBillHistoryModels, (e) => e.wht.toString() ?? '0');
-    final totalLine = getTotalByField(
-        _TransReBillHistoryModels, (e) => e.total.toString() ?? '0');
-
-    final totalDis = double.tryParse(sum_disamt.toString() ?? '0.00') ?? 0.00;
-    final totalFee = double.tryParse(sum_fee.toString() ?? '0.00') ?? 0.00;
-    final totalMatjum =
-        double.tryParse(dis_sum_Matjum.toString() ?? '0.00') ?? 0.00;
+    final totalAmt = roundMoney(getTotalByField(
+        _TransReBillHistoryModels, (e) => e.amt.toString() ?? '0'));
+    final totalPvat = roundMoney(getTotalByField(
+        _TransReBillHistoryModels, (e) => e.pvat.toString() ?? '0'));
+    final totalVat = roundMoney(getTotalByField(
+        _TransReBillHistoryModels, (e) => e.vat.toString() ?? '0'));
+    final totalWht = roundMoney(getTotalByField(
+        _TransReBillHistoryModels, (e) => e.wht.toString() ?? '0'));
+    final totalLine = roundMoney(getTotalByField(
+        _TransReBillHistoryModels, (e) => e.total.toString() ?? '0'));
+    final totalDis =
+        roundMoney(double.tryParse(sum_disamt.toString() ?? '0.00') ?? 0.00);
+    final totalFee =
+        roundMoney(double.tryParse(sum_fee.toString() ?? '0.00') ?? 0.00);
+    final totalMatjum = roundMoney(
+        double.tryParse(dis_sum_Matjum.toString() ?? '0.00') ?? 0.00);
     final totalPakan =
-        double.tryParse(dis_sum_Pakan.toString() ?? '0.00') ?? 0.00;
+        roundMoney(double.tryParse(dis_sum_Pakan.toString() ?? '0.00') ?? 0.00);
 
-    final totalBill =
-        ((totalLine + totalFee) - totalDis) - (totalMatjum + totalPakan);
+    final totalBill = roundMoney((totalLine + totalFee) - totalDis) -
+        (totalMatjum + totalPakan);
 
     ///////------------------------------->
 
@@ -242,10 +304,116 @@ class Pdfgen_his_statusbill_TP7 {
       return nFormat.format(value);
     }
 
+    ///---------------------> โหลด signature image
+    print('billingFormat: $billingFormat');
+    Uint8List? signatureBytes;
+    if (billingFormat == 'มี') {
+      if (signature != null &&
+          signature.toString().isNotEmpty &&
+          signature.toString() != 'null') {
+        try {
+          final sigUrl = '${MyConstant().domain_chao}/${signature}';
+          print('signature URL: $sigUrl');
+          final sigRes = await http.get(Uri.parse(sigUrl));
+          if (sigRes.statusCode == 200) {
+            signatureBytes = sigRes.bodyBytes;
+          }
+        } catch (_) {
+          signatureBytes = null;
+        }
+      }
+    }
+
     bool isPositive(String? value) {
       return (double.tryParse(value ?? '0.00') ?? 0.00) > 0;
     }
 
+    // ── คำนวณความสูงกระดาษ POS จากเนื้อหาจริง ──────────────────
+    //  เพิ่ม safety buffer 40% เพื่อป้องกัน text wrap / image
+    //  ทำให้เนื้อหาอยู่หน้าเดียว ไม่แตกหน้า 2
+    final int _itemCount = _TransReBillHistoryModels.length;
+    final double _rowH = font_Size * 5.5; // ต่อแถว (รวม wrap)
+    final double _posH = isPos
+        ? ((logoSize // header logo
+                    +
+                    90 // header info + doc title
+                    +
+                    15 // divider
+                    +
+                    100 // customer info block
+                    +
+                    28 // table header
+                    +
+                    (_itemCount * _rowH) // table rows (generous)
+                    +
+                    200 // summary / totals section
+                    +
+                    180 // footer (หมายเหตุ + ลงชื่อ)
+                    +
+                    60 // padding รวม
+                ) *
+                1.4 // safety buffer +40%
+            )
+            .clamp(500, 4500) // ต่ำสุด 500pt, สูงสุด 4500pt
+        : 5000.0; // non-POS ไม่ใช้ค่านี้
+    // ────────────────────────────────────────────────────────────
+
+    PdfPageFormat buildFormat() {
+      // margin ซ้าย/ขวา/บน/ล่าง (หน่วย pt — 1 pt = 1/72 inch)
+      const double mLeft = 10;
+      const double mRight = 10;
+      const double mTop = 12;
+      const double mBottom = 12;
+
+      switch (pageMode) {
+        // ---- POS (กระดาษม้วน) — ความสูงคำนวณจากเนื้อหาจริง ----
+        case 'pos80':
+          return PdfPageFormat(80.0 * PdfPageFormat.mm, _posH).copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+        case 'pos58':
+          return PdfPageFormat(58.0 * PdfPageFormat.mm, _posH).copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+
+        // ---- A3 (297 × 420 mm) ----
+        case 'a3':
+          return PdfPageFormat.a3.copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+
+        // ---- A5 (148 × 210 mm) ----
+        case 'a5':
+          return PdfPageFormat(14.8 * PdfPageFormat.cm, 21.0 * PdfPageFormat.cm)
+              .copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+
+        // ---- A4 (210 × 297 mm) — default ----
+        case 'a4':
+        default:
+          return PdfPageFormat.a4.copyWith(
+            marginLeft: mLeft,
+            marginRight: mRight,
+            marginTop: mTop,
+            marginBottom: mBottom,
+          );
+      }
+    }
+
+    ///////------------------------------->
     pw.Widget buildCell({
       required String text,
       int flex = 1,
@@ -259,8 +427,8 @@ class Pdfgen_his_statusbill_TP7 {
           // decoration: const pw.BoxDecoration(
           //   color: PdfColors.white,
           //   border: pw.Border(
-          //     left: pw.BorderSide(color: PdfColors.grey600),
-          //     right: pw.BorderSide(color: PdfColors.grey600),
+          //     left: pw.BorderSide(color: PDF_Border_Color),
+          //     right: pw.BorderSide(color: PDF_Border_Color),
           //   ),
           // ),
           padding: pw.EdgeInsets.all(padding),
@@ -273,7 +441,7 @@ class Pdfgen_his_statusbill_TP7 {
               style: pw.TextStyle(
                 fontSize: font_Size,
                 font: ttf,
-                color: PdfColors.grey800,
+                color: PDF_Border_Color,
               ),
             ),
           ),
@@ -493,7 +661,18 @@ class Pdfgen_his_statusbill_TP7 {
                   //   ),
                   // ),
                   pw.Text(
-                    'ลูกค้า(Customer) : ${(sname.toString() == '' || sname == null || sname.toString() == 'null') ? '-' : sname} (${(cname.toString() == '' || cname == null || cname.toString() == 'null') ? '-' : cname})',
+                    (cname != null &&
+                            cname.toString().trim().isNotEmpty &&
+                            cname.toString() != 'null' &&
+                            cname.toString() != '-')
+                        ? 'ลูกค้า(Customer) : $cname'
+                        : (sname != null &&
+                                sname.toString().trim().isNotEmpty &&
+                                sname.toString() != 'null' &&
+                                sname.toString() != '-')
+                            ? 'ลูกค้า(Customer) : $sname'
+                            : 'ลูกค้า(Customer) : -',
+                    // 'ลูกค้า(Customer) : ${(sname.toString() == '' || sname == null || sname.toString() == 'null') ? '-' : sname} (${(cname.toString() == '' || cname == null || cname.toString() == 'null') ? '-' : cname})',
                     // (sname.toString() == null ||
                     //         sname.toString() == '' ||
                     //         sname.toString() == 'null')
@@ -766,7 +945,7 @@ class Pdfgen_his_statusbill_TP7 {
                     style: pw.TextStyle(
                         font: ttf,
                         fontSize: font_Size,
-                        color: PdfColors.grey800),
+                        color: PDF_Border_Color),
                   ),
                 ),
                 pw.Padding(
@@ -796,7 +975,7 @@ class Pdfgen_his_statusbill_TP7 {
                     style: pw.TextStyle(
                         font: ttf,
                         fontSize: font_Size,
-                        color: PdfColors.grey800),
+                        color: PDF_Border_Color),
                   ),
                 ),
                 pw.Padding(
@@ -814,7 +993,7 @@ class Pdfgen_his_statusbill_TP7 {
                     style: pw.TextStyle(
                         font: ttf,
                         fontSize: font_Size,
-                        color: PdfColors.grey800),
+                        color: PDF_Border_Color),
                   ),
                 ),
                 pw.Padding(
@@ -840,7 +1019,7 @@ class Pdfgen_his_statusbill_TP7 {
           // decoration: new pw.BoxDecoration(
           //     border: pw.Border(
           //         bottom: pw.BorderSide(
-          //             color: PdfColors.grey600,
+          //             color: PDF_Border_Color,
           //             width: 2.0,
           //             style: pw.BorderStyle.none))),
           child: pw.Column(
@@ -860,7 +1039,7 @@ class Pdfgen_his_statusbill_TP7 {
                           // fontWeight: pw.FontWeight.bold,
                           font: ttf,
                           fontSize: font_Size,
-                          color: PdfColors.grey800),
+                          color: PDF_Border_Color),
                     ),
                   ),
                   pw.Expanded(
@@ -869,35 +1048,55 @@ class Pdfgen_his_statusbill_TP7 {
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       crossAxisAlignment: pw.CrossAxisAlignment.center,
                       children: [
-                        pw.Text(
-                          'ลงชื่อ..................................................................(ผู้จัดการ)',
-                          textAlign: pw.TextAlign.left,
-                          maxLines: 1,
-                          style: pw.TextStyle(
-                              // fontWeight: pw.FontWeight.bold,
-                              font: ttf,
-                              fontSize: font_Size,
-                              color: PdfColors.grey800),
+                        pw.Container(
+                          height: 35,
+                          child: pw.Stack(
+                            children: [
+                              pw.Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: pw.Text(
+                                  'ลงชื่อ........................................................(ผู้รับบริการ)',
+                                  textAlign: pw.TextAlign.center,
+                                  style: pw.TextStyle(
+                                    fontSize: font_Size,
+                                    font: ttf,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: Colors_pd,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        pw.Text(
-                          '(........................................................)',
-                          textAlign: pw.TextAlign.left,
-                          maxLines: 1,
-                          style: pw.TextStyle(
-                              // fontWeight: pw.FontWeight.bold,
-                              font: ttf,
-                              fontSize: font_Size,
-                              color: PdfColors.grey800),
+                        pw.Stack(
+                          children: [
+                            pw.Text(
+                              '(......................................................)',
+                              textAlign: pw.TextAlign.center,
+                              style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                fontWeight: pw.FontWeight.bold,
+                                color: Colors_pd,
+                              ),
+                            ),
+                          ],
                         ),
-                        pw.Text(
-                          'วันที่/Date........................................................',
-                          textAlign: pw.TextAlign.left,
-                          maxLines: 1,
-                          style: pw.TextStyle(
-                              // fontWeight: pw.FontWeight.bold,
-                              font: ttf,
-                              fontSize: font_Size,
-                              color: PdfColors.grey800),
+                        pw.Stack(
+                          children: [
+                            pw.Text(
+                              'วันที่/Date...............................................',
+                              textAlign: pw.TextAlign.center,
+                              style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                fontWeight: pw.FontWeight.bold,
+                                color: Colors_pd,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -908,35 +1107,105 @@ class Pdfgen_his_statusbill_TP7 {
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       crossAxisAlignment: pw.CrossAxisAlignment.center,
                       children: [
-                        pw.Text(
-                          'ลงชื่อ..................................................................(ผู้รับเงิน)',
-                          textAlign: pw.TextAlign.left,
-                          maxLines: 1,
-                          style: pw.TextStyle(
-                              // fontWeight: pw.FontWeight.bold,
-                              font: ttf,
-                              fontSize: font_Size,
-                              color: PdfColors.grey800),
+                        pw.Container(
+                          height: 35,
+                          child: pw.Stack(
+                            children: [
+                              pw.Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: pw.Text(
+                                  'ลงชื่อ........................................................(ผู้วางบิล)',
+                                  textAlign: pw.TextAlign.center,
+                                  style: pw.TextStyle(
+                                    fontSize: font_Size,
+                                    font: ttf,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: Colors_pd,
+                                  ),
+                                ),
+                              ),
+                              if (signatureBytes != null &&
+                                  signatureBytes.isNotEmpty)
+                                pw.Positioned(
+                                  bottom: 4,
+                                  left: 0,
+                                  right: 14,
+                                  child: pw.Center(
+                                    child: pw.Image(
+                                      pw.MemoryImage(signatureBytes),
+                                      width: 100,
+                                      height: 40,
+                                      fit: pw.BoxFit.contain,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                        pw.Text(
-                          '(........................................................)',
-                          textAlign: pw.TextAlign.left,
-                          maxLines: 1,
-                          style: pw.TextStyle(
-                              // fontWeight: pw.FontWeight.bold,
-                              font: ttf,
-                              fontSize: font_Size,
-                              color: PdfColors.grey800),
+                        pw.Stack(
+                          children: [
+                            pw.Text(
+                              '(......................................................)',
+                              textAlign: pw.TextAlign.center,
+                              style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                fontWeight: pw.FontWeight.bold,
+                                color: Colors_pd,
+                              ),
+                            ),
+                            if (fullname != null && signatureBytes != null)
+                              pw.Positioned(
+                                left: 0,
+                                right: 0,
+                                top: -4,
+                                bottom: 10,
+                                child: pw.Text(
+                                  fullname,
+                                  textAlign: pw.TextAlign.center,
+                                  style: pw.TextStyle(
+                                    fontSize: font_Size + 2,
+                                    font: ttf,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: Colors_pd,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                        pw.Text(
-                          'วันที่/Date........................................................',
-                          textAlign: pw.TextAlign.left,
-                          maxLines: 1,
-                          style: pw.TextStyle(
-                              // fontWeight: pw.FontWeight.bold,
-                              font: ttf,
-                              fontSize: font_Size,
-                              color: PdfColors.grey800),
+                        pw.Stack(
+                          children: [
+                            pw.Text(
+                              'วันที่/Date...............................................',
+                              textAlign: pw.TextAlign.center,
+                              style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                fontWeight: pw.FontWeight.bold,
+                                color: Colors_pd,
+                              ),
+                            ),
+                            if (date_Transaction != null &&
+                                signatureBytes != null)
+                              pw.Positioned(
+                                left: 15,
+                                right: 0,
+                                top: -4,
+                                bottom: 10,
+                                child: pw.Text(
+                                  '${DateFormat('dd/MM').format(DateTime.parse(date_Transaction!))}/${DateTime.parse('$date_Transaction').year + 543}',
+                                  textAlign: pw.TextAlign.center,
+                                  style: pw.TextStyle(
+                                    fontSize: font_Size + 2,
+                                    font: ttf,
+                                    fontWeight: pw.FontWeight.bold,
+                                    color: Colors_pd,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ],
                     ),
@@ -965,7 +1234,7 @@ class Pdfgen_his_statusbill_TP7 {
                 //           style: pw.TextStyle(
                 //               font: ttf,
                 //               fontSize: font_Size,
-                //               color: PdfColors.grey800),
+                //               color: PDF_Border_Color),
                 //         ),
                 //       ),
                 //     ],
@@ -994,7 +1263,7 @@ class Pdfgen_his_statusbill_TP7 {
                 //           style: pw.TextStyle(
                 //               font: ttf,
                 //               fontSize: font_Size,
-                //               color: PdfColors.grey800),
+                //               color: PDF_Border_Color),
                 //         ),
                 //       ),
                 //     ],
@@ -1020,7 +1289,7 @@ class Pdfgen_his_statusbill_TP7 {
                 //               style: pw.TextStyle(
                 //                   font: ttf,
                 //                   fontSize: font_Size,
-                //                   color: PdfColors.grey800),
+                //                   color: PDF_Border_Color),
                 //             ),
                 //           ),
                 //         ],
@@ -1052,7 +1321,7 @@ class Pdfgen_his_statusbill_TP7 {
               //                     style: pw.TextStyle(
               //                         font: ttf,
               //                         fontSize: font_Size,
-              //                         color: PdfColors.grey800),
+              //                         color: PDF_Border_Color),
               //                   ),
               //                 ),
               //               ]),
@@ -1101,7 +1370,7 @@ class Pdfgen_his_statusbill_TP7 {
               //                         style: pw.TextStyle(
               //                             font: ttf,
               //                             fontSize: font_Size,
-              //                             color: PdfColors.grey800),
+              //                             color: PDF_Border_Color),
               //                       ),
               //                     ),
               //                   ]),
@@ -1143,8 +1412,8 @@ class Pdfgen_his_statusbill_TP7 {
     //                 decoration: const pw.BoxDecoration(
     //                   // color: PdfColors.green100,
     //                   border: pw.Border(
-    //                     top: pw.BorderSide(color: PdfColors.grey800),
-    //                     bottom: pw.BorderSide(color: PdfColors.grey800),
+    //                     top: pw.BorderSide(color: PDF_Border_Color),
+    //                     bottom: pw.BorderSide(color: PDF_Border_Color),
     //                   ),
     //                 ),
     //                 // padding: const pw.EdgeInsets.all(1.0),
@@ -1155,9 +1424,9 @@ class Pdfgen_his_statusbill_TP7 {
     //                       decoration: const pw.BoxDecoration(
     //                         // color: PdfColors.green100,
     //                         border: pw.Border(
-    //                             // left: pw.BorderSide(color: PdfColors.grey800),
-    //                             // top: pw.BorderSide(color: PdfColors.grey800),
-    //                             // bottom: pw.BorderSide(color: PdfColors.grey800),
+    //                             // left: pw.BorderSide(color: PDF_Border_Color),
+    //                             // top: pw.BorderSide(color: PDF_Border_Color),
+    //                             // bottom: pw.BorderSide(color: PDF_Border_Color),
     //                             ),
     //                       ),
     //                       // height: 25,
@@ -1178,9 +1447,9 @@ class Pdfgen_his_statusbill_TP7 {
     //                     //     decoration: const pw.BoxDecoration(
     //                     //       // color: PdfColors.green100,
     //                     //       border: pw.Border(
-    //                     //           // left: pw.BorderSide(color: PdfColors.grey800),
-    //                     //           // top: pw.BorderSide(color: PdfColors.grey800),
-    //                     //           // bottom: pw.BorderSide(color: PdfColors.grey800),
+    //                     //           // left: pw.BorderSide(color: PDF_Border_Color),
+    //                     //           // top: pw.BorderSide(color: PDF_Border_Color),
+    //                     //           // bottom: pw.BorderSide(color: PDF_Border_Color),
     //                     //           ),
     //                     //     ),
     //                     //     // height: 25,
@@ -1202,9 +1471,9 @@ class Pdfgen_his_statusbill_TP7 {
     //                         decoration: const pw.BoxDecoration(
     //                           // color: PdfColors.green100,
     //                           border: pw.Border(
-    //                               // left: pw.BorderSide(color: PdfColors.grey800),
-    //                               // top: pw.BorderSide(color: PdfColors.grey800),
-    //                               // bottom: pw.BorderSide(color: PdfColors.grey800),
+    //                               // left: pw.BorderSide(color: PDF_Border_Color),
+    //                               // top: pw.BorderSide(color: PDF_Border_Color),
+    //                               // bottom: pw.BorderSide(color: PDF_Border_Color),
     //                               ),
     //                         ),
     //                         // height: 25,
@@ -1226,9 +1495,9 @@ class Pdfgen_his_statusbill_TP7 {
     //                         decoration: const pw.BoxDecoration(
     //                           // color: PdfColors.green100,
     //                           border: pw.Border(
-    //                               // left: pw.BorderSide(color: PdfColors.grey800),
-    //                               // top: pw.BorderSide(color: PdfColors.grey800),
-    //                               // bottom: pw.BorderSide(color: PdfColors.grey800),
+    //                               // left: pw.BorderSide(color: PDF_Border_Color),
+    //                               // top: pw.BorderSide(color: PDF_Border_Color),
+    //                               // bottom: pw.BorderSide(color: PDF_Border_Color),
     //                               ),
     //                         ),
     //                         // height: 25,
@@ -1250,9 +1519,9 @@ class Pdfgen_his_statusbill_TP7 {
     //                         decoration: const pw.BoxDecoration(
     //                           // color: PdfColors.green100,
     //                           border: pw.Border(
-    //                               // left: pw.BorderSide(color: PdfColors.grey800),
-    //                               // top: pw.BorderSide(color: PdfColors.grey800),
-    //                               // bottom: pw.BorderSide(color: PdfColors.grey800),
+    //                               // left: pw.BorderSide(color: PDF_Border_Color),
+    //                               // top: pw.BorderSide(color: PDF_Border_Color),
+    //                               // bottom: pw.BorderSide(color: PDF_Border_Color),
     //                               ),
     //                         ),
     //                         // height: 25,
@@ -1274,9 +1543,9 @@ class Pdfgen_his_statusbill_TP7 {
     //                         decoration: const pw.BoxDecoration(
     //                           // color: PdfColors.green100,
     //                           border: pw.Border(
-    //                               // left: pw.BorderSide(color: PdfColors.grey800),
-    //                               // top: pw.BorderSide(color: PdfColors.grey800),
-    //                               // bottom: pw.BorderSide(color: PdfColors.grey800),
+    //                               // left: pw.BorderSide(color: PDF_Border_Color),
+    //                               // top: pw.BorderSide(color: PDF_Border_Color),
+    //                               // bottom: pw.BorderSide(color: PDF_Border_Color),
     //                               ),
     //                         ),
     //                         // height: 25,
@@ -1298,9 +1567,9 @@ class Pdfgen_his_statusbill_TP7 {
     //                         decoration: const pw.BoxDecoration(
     //                           // color: PdfColors.green100,
     //                           border: pw.Border(
-    //                               // left: pw.BorderSide(color: PdfColors.grey800),
-    //                               // top: pw.BorderSide(color: PdfColors.grey800),
-    //                               // bottom: pw.BorderSide(color: PdfColors.grey800),
+    //                               // left: pw.BorderSide(color: PDF_Border_Color),
+    //                               // top: pw.BorderSide(color: PDF_Border_Color),
+    //                               // bottom: pw.BorderSide(color: PDF_Border_Color),
     //                               ),
     //                         ),
     //                         // height: 25,
@@ -1322,9 +1591,9 @@ class Pdfgen_his_statusbill_TP7 {
     //                         decoration: const pw.BoxDecoration(
     //                           // color: PdfColors.green100,
     //                           border: pw.Border(
-    //                               // left: pw.BorderSide(color: PdfColors.grey800),
-    //                               // top: pw.BorderSide(color: PdfColors.grey800),
-    //                               // bottom: pw.BorderSide(color: PdfColors.grey800),
+    //                               // left: pw.BorderSide(color: PDF_Border_Color),
+    //                               // top: pw.BorderSide(color: PDF_Border_Color),
+    //                               // bottom: pw.BorderSide(color: PDF_Border_Color),
     //                               ),
     //                         ),
     //                         // height: 25,
@@ -1358,8 +1627,8 @@ class Pdfgen_his_statusbill_TP7 {
                       decoration: const pw.BoxDecoration(
                         // color: PdfColors.green100,
                         border: pw.Border(
-                          top: pw.BorderSide(color: PdfColors.grey800),
-                          bottom: pw.BorderSide(color: PdfColors.grey800),
+                          top: pw.BorderSide(color: PDF_Border_Color),
+                          bottom: pw.BorderSide(color: PDF_Border_Color),
                         ),
                       ),
                       child: pw.Row(
@@ -1374,8 +1643,8 @@ class Pdfgen_his_statusbill_TP7 {
                             //   border: pw.Border(
                             //     left: (label == 'ยอดสุทธิ')
                             //         ? pw.BorderSide.none
-                            //         : const pw.BorderSide(color: PdfColors.grey600),
-                            //     right: const pw.BorderSide(color: PdfColors.grey600),
+                            //         : const pw.BorderSide(color: PDF_Border_Color),
+                            //     right: const pw.BorderSide(color: PDF_Border_Color),
                             //   ),
                             // ),
                             // height: 20,
@@ -1404,7 +1673,7 @@ class Pdfgen_his_statusbill_TP7 {
                               height: 20,
                               // decoration: const pw.BoxDecoration(
                               //   border: pw.Border(
-                              //     left: pw.BorderSide(color: PdfColors.grey600),
+                              //     left: pw.BorderSide(color: PDF_Border_Color),
                               //   ),
                               // ),
                               padding: const pw.EdgeInsets.all(2.0),
@@ -1421,7 +1690,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //     // decoration: const pw.BoxDecoration(
                   //     //   // color: PdfColors.green100,
                   //     //   border: pw.Border(
-                  //     //     bottom: pw.BorderSide(color: PdfColors.grey800),
+                  //     //     bottom: pw.BorderSide(color: PDF_Border_Color),
                   //     //   ),
                   //     // ),
                   //     child: pw.Row(
@@ -1431,8 +1700,8 @@ class Pdfgen_his_statusbill_TP7 {
                   //           decoration: const pw.BoxDecoration(
                   //             color: PdfColors.white,
                   //             border: const pw.Border(
-                  //                 // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                 // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                 // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                 // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                 ),
                   //           ),
                   //           // padding: const pw.EdgeInsets.all(1.0),
@@ -1445,7 +1714,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //               style: pw.TextStyle(
                   //                   fontSize: font_Size,
                   //                   font: ttf,
-                  //                   color: PdfColors.grey800),
+                  //                   color: PDF_Border_Color),
                   //             ),
                   //           ),
                   //         ),
@@ -1457,8 +1726,8 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: const pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
 
@@ -1505,7 +1774,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                   fontSize: font_Size,
                   //                   font: ttf,
-                  //                   color: PdfColors.grey800,
+                  //                   color: PDF_Border_Color,
                   //                 ),
                   //               ),
                   //             ),
@@ -1519,9 +1788,9 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // right: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // right: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
                   //             child: pw.Align(
@@ -1538,7 +1807,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -1551,9 +1820,9 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // right: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // right: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
                   //             child: pw.Align(
@@ -1577,7 +1846,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -1590,9 +1859,9 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // right: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // right: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
                   //             child: pw.Align(
@@ -1604,7 +1873,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -1617,9 +1886,9 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // right: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // right: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
                   //             child: pw.Align(
@@ -1631,7 +1900,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -1644,7 +1913,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //     // decoration: const pw.BoxDecoration(
                   //     //   // color: PdfColors.green100,
                   //     //   border: pw.Border(
-                  //     //     bottom: pw.BorderSide(color: PdfColors.grey800),
+                  //     //     bottom: pw.BorderSide(color: PDF_Border_Color),
                   //     //   ),
                   //     // ),
                   //     child: pw.Row(
@@ -1654,8 +1923,8 @@ class Pdfgen_his_statusbill_TP7 {
                   //           decoration: const pw.BoxDecoration(
                   //             color: PdfColors.white,
                   //             border: const pw.Border(
-                  //                 // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                 // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                 // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                 // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                 ),
                   //           ),
                   //           // padding: const pw.EdgeInsets.all(1.0),
@@ -1668,7 +1937,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //               style: pw.TextStyle(
                   //                   fontSize: font_Size,
                   //                   font: ttf,
-                  //                   color: PdfColors.grey800),
+                  //                   color: PDF_Border_Color),
                   //             ),
                   //           ),
                   //         ),
@@ -1679,8 +1948,8 @@ class Pdfgen_his_statusbill_TP7 {
                   //         //     decoration: const pw.BoxDecoration(
                   //         //       color: PdfColors.white,
                   //         //       border: const pw.Border(
-                  //         //           // left: pw.BorderSide(color: PdfColors.grey600),
-                  //         //           // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //         //           // left: pw.BorderSide(color: PDF_Border_Color),
+                  //         //           // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //         //           ),
                   //         //     ),
                   //         //     // padding: const pw.EdgeInsets.all(1.0),
@@ -1696,7 +1965,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //         //         style: pw.TextStyle(
                   //         //             fontSize: font_Size,
                   //         //             font: ttf,
-                  //         //             color: PdfColors.grey800),
+                  //         //             color: PDF_Border_Color),
                   //         //       ),
                   //         //     ),
                   //         //   ),
@@ -1709,8 +1978,8 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: const pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
                   //             child: pw.Align(
@@ -1722,7 +1991,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -1735,9 +2004,9 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // right: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // right: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
                   //             child: pw.Align(
@@ -1751,7 +2020,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -1764,9 +2033,9 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // right: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // right: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
                   //             child: pw.Align(
@@ -1780,7 +2049,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -1793,9 +2062,9 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // right: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // right: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
                   //             child: pw.Align(
@@ -1807,7 +2076,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -1820,9 +2089,9 @@ class Pdfgen_his_statusbill_TP7 {
                   //             decoration: const pw.BoxDecoration(
                   //               color: PdfColors.white,
                   //               border: pw.Border(
-                  //                   // left: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // right: pw.BorderSide(color: PdfColors.grey600),
-                  //                   // bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //                   // left: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // right: pw.BorderSide(color: PDF_Border_Color),
+                  //                   // bottom: pw.BorderSide(color: PDF_Border_Color),
                   //                   ),
                   //             ),
                   //             child: pw.Align(
@@ -1834,7 +2103,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -1843,88 +2112,156 @@ class Pdfgen_his_statusbill_TP7 {
                   //     ),
                   //   ),
 
-                  pw.Column(
+                  pw.Table(
                     children: List.generate(TransReBillHistory.length, (index) {
                       final TransReBill = TransReBillHistory[index];
 
-                      return pw.Container(
-                        // decoration: const pw.BoxDecoration(
-                        //   // color: PdfColors.green100,
-                        //   border: pw.Border(
-                        //     // top: pw.BorderSide(color: PdfColors.grey600),
-                        //     bottom: pw.BorderSide(color: PdfColors.grey600),
-                        //   ),
-                        // ),
-                        child: pw.Row(
-                          children: [
-                            pw.Container(
-                              width: 30, //25
+                      return pw.TableRow(
+                        children: [
+                          pw.Container(
+                            width: 35,
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.center,
+                              child: pw.Text(
+                                '${index + 1}',
+                                maxLines: 2,
+                                textAlign: pw.TextAlign.center,
+                                style: pw.TextStyle(
+                                    fontSize: font_Size,
+                                    font: ttf,
+                                    color: PDF_Border_Color),
+                              ),
+                            ),
+                          ),
+                          pw.Expanded(
+                            flex: 4,
+                            child: pw.Container(
                               padding: const pw.EdgeInsets.all(2.0),
                               child: pw.Align(
-                                alignment: pw.Alignment.center,
+                                alignment: pw.Alignment.centerLeft,
                                 child: pw.Text(
-                                  '${index + 1}',
+                                  (TransReBill.unitser.toString() == '6')
+                                      ? '${TransReBill.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(TransReBill.date!))} ${DateTime.parse('${TransReBill.date}').year + 543} [ หน่วยที่ใช้ไป ${TransReBill.ovalue}-${TransReBill.nvalue} ]'
+                                      : '${TransReBill.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(TransReBill.date!))} ${DateTime.parse('${TransReBill.date}').year + 543}',
                                   maxLines: 2,
-                                  textAlign: pw.TextAlign.center,
+                                  textAlign: pw.TextAlign.left,
                                   style: pw.TextStyle(
                                       fontSize: font_Size,
                                       font: ttf,
-                                      color: PdfColors.grey800),
+                                      color: PDF_Border_Color),
                                 ),
                               ),
                             ),
-                            buildCell(
-                              text: (TransReBill.unitser.toString() == '6')
-                                  ? '${TransReBill.expname} [ หน่วยที่ใช้ไป ${TransReBill.ovalue}-${TransReBill.nvalue} ]'
-                                  : '${TransReBill.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(TransReBill.date!))} ${DateTime.parse('${TransReBill.date}').year + 543}',
-                              flex: 4,
-                              alignment: pw.Alignment.centerLeft,
-                              textAlign: pw.TextAlign.left,
+                          ),
+                          pw.Expanded(
+                            flex: 1,
+                            child: pw.Container(
+                              padding: const pw.EdgeInsets.all(2.0),
+                              child: pw.Align(
+                                alignment: pw.Alignment.centerRight,
+                                child: pw.Text(
+                                  getFormattedText(TransReBill.qty),
+                                  maxLines: 2,
+                                  textAlign: pw.TextAlign.right,
+                                  style: pw.TextStyle(
+                                      fontSize: font_Size,
+                                      font: ttf,
+                                      color: PDF_Border_Color),
+                                ),
+                              ),
                             ),
-                            buildCell(
-                              text: getFormattedText(TransReBill.qty),
-                              flex: 1,
-                              alignment: pw.Alignment.centerRight,
-                              textAlign: pw.TextAlign.right,
+                          ),
+                          pw.Expanded(
+                            flex: 1,
+                            child: pw.Container(
+                              padding: const pw.EdgeInsets.all(2.0),
+                              child: pw.Align(
+                                alignment: pw.Alignment.centerRight,
+                                child: pw.Text(
+                                  (TransReBill.ele_ty.toString() != '0' &&
+                                          TransReBill.ele_ty != null)
+                                      ? 'อัตราพิเศษ'
+                                      : (TransReBill.exp_dtype.toString() ==
+                                              'KU')
+                                          ? getFormattedText(
+                                              '${TransReBill.pri}')
+                                          : '-',
+                                  maxLines: 2,
+                                  textAlign: pw.TextAlign.right,
+                                  style: pw.TextStyle(
+                                      fontSize: font_Size,
+                                      font: ttf,
+                                      color: PDF_Border_Color),
+                                ),
+                              ),
                             ),
-                            buildCell(
-                              text: (TransReBill.ele_ty.toString() != '0' &&
-                                      TransReBill.ele_ty != null)
-                                  ? 'อัตราพิเศษ'
-                                  : (TransReBill.exp_dtype.toString() == 'KU')
-                                      ? getFormattedText('${TransReBill.pri}')
-                                      : '-',
-                              flex: 1,
-                              alignment: pw.Alignment.centerRight,
-                              textAlign: pw.TextAlign.right,
+                          ),
+                          pw.Expanded(
+                            flex: 1,
+                            child: pw.Container(
+                              padding: const pw.EdgeInsets.all(2.0),
+                              child: pw.Align(
+                                alignment: pw.Alignment.centerRight,
+                                child: pw.Text(
+                                  (double.tryParse(TransReBill.pvat_original
+                                              .toString()) !=
+                                          0)
+                                      ? getFormattedText(
+                                          '${TransReBill.pvat_original}')
+                                      : (TransReBill.exp_dtype.toString() ==
+                                              'KU')
+                                          ? getFormattedText(
+                                              '${TransReBill.pvat}')
+                                          : getFormattedText(
+                                              '${TransReBill.pri}'),
+                                  maxLines: 2,
+                                  textAlign: pw.TextAlign.right,
+                                  style: pw.TextStyle(
+                                      fontSize: font_Size,
+                                      font: ttf,
+                                      color: PDF_Border_Color),
+                                ),
+                              ),
                             ),
-                            buildCell(
-                              text: (double.tryParse(TransReBill.pvat_original
-                                          .toString()) !=
-                                      0)
-                                  ? getFormattedText(
-                                      '${TransReBill.pvat_original}')
-                                  : (TransReBill.exp_dtype.toString() == 'KU')
-                                      ? getFormattedText('${TransReBill.pvat}')
-                                      : getFormattedText('${TransReBill.pri}'),
-                              flex: 1,
-                              alignment: pw.Alignment.centerRight,
-                              textAlign: pw.TextAlign.right,
+                          ),
+                          pw.Expanded(
+                            flex: 1,
+                            child: pw.Container(
+                              padding: const pw.EdgeInsets.all(2.0),
+                              child: pw.Align(
+                                alignment: pw.Alignment.centerRight,
+                                child: pw.Text(
+                                  getFormattedText('${TransReBill.dis_list}'),
+                                  maxLines: 2,
+                                  textAlign: pw.TextAlign.right,
+                                  style: pw.TextStyle(
+                                      fontSize: font_Size,
+                                      font: ttf,
+                                      color: PDF_Border_Color),
+                                ),
+                              ),
                             ),
-                            buildCell(
-                              text: getFormattedText('${TransReBill.dis_list}'),
-                              flex: 1,
-                              alignment: pw.Alignment.centerRight,
-                              textAlign: pw.TextAlign.right,
+                          ),
+                          pw.Expanded(
+                            flex: 2,
+                            child: pw.Container(
+                              padding: const pw.EdgeInsets.all(2.0),
+                              child: pw.Align(
+                                alignment: pw.Alignment.centerRight,
+                                child: pw.Text(
+                                  getFormattedText('${TransReBill.total}'),
+                                  maxLines: 2,
+                                  textAlign: pw.TextAlign.right,
+                                  style: pw.TextStyle(
+                                      fontSize: font_Size,
+                                      font: ttf,
+                                      color: PDF_Border_Color),
+                                ),
+                              ),
                             ),
-                            buildCell(
-                              text: getFormattedText('${TransReBill.total}'),
-                              flex: 2,
-                              alignment: pw.Alignment.centerRight,
-                              textAlign: pw.TextAlign.right,
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       );
                     }),
                   ),
@@ -1936,8 +2273,8 @@ class Pdfgen_his_statusbill_TP7 {
                   //       decoration: const pw.BoxDecoration(
                   //         // color: PdfColors.green100,
                   //         border: pw.Border(
-                  //           // top: pw.BorderSide(color: PdfColors.grey600),
-                  //           bottom: pw.BorderSide(color: PdfColors.grey600),
+                  //           // top: pw.BorderSide(color: PDF_Border_Color),
+                  //           bottom: pw.BorderSide(color: PDF_Border_Color),
                   //         ),
                   //       ),
                   //       child: pw.Row(
@@ -1957,7 +2294,7 @@ class Pdfgen_his_statusbill_TP7 {
                   //                 style: pw.TextStyle(
                   //                     fontSize: font_Size,
                   //                     font: ttf,
-                  //                     color: PdfColors.grey800),
+                  //                     color: PDF_Border_Color),
                   //               ),
                   //             ),
                   //           ),
@@ -2077,8 +2414,8 @@ class Pdfgen_his_statusbill_TP7 {
                     decoration: const pw.BoxDecoration(
                       // color: PdfColors.green100,
                       border: pw.Border(
-                        top: pw.BorderSide(color: PdfColors.grey600),
-                        // bottom: pw.BorderSide(color: PdfColors.grey600),
+                        top: pw.BorderSide(color: PDF_Border_Color),
+                        // bottom: pw.BorderSide(color: PDF_Border_Color),
                       ),
                     ),
                     padding: const pw.EdgeInsets.fromLTRB(0, 1.5, 0, 0),
@@ -2099,7 +2436,7 @@ class Pdfgen_his_statusbill_TP7 {
                               fontStyle: pw.FontStyle.italic,
                               // decoration:
                               //     pw.TextDecoration.lineThrough,
-                              color: PdfColors.grey800,
+                              color: PDF_Border_Color,
                             ),
                           ),
                         ),
@@ -2110,8 +2447,8 @@ class Pdfgen_his_statusbill_TP7 {
                             decoration: const pw.BoxDecoration(
                               // color: PdfColors.green100,
                               border: pw.Border(
-                                // top: pw.BorderSide(color: PdfColors.grey600),
-                                bottom: pw.BorderSide(color: PdfColors.grey600),
+                                // top: pw.BorderSide(color: PDF_Border_Color),
+                                bottom: pw.BorderSide(color: PDF_Border_Color),
                               ),
                             ),
                             child: pw.Column(
@@ -2127,7 +2464,7 @@ class Pdfgen_his_statusbill_TP7 {
                                             fontSize: font_Size,
                                             fontWeight: pw.FontWeight.bold,
                                             font: ttf,
-                                            color: PdfColors.grey800),
+                                            color: PDF_Border_Color),
                                       ),
                                     ),
                                     pw.Text(
@@ -2139,7 +2476,7 @@ class Pdfgen_his_statusbill_TP7 {
                                           fontSize: font_Size,
                                           fontWeight: pw.FontWeight.bold,
                                           font: ttf,
-                                          color: PdfColors.grey800),
+                                          color: PDF_Border_Color),
                                     ),
                                   ],
                                 ),
@@ -2152,7 +2489,7 @@ class Pdfgen_his_statusbill_TP7 {
                                             fontSize: font_Size,
                                             fontWeight: pw.FontWeight.bold,
                                             font: ttf,
-                                            color: PdfColors.grey800),
+                                            color: PDF_Border_Color),
                                       ),
                                     ),
                                     pw.Text(
@@ -2164,7 +2501,7 @@ class Pdfgen_his_statusbill_TP7 {
                                           fontSize: font_Size,
                                           fontWeight: pw.FontWeight.bold,
                                           font: ttf,
-                                          color: PdfColors.grey800),
+                                          color: PDF_Border_Color),
                                     ),
                                   ],
                                 ),
@@ -2177,7 +2514,7 @@ class Pdfgen_his_statusbill_TP7 {
                                             fontSize: font_Size,
                                             fontWeight: pw.FontWeight.bold,
                                             font: ttf,
-                                            color: PdfColors.grey800),
+                                            color: PDF_Border_Color),
                                       ),
                                     ),
                                     pw.Text(
@@ -2188,7 +2525,7 @@ class Pdfgen_his_statusbill_TP7 {
                                           fontSize: font_Size,
                                           fontWeight: pw.FontWeight.bold,
                                           font: ttf,
-                                          color: PdfColors.grey800),
+                                          color: PDF_Border_Color),
                                     ),
                                   ],
                                 ),
@@ -2201,7 +2538,7 @@ class Pdfgen_his_statusbill_TP7 {
                                             fontSize: font_Size,
                                             fontWeight: pw.FontWeight.bold,
                                             font: ttf,
-                                            color: PdfColors.grey800),
+                                            color: PDF_Border_Color),
                                       ),
                                     ),
                                     pw.Text(
@@ -2213,7 +2550,7 @@ class Pdfgen_his_statusbill_TP7 {
                                           fontSize: font_Size,
                                           fontWeight: pw.FontWeight.bold,
                                           font: ttf,
-                                          color: PdfColors.grey800),
+                                          color: PDF_Border_Color),
                                     ),
                                   ],
                                 ),
@@ -2226,7 +2563,7 @@ class Pdfgen_his_statusbill_TP7 {
                                 //             fontSize: font_Size,
                                 //             fontWeight: pw.FontWeight.bold,
                                 //             font: ttf,
-                                //             color: PdfColors.grey800),
+                                //             color: PDF_Border_Color),
                                 //       ),
                                 //     ),
                                 //     pw.Text(
@@ -2236,7 +2573,7 @@ class Pdfgen_his_statusbill_TP7 {
                                 //           fontSize: font_Size,
                                 //           fontWeight: pw.FontWeight.bold,
                                 //           font: ttf,
-                                //           color: PdfColors.grey800),
+                                //           color: PDF_Border_Color),
                                 //     ),
                                 //   ],
                                 // ),
@@ -2249,7 +2586,7 @@ class Pdfgen_his_statusbill_TP7 {
                                 //             fontSize: font_Size,
                                 //             fontWeight: pw.FontWeight.bold,
                                 //             font: ttf,
-                                //             color: PdfColors.grey800),
+                                //             color: PDF_Border_Color),
                                 //       ),
                                 //     ),
                                 //     pw.Text(
@@ -2259,7 +2596,7 @@ class Pdfgen_his_statusbill_TP7 {
                                 //           fontSize: font_Size,
                                 //           fontWeight: pw.FontWeight.bold,
                                 //           font: ttf,
-                                //           color: PdfColors.grey800),
+                                //           color: PDF_Border_Color),
                                 //     ),
                                 //   ],
                                 // ),
@@ -2272,7 +2609,7 @@ class Pdfgen_his_statusbill_TP7 {
                                             fontSize: font_Size,
                                             fontWeight: pw.FontWeight.bold,
                                             font: ttf,
-                                            color: PdfColors.grey800),
+                                            color: PDF_Border_Color),
                                       ),
                                     ),
                                     pw.Text(
@@ -2284,7 +2621,7 @@ class Pdfgen_his_statusbill_TP7 {
                                           fontSize: font_Size,
                                           fontWeight: pw.FontWeight.bold,
                                           font: ttf,
-                                          color: PdfColors.grey800),
+                                          color: PDF_Border_Color),
                                     ),
                                   ],
                                 ),
@@ -2303,7 +2640,7 @@ class Pdfgen_his_statusbill_TP7 {
                                               fontSize: font_Size,
                                               fontWeight: pw.FontWeight.bold,
                                               font: ttf,
-                                              color: PdfColors.grey800),
+                                              color: PDF_Border_Color),
                                         ),
                                       ),
                                       pw.Text(
@@ -2314,7 +2651,7 @@ class Pdfgen_his_statusbill_TP7 {
                                             fontSize: font_Size,
                                             fontWeight: pw.FontWeight.bold,
                                             font: ttf,
-                                            color: PdfColors.grey800),
+                                            color: PDF_Border_Color),
                                       ),
                                     ],
                                   ),
@@ -2333,7 +2670,7 @@ class Pdfgen_his_statusbill_TP7 {
                                               fontSize: font_Size,
                                               fontWeight: pw.FontWeight.bold,
                                               font: ttf,
-                                              color: PdfColors.grey800),
+                                              color: PDF_Border_Color),
                                         ),
                                       ),
                                       pw.Text(
@@ -2344,7 +2681,7 @@ class Pdfgen_his_statusbill_TP7 {
                                             fontSize: font_Size,
                                             fontWeight: pw.FontWeight.bold,
                                             font: ttf,
-                                            color: PdfColors.grey800),
+                                            color: PDF_Border_Color),
                                       ),
                                     ],
                                   ),
@@ -2353,7 +2690,7 @@ class Pdfgen_his_statusbill_TP7 {
                                 //     // color: PdfColors.green100,
                                 //     border: pw.Border(
                                 //       top: pw.BorderSide(
-                                //           color: PdfColors.grey600),
+                                //           color: PDF_Border_Color),
                                 //     ),
                                 //   ),
                                 //   child: pw.Row(
@@ -2365,7 +2702,7 @@ class Pdfgen_his_statusbill_TP7 {
                                 //               fontSize: font_Size,
                                 //               fontWeight: pw.FontWeight.bold,
                                 //               font: ttf,
-                                //               color: PdfColors.grey800),
+                                //               color: PDF_Border_Color),
                                 //         ),
                                 //       ),
                                 //       pw.Text(
@@ -2375,7 +2712,7 @@ class Pdfgen_his_statusbill_TP7 {
                                 //             fontSize: font_Size,
                                 //             fontWeight: pw.FontWeight.bold,
                                 //             font: ttf,
-                                //             color: PdfColors.grey800),
+                                //             color: PDF_Border_Color),
                                 //       ),
                                 //     ],
                                 //   ),
@@ -2392,7 +2729,7 @@ class Pdfgen_his_statusbill_TP7 {
                                             //     pw.FontWeight.bold,
                                             font: ttf,
                                             fontSize: font_Size,
-                                            color: PdfColors.grey800),
+                                            color: PDF_Border_Color),
                                       ),
                                     ),
                                     pw.Text(
@@ -2403,7 +2740,7 @@ class Pdfgen_his_statusbill_TP7 {
                                           // fontWeight: pw.FontWeight.bold,
                                           font: ttf,
                                           fontSize: font_Size,
-                                          color: PdfColors.grey800),
+                                          color: PDF_Border_Color),
                                     ),
                                   ],
                                 ),
@@ -2427,12 +2764,13 @@ class Pdfgen_his_statusbill_TP7 {
     if (TransReBillHistory.length < 7) {
       pdf.addPage(
         pw.MultiPage(
-          pageFormat: PdfPageFormat.a4.copyWith(
-            marginBottom: 4.00,
-            marginLeft: 8.00,
-            marginRight: 8.00,
-            marginTop: 8.00,
-          ),
+          pageFormat: buildFormat(),
+          // pageFormat: PdfPageFormat.a4.copyWith(
+          //   marginBottom: 4.00,
+          //   marginLeft: 8.00,
+          //   marginRight: 8.00,
+          //   marginTop: 8.00,
+          // ),
           build: (context) {
             return [
               pw.Container(
@@ -2440,8 +2778,8 @@ class Pdfgen_his_statusbill_TP7 {
                   decoration: const pw.BoxDecoration(
                     // color: PdfColors.green50,
                     border: pw.Border(
-                        // top: pw.BorderSide(color: PdfColors.grey800),
-                        // bottom: pw.BorderSide(color: PdfColors.grey800),
+                        // top: pw.BorderSide(color: PDF_Border_Color),
+                        // bottom: pw.BorderSide(color: PDF_Border_Color),
                         ),
                   ),
                   child: pw.Column(
@@ -2455,8 +2793,8 @@ class Pdfgen_his_statusbill_TP7 {
                   decoration: const pw.BoxDecoration(
                     // color: PdfColors.red50,
                     border: pw.Border(
-                        // top: pw.BorderSide(color: PdfColors.grey800),
-                        // bottom: pw.BorderSide(color: PdfColors.grey800),
+                        // top: pw.BorderSide(color: PDF_Border_Color),
+                        // bottom: pw.BorderSide(color: PDF_Border_Color),
                         ),
                   ),
                   child: pw.Column(
@@ -2474,12 +2812,13 @@ class Pdfgen_his_statusbill_TP7 {
     if (TransReBillHistory.length >= 7) {
       pdf.addPage(
         pw.MultiPage(
-            pageFormat: PdfPageFormat.a4.copyWith(
-              marginBottom: 4.00,
-              marginLeft: 8.00,
-              marginRight: 8.00,
-              marginTop: 8.00,
-            ),
+            pageFormat: buildFormat(),
+            // pageFormat: PdfPageFormat.a4.copyWith(
+            //   marginBottom: 4.00,
+            //   marginLeft: 8.00,
+            //   marginRight: 8.00,
+            //   marginTop: 8.00,
+            // ),
             header: (context) {
               return Header(1);
             },
@@ -2494,12 +2833,13 @@ class Pdfgen_his_statusbill_TP7 {
       );
       pdf.addPage(
         pw.MultiPage(
-            pageFormat: PdfPageFormat.a4.copyWith(
-              marginBottom: 4.00,
-              marginLeft: 8.00,
-              marginRight: 8.00,
-              marginTop: 8.00,
-            ),
+            pageFormat: buildFormat(),
+            // pageFormat: PdfPageFormat.a4.copyWith(
+            //   marginBottom: 4.00,
+            //   marginLeft: 8.00,
+            //   marginRight: 8.00,
+            //   marginTop: 8.00,
+            // ),
             header: (context) {
               return Header(2);
             },
@@ -2566,23 +2906,19 @@ class Pdfgen_his_statusbill_TP7 {
     if (Preview_ser.toString() == 'Folder') {
       final List<int> bytes = await pdf.save(); // Save the PDF as bytes
       final Uint8List data = Uint8List.fromList(bytes); // Convert to Uint8List
-      var name_1 = (numdoctax.toString() == '') ? '$numinvoice' : '$numdoctax';
+      var name_1 = (numdoctax.toString() == '')
+          ? 'ใบเสร็จรับเงิน $numinvoice'
+          : 'ใบเสร็จรับเงิน/ใบกำกับภาษี $numdoctax';
       // Upload the file
       await uploadFile(data, name_1);
     } else if (Preview_ser.toString() == 'File') {
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      await FlutterFileDialog.saveFile(
-        params: SaveFileDialogParams(
-          data: data,
-          fileName: (numdoctax.toString() == '') ? '$numinvoice' : '$numdoctax',
-        ),
-      );
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
       // MimeType type = MimeType.PDF;
       // final dir = await FileSaver.instance.saveFile(
-      //     (numdoctax.toString() == '') ? '$numinvoice' : '$numdoctax',
+      //     (numdoctax.toString() == '')
+      //         ? 'ใบเสร็จรับเงิน $numinvoice'
+      //         : 'ใบเสร็จรับเงิน/ใบกำกับภาษี $numdoctax',
       //     data,
       //     "pdf",
       //     mimeType: type);
@@ -2591,14 +2927,15 @@ class Pdfgen_his_statusbill_TP7 {
           context,
           MaterialPageRoute(
             builder: (context) => PreviewPdfgen_Billsplay(
+                selectedMode: _selectedMode,
                 doc: pdf,
                 title: (TitleType_Default_Receipt_Name == null)
                     ? (numdoctax.toString() == '')
-                        ? '$numinvoice'
-                        : '$numdoctax'
+                        ? 'ใบเสร็จรับเงิน $numinvoice'
+                        : 'ใบเสร็จรับเงิน/ใบกำกับภาษี $numdoctax'
                     : (numdoctax.toString() == '')
-                        ? '[ $TitleType_Default_Receipt_Name ]$numinvoice'
-                        : '[ $TitleType_Default_Receipt_Name ]$numdoctax'),
+                        ? 'ใบเสร็จรับเงิน [ $TitleType_Default_Receipt_Name ]$numinvoice'
+                        : 'ใบเสร็จรับเงิน/ใบกำกับภาษี [ $TitleType_Default_Receipt_Name ]$numdoctax'),
           ));
     }
   }

@@ -13,7 +13,7 @@ import '../../../main.dart';
 import '../../../screen_Intents/payment_mainV2_InvAll.dart';
 import '../../../screen_Intents_V3/payment_mainV3_InvAll.dart';
 import '../../pay_bill_Mainscreen.dart';
-import '../../pay_bill_Mainscreen_Choice.dart';
+import '../../pay_bill_Mainscreen_Choice_new.dart';
 import '../../pay_bill_screen.dart';
 import '../../pay_bill_screen_Choice.dart';
 import '../fitness_app_theme.dart';
@@ -25,10 +25,11 @@ import '../ui_view/workout_view.dart';
 import 'package:http/http.dart' as http;
 
 class TrainingPayScreen extends StatefulWidget {
-  const TrainingPayScreen({Key? key, this.animationController})
+  const TrainingPayScreen({Key? key, this.animationController, this.initialCid})
       : super(key: key);
 
   final AnimationController? animationController;
+  final String? initialCid;
   @override
   _TrainingPayScreenState createState() => _TrainingPayScreenState();
 }
@@ -126,7 +127,7 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
 
   Future<Null> checkPreferance() async {
     DateTime currentDate = DateTime.now();
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
 
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
 
@@ -323,7 +324,7 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
 
     listViews.add(
       (renTal_user.toString() == '106' || renTal_user.toString() == '50')
-          ? PaybillMainScreenChoice(
+          ? PaybillMainScreenChoiceNew(
               mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
                   CurvedAnimation(
                       parent: _effectiveController,
@@ -354,7 +355,8 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
               customerModel: customerModels,
               teNantModel: teNantModels,
               cuslang: cus_lang,
-              isMainScreen: false, // [NEW] Fix nested scroll error
+              initialCid: widget.initialCid,
+              isMainScreen: true,
             ),
       // PaybillMainScreen(
       //   mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -388,6 +390,7 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
       //    customerModel: customerModels,
       // ),
     );
+    _effectiveController.forward();
   }
 
   Future<bool> getData() async {
@@ -416,32 +419,13 @@ class _TrainingPayScreenState extends State<TrainingPayScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                      color: Colors.green,
+                      color: Colors.indigo,
                       size: 70,
                     ),
                   ],
                 ),
               )
-            : CustomScrollView(
-                controller: scrollController,
-                slivers: <Widget>[
-                  getAppBarUI(),
-                  SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        _effectiveController.forward();
-                        return listViews[index];
-                      },
-                      childCount: listViews.length,
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 62 + MediaQuery.of(context).padding.bottom,
-                    ),
-                  ),
-                ],
-              ),
+            : listViews.first,
       ),
     );
   }

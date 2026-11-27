@@ -56,8 +56,10 @@ class Pdfgen_Agreementlamphun2 {
     FormName1_choice,
     FormName2_choice,
     FormName3_choice,
-    FormName4_choice,
-  ) async {
+    FormName4_choice, {
+    // ข้อมูลพื้นที่จาก GC_tenantlookAS_LPJATUJAK
+    lpAreaModels,
+  }) async {
     ////
 
     final pdf = pw.Document();
@@ -121,7 +123,10 @@ class Pdfgen_Agreementlamphun2 {
     final totalchaoNumber = filteredListchao.fold<double>(
       0.00,
       (double sum, dynamic item) =>
-          sum + (item.pvat != null ? double.parse(item.pvat!) : 0.00),
+          sum +
+          (item.pvat != null
+              ? double.parse(item.pvat!.replaceAll(',', ''))
+              : 0.00),
     ); // ค่าเช่า เดือนละ (ตัวเลข)
     final totalchao =
         nFormat.format(totalchaoNumber); // ค่าเช่า เดือนละ (String)
@@ -132,9 +137,55 @@ class Pdfgen_Agreementlamphun2 {
     final totalpakanNumber = filteredListpakan.fold<double>(
       0.00,
       (double sum, dynamic item) =>
-          sum + (item.pvat != null ? double.parse(item.pvat!) : 0.00),
+          sum +
+          (item.pvat != null
+              ? double.parse(item.pvat!.replaceAll(',', ''))
+              : 0.00),
     );
     final totalpakan = nFormat.format(totalpakanNumber);
+
+    // additional info
+    // ขนาด/เนื้อที่รวม: ไล่หาแหล่งข้อมูลตามลำดับ
+    // lpAreaModels (GC_tenantlookAS_LPJATUJAK) -> teNantModels -> quotxSelectModels
+    // แล้วเลือก "ทีละ field" ที่มีค่าจริง (เดิมเลือกทั้ง list ทำให้ list แรกที่ไม่ว่างแต่ field ว่างมาบัง)
+    final _areaSources = <dynamic>[
+      if (lpAreaModels != null && lpAreaModels.isNotEmpty) lpAreaModels.first,
+      if (teNantModels.isNotEmpty) teNantModels.first,
+      if (quotxSelectModels.isNotEmpty) quotxSelectModels.first,
+    ];
+    String _pickArea(dynamic Function(dynamic) get) {
+      for (var s in _areaSources) {
+        var v = '';
+        try {
+          v = '${get(s) ?? ''}'.trim();
+        } catch (_) {}
+        if (v.isNotEmpty && v != 'null') return v;
+      }
+      return '';
+    }
+
+    final _areaWidth = _pickArea((s) => s.area_width);
+    final _areaLength = _pickArea((s) => s.area_length);
+    final _areaSize = _pickArea((s) => s.area_size);
+    // ขนาด = area_width x area_length เช่น "3.00 x 3.00"
+    // ถ้า API ไม่ส่ง width/length มา ใช้ area_size (ขนาดต่อล็อค) แทน
+    final areaDimText = (_areaWidth.isNotEmpty && _areaLength.isNotEmpty)
+        ? '$_areaWidth x $_areaLength'
+        : (_areaSize.isNotEmpty ? _areaSize : ' - ');
+    // เนื้อที่รวม = area เช่น "6"
+    final _areaTotal = _pickArea((s) => s.area);
+    final areaTotalText = _areaTotal.isNotEmpty ? _areaTotal : ' - ';
+    // // ค่าเช่า ใช้ area_rent (ถ้าไม่มีใช้ totalchao เดิม)
+    // final _areaRent = _pickArea((s) => s.area_rent);
+    // // totalchaoNumber เป็น double อยู่แล้ว ไม่ต้อง parse ซ้ำ
+    // final double areaRentNumber = totalchaoNumber;
+    // final areaRentText = nFormat.format(areaRentNumber);
+
+    // ค่าเช่า ใช้ area_rent อย่างเดียว (ไม่ fallback ไป totalchao)
+    final _areaRent = _pickArea((s) => s.area_rent);
+    final areaRentNumber =
+        double.tryParse(_areaRent.replaceAll(',', '')) ?? 0.00;
+    final areaRentText = nFormat.format(areaRentNumber);
 
     pw.Widget Textx({
       // required String label,
@@ -441,7 +492,7 @@ class Pdfgen_Agreementlamphun2 {
             pw.Row(children: [
               Textx(
                   value:
-                      '${' ' * 24}ข้อ 1. ผู้เช่าตาลงเช่าและให้ผู้เช่าตกลงให้เช่า อาคารพาณิชย์',
+                      '${' ' * 24}ข้อ 1. ผู้เช่าตกลงเช่าและผู้ให้เช่าตกลงให้เช่า อาคารพาณิชย์',
                   font: ttf),
               labeledLine1(
                   value: ' - ', font: ttf, flex: 1, color: PdfColors.white),
@@ -475,7 +526,7 @@ class Pdfgen_Agreementlamphun2 {
             pw.Row(children: [
               Textx(
                   value:
-                      '${' ' * 24}ผู้เช่าได้ตรวจดูอาคารที่เช่านี้แล้ว พอใจในสถาพของที่เช่าตามที่ปรากฏ และได้รับมอบอาคารที่เช่าจากผู้เช่าจากผู้ให้เช่าแล้วนับตั้งแต่วันทำสัญญานี้',
+                      '${' ' * 24}ผู้เช่าได้ตรวจดูอาคารที่เช่านี้แล้ว พอใจในสภาพของที่เช่าตามที่ปรากฏ และได้รับมอบอาคารที่เช่าจากผู้เช่าจากผู้ให้เช่าแล้วนับตั้งแต่วันทำสัญญานี้',
                   font: ttf),
             ]),
             Textx(value: 'เป็นต้นไป', font: ttf),
@@ -487,7 +538,8 @@ class Pdfgen_Agreementlamphun2 {
               labeledLine1(value: totalchao, font: ttf, flex: 1),
               Textx(value: 'บาท', font: ttf),
               labeledLine1(
-                  value: '( ${convertToThaiBaht(double.parse(totalchao))} )',
+                  value:
+                      '( ${convertToThaiBaht(double.parse(totalchao.replaceAll(',', '')))} )',
                   font: ttf,
                   flex: 1)
             ]),
@@ -506,7 +558,7 @@ class Pdfgen_Agreementlamphun2 {
             pw.Row(children: [
               Textx(
                   value:
-                      'ในเวลาที่ได้ระบุไว้ในวรรคก่อน  หรือกรณีที่ผู้เช่าไม่มาขายสินค้าใน  "พื้นที่เช่า"  เมื่อผู้ให้เช่ามีหนังสือแจ้งเตือนผู้เช่าให้ชำระค่าเช่าค่าเช่าหรือให้กลับมาขายสินค้าภายใน',
+                      'ในเวลาที่ได้ระบุไว้ในวรรคก่อน  หรือกรณีที่ผู้เช่าไม่มาขายสินค้าใน  "พื้นที่เช่า"  เมื่อผู้ให้เช่ามีหนังสือแจ้งเตือนผู้เช่าให้ชำระค่าเช่าหรือให้กลับมาขายสินค้าภายใน',
                   font: ttf)
             ]),
             pw.Row(children: [
@@ -518,19 +570,20 @@ class Pdfgen_Agreementlamphun2 {
             pw.Row(children: [
               Textx(
                   value:
-                      '${' ' * 24}ข้อ 3 ในวันสัญญานี้ ผู้เช่าได้วางเงินประกันค่าเสีนหายแก่ผู้ให้เช่าเป็นจำนวน',
+                      '${' ' * 24}ข้อ 3 ในวันสัญญานี้ ผู้เช่าได้วางเงินประกันค่าเสียหายแก่ผู้ให้เช่าเป็นจำนวน',
                   font: ttf),
               labeledLine1(value: totalpakan, font: ttf, flex: 1),
               Textx(value: 'บาท', font: ttf),
             ]),
             pw.Row(children: [
               labeledLine1(
-                  value: '( ${convertToThaiBaht(double.parse(totalpakan))} )',
+                  value:
+                      '( ${convertToThaiBaht(double.parse(totalpakan.replaceAll(',', '')))} )',
                   font: ttf,
                   flex: 2),
               Textx(
                   value:
-                      'เงินประกันดังกล่าวถือเป็นเงินประกันค่าเสีนหาย ที่ผู้เช่าหรือบริวารของผู้เช่าก่อขึ้นแก่อาคารที่เช่า',
+                      'เงินประกันดังกล่าวถือเป็นเงินประกันค่าเสียหาย ที่ผู้เช่าหรือบริวารของผู้เช่าก่อขึ้นแก่อาคารที่เช่า',
                   font: ttf),
             ]),
             pw.Row(children: [
@@ -562,7 +615,7 @@ class Pdfgen_Agreementlamphun2 {
             ]),
             Textx(
                 value:
-                    'ต้องได้รับอนุญาตเป็นรายลักษณ์อักษรผู้ให้เช่าก่อน ผู้เช่าถึงจะดำเนินการได้',
+                    'ต้องได้รับอนุญาตเป็นลายลักษณ์อักษรผู้ให้เช่าก่อน ผู้เช่าถึงจะดำเนินการได้',
                 font: ttf),
             pw.Row(children: [
               Textx(
@@ -590,9 +643,15 @@ class Pdfgen_Agreementlamphun2 {
                       '${' ' * 24}ข้อ 8. หากผู้เช่าประสงค์จะเช่าอาคารที่เช่านี้ต่อไป  ผู้เช่าต้องแจ้งความประสงค์ให้ผู้ให้เช่าทราบอย่างช้า 3 เดือนก่อนครบกำหนดสัญญาเช่า  เพื่อทั้ง',
                   font: ttf),
             ]),
+            pw.Row(children: [
+              Textx(
+                  value:
+                      'ติดกุญแจ "พื้นที่เช่า"  หรืองัดประตู  ทำลายกุญแจที่ติดไว้ก่อน  และสามารถนำ "พื้นที่เช่า" ออกให้บุคคลอื่นเช่าได้ทันที  โดยผู้เช่าตกลงและยินยอมจะไม่เรียกร้องใดๆกับ',
+                  font: ttf),
+            ]),
             Textx(
                 value:
-                    'สองฝ่ายจะได้ทำความตกลง กำหนดข้อสัญญาเช่ากันใหม่ มิฉะนั้น ผู้เให้เช่าสามารถนำอาคารที่เช่าออกให้บุคคลอื่นเช่าได้ทันที',
+                    'ผู้ให้เช่าทั้งทางแพ่งและทางอาญา ตลอดจนสละสิทธิของผู้เช่าทั้งหมด',
                 font: ttf),
             pw.Row(children: [
               Textx(
@@ -603,7 +662,7 @@ class Pdfgen_Agreementlamphun2 {
             pw.Row(children: [
               Textx(
                   value:
-                      '${' ' * 24}ข้อ 10. ผู้เช่าจะไม่ทำการหรือยินยอมให้มีการกระทำการใดๆ ใน "พื้นที่เช่า" อันเป็นการขัดต่อกฎหมาย  ขัดต่อความสงบเรียบร้อยหรือศิลธรรมอันดี',
+                      '${' ' * 24}ข้อ 10. ผู้เช่าจะไม่ทำการหรือยินยอมให้มีการกระทำการใดๆ ใน "พื้นที่เช่า" อันเป็นการขัดต่อกฎหมาย  ขัดต่อความสงบเรียบร้อยหรือศีลธรรมอันดี',
                   font: ttf),
             ]),
             Textx(
@@ -622,8 +681,7 @@ class Pdfgen_Agreementlamphun2 {
                       'ในกรณีที่ผู้เช่ายังค้างชำระ หรือมีความเสียหายใดๆที่ผู้เช่าจะต้องรับผิดต่อให้ผู้เช่า ผู้เช่ามีสิทธิหักเงินประกันก่อนคืนส่วนที่เหลือผู้เช่า  หากเงินประกันไม่พอหัก ผู้ให้เช่ามี',
                   font: ttf),
             ]),
-            Textx(
-                value: 'สิทธ์เรียกผู้ให้เช่าจ่ายส่วนที่ขาดได้ทันที', font: ttf),
+            Textx(value: 'สิทธิ์เรียกผู้เช่าจ่ายส่วนที่ขาดได้ทันที', font: ttf),
             pw.Spacer(),
             pw.Align(
               alignment: pw.Alignment.bottomRight,
@@ -653,7 +711,7 @@ class Pdfgen_Agreementlamphun2 {
             pw.Row(children: [
               Textx(
                   value:
-                      'อาคารที่เช่า หรือกลับเข้าครอบครองอาคารที่เช่าได้ทันที ในกรณีที่ผู้เช่าทิ้งที่เช่า ผู้ให้เช่ามีสิทธ์เข้าไปในอาคารที่เช่าโดยใช้กุญแจสำรอง หรือทำลายกุญแจหรือเครื่องกีด',
+                      'อาคารที่เช่า หรือกลับเข้าครอบครองอาคารที่เช่าได้ทันที ในกรณีที่ผู้เช่าทิ้งที่เช่า ผู้ให้เช่ามีสิทธิ์เข้าไปในอาคารที่เช่าโดยใช้กุญแจสำรอง หรือทำลายกุญแจหรือเครื่องกีด',
                   font: ttf),
             ]),
             Textx(
@@ -719,7 +777,7 @@ class Pdfgen_Agreementlamphun2 {
                         Textx(
                           value: (Form_nameshop.toString().isNotEmpty)
                               ? '  $Form_nameshop  '
-                              : '',
+                              : '(${'...' * 30})',
                           font: ttf,
                         ),
                       pw.SizedBox(height: 6 * PdfPageFormat.mm),
@@ -732,7 +790,9 @@ class Pdfgen_Agreementlamphun2 {
                         font: ttf,
                       ),
                       Textx(
-                        value: '(  $FormName1_choice  )',
+                        value: FormName1_choice.toString().isNotEmpty
+                            ? '(  $FormName1_choice  )'
+                            : '(${'...' * 30})',
                         font: ttf,
                       ),
                     ],
@@ -749,7 +809,9 @@ class Pdfgen_Agreementlamphun2 {
                         font: ttf,
                       ),
                       Textx(
-                        value: '(  $FormName3_choice  )',
+                        value: FormName3_choice.toString().isNotEmpty
+                            ? '(  $FormName3_choice  )'
+                            : '(${'...' * 30})',
                         font: ttf,
                       ),
                       Textx(
@@ -762,7 +824,9 @@ class Pdfgen_Agreementlamphun2 {
                         font: ttf,
                       ),
                       Textx(
-                        value: '(  $FormName4_choice  )',
+                        value: FormName4_choice.toString().isNotEmpty
+                            ? '(  $FormName4_choice  )'
+                            : '(${'...' * 30})',
                         font: ttf,
                       ),
                       Textx(
@@ -796,19 +860,9 @@ class Pdfgen_Agreementlamphun2 {
                         font: ttf,
                       ),
                       Textx(
-                        value: '$bill_name โดย',
-                        font: ttf,
-                      ),
-                      Textx(
-                        value: '(  $FormName1_choice  )',
-                        font: ttf,
-                      ),
-                      Textx(
-                        value: 'ลงชื่อ${'...' * 30} พยาน',
-                        font: ttf,
-                      ),
-                      Textx(
-                        value: '(  $FormName3_choice  )',
+                        value: FormName1_choice.toString().isNotEmpty
+                            ? '(  $FormName1_choice  )'
+                            : '(${'...' * 30})',
                         font: ttf,
                       ),
                       Textx(
@@ -821,7 +875,24 @@ class Pdfgen_Agreementlamphun2 {
                         font: ttf,
                       ),
                       Textx(
-                        value: '(  $FormName4_choice  )',
+                        value: FormName3_choice.toString().isNotEmpty
+                            ? '(  $FormName3_choice  )'
+                            : '(${'...' * 30})',
+                        font: ttf,
+                      ),
+                      Textx(
+                        value: '$bill_name',
+                        font: ttf,
+                      ),
+                      pw.SizedBox(height: 6 * PdfPageFormat.mm),
+                      Textx(
+                        value: 'ลงชื่อ${'...' * 30} พยาน',
+                        font: ttf,
+                      ),
+                      Textx(
+                        value: FormName4_choice.toString().isNotEmpty
+                            ? '(  $FormName4_choice  )'
+                            : '(${'...' * 30})',
                         font: ttf,
                       ),
                       Textx(

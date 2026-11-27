@@ -68,7 +68,7 @@ class _MwterScreenState extends State<MwterScreen> {
 
     // Format the date as 'YYYY-MM-DD'
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
- String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
     SharedPreferences preferences = await SharedPreferences.getInstance();
     String? DateLogin;
     setState(() {
@@ -97,8 +97,7 @@ class _MwterScreenState extends State<MwterScreen> {
     if (cus_photo != null ||
         cus_photo.toString() != '' ||
         cus_photo.toString() != 'null') {
-      cus_imglogo_ =
-          '$new_Url/files/$cus_foder/contract/$cus_photo';
+      cus_imglogo_ = '$new_Url/files/$cus_foder/contract/$cus_photo';
     }
   }
 
@@ -1240,7 +1239,8 @@ class _MwterScreenState extends State<MwterScreen> {
                                                           .image_not_supported))
                                                   : Image.network(
                                                       // '${MyConstant().domain}/files/kad_taii/logo/${Img_logo_}',
-                                                      '${MyConstant().domain_chao}/files/$cus_foder/Meter/${_TransModels[indextran].img}',
+                                                      '${MyConstant().domain_chao_img}/files/$cus_foder/Meter/${_TransModels[indextran].img}',
+                                                      cacheWidth: 500,
                                                       fit: BoxFit.cover,
                                                     ),
                                             ),
@@ -1249,7 +1249,7 @@ class _MwterScreenState extends State<MwterScreen> {
                                       },
                                       child: Image.network(
                                         // '${MyConstant().domain}/files/kad_taii/logo/${Img_logo_}',
-                                        '${MyConstant().domain_chao}/files/$cus_foder/Meter/${_TransModels[indextran].img}',
+                                        '${MyConstant().domain_chao_img}/files/$cus_foder/Meter/${_TransModels[indextran].img}',
                                         fit: BoxFit.cover,
                                       ),
                                     ),

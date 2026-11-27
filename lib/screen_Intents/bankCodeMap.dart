@@ -125,3 +125,18 @@ final Map<String, Map<String, String>> bankCodeMap = {
     'logo': 'PSVB.png',
   },
 };
+
+/// ✅ Map bank_merchant_id (int) → bank short code (จาก bankCodeMap ด้านบน)
+/// ใช้เป็น fallback เมื่อ accountName ว่าง/ไม่ตรงกับ key ใน bankCodeMap
+/// ตัวอย่าง: bankMerchantIdToCode[46] → "KBANK" (KBank ลาว/BCEL ฯลฯ)
+///
+/// NOTE: mapping ด้านล่างเป็นค่า placeholder ที่ต้อง verify กับ backend
+/// ถ้า id ตรงกับ payser ใน GC_billGropInv_UserPaytypeV2.php response
+const Map<int, String> bankMerchantIdToCode = {
+  // ตัวอย่าง mapping (ต้อง update ตามข้อมูลจริงจาก API):
+  // 1: 'BBL',
+  // 2: 'KBANK',
+  // 39: 'SCB',
+  // 46: 'KBANK',
+  // ...
+};

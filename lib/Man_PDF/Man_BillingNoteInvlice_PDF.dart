@@ -1,36 +1,42 @@
 import 'dart:convert';
-
-import 'package:chaoperty_user/PDF/nim/PDF_Billing_TP7_nim/pdf_BillingNote_IV_TP7_nim.dart';
+import 'package:chaoperty_user/PDF/PDF_58MM/PDF_58MM_TP1/PDF_Billing_58MM/pdf_BillingNote_IV_58MM.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../Constant/Myconstant.dart';
-
+import '../Model/GetC_Quot_Select_Model.dart';
 import '../Model/GetInvoice_Model.dart';
 import '../Model/GetInvoice_history_Model.dart';
 import '../Model/GetTeNant_Model.dart';
 import '../Model/GetUser_Model.dart';
 import '../Model/electricity_model.dart';
+import '../PDF/PDF_60MM/PDF_60MM_TP1/PDF_Billing_60MM/pdf_BillingNote_IV_60MM.dart';
+import '../PDF/PDF_80MM/PDF_80MM_TP1/PDF_Billing_80MM/pdf_BillingNote_IV_80MM.dart';
+import '../PDF/PDF_Billing/pdf_BillingNote_IV.dart';
 
+import '../PDF/nim/PDF_Billing_TP7_nim/pdf_BillingNote_IV_TP7_nim.dart';
 import '../PDF_TP10/PDF_Billing_TP10/pdf_BillingNote_IV_TP10.dart';
 
+import '../PDF_TP2/PDF_Billing_TP2/pdf_BillingNote_IV_TP2.dart';
 import '../PDF_TP3/PDF_Billing_TP3/pdf_BillingNote_IV_TP3.dart';
-
+import '../PDF_TP3/PDF_Billing_TP3/pdf_BillingNote_IV_TP3_V2.dart';
 import '../PDF_TP4/PDF_Billing_TP4/pdf_BillingNote_IV_TP4.dart';
-
+import '../PDF_TP5/PDF_Billing_TP5/pdf_BillingNote_IV_TP5.dart';
+import '../PDF_TP6/PDF_Billing_TP6/pdf_BillingNote_IV_TP6.dart';
 import '../PDF_TP7/PDF_Billing_TP7/pdf_BillingNote_IV_TP7.dart';
 import '../PDF/LAMPHUN/PDF_Billing_TP7_LAMPHUN/pdf_BillingNote_IV_TP7_LAMPHUN.dart';
 import '../PDF_TP7_Ama1000/PDF_Billing_TP7/pdf_BillingNote_IV_TP7.dart';
-
+import '../PDF_TP8/PDF_Billing_TP8/pdf_BillingNote_IV_TP8.dart';
 import '../PDF_TP8_Choice/PDF_Billing_TP8_Choice/pdf_BillingNote_IV_TP8_Choice.dart';
 import '../PDF_TP8_Ortorkor/PDF_Billing_TP8_Ortorkor/pdf_BillingNote_IV_TP8.dart';
 import '../PDF_TP9/PDF_Billing_TP9/pdf_BillingNote_IV_TP9.dart';
 import '../PDF_TP9_Lao/PDF_Billing_TP9/pdf_BillingNote_IV_TP9.dart';
+import '../PDF_TP9_Lao/PDF_Billing_TP9/pdf_BillingNote_IV_TP9_screenshot_preview.dart';
 
 class Man_BillingNoteInvlice_PDF {
   // ─────────────────────────────────────────────────────────────────
-  // Dialog เลือกขนาดกระดาษก่อน Export PDF (ใช้ร่วมได้ทุกเทมเพลต PDF)
+  // Dialog เลือกขนาดกระดาษก่อน Export PDF (ใช้ร่วมได้ทุกเทมเพลต PDF),
   // คืนค่า: 'pos80' | 'pos58' | 'a3' | 'a4' | 'a5'
   // คืนค่า null = ผู้ใช้กด ยกเลิก
   // เรียกใช้: await ManTemporary_Receipt_PDF.showPageFormatDialog(context)
@@ -152,14 +158,16 @@ class Man_BillingNoteInvlice_PDF {
       bill_name,
       newValuePDFimg,
       cFinn,
-      Preview_ser
+      Preview_ser,
       // Date_Time,
       // paymentName1,
       // paymentName2,
       // selectedValue_bank_bno
-      ) async {
+      billingFormat) async {
     List<InvoiceHistoryModel> _InvoiceHistoryModels = [];
     List<ElectricityModel> Water_electricity = [];
+    List<ElectricityModel> electricityModels = [];
+    List<String> Water_elec = [];
     String? numinvoice;
     String? Form_nameshop;
     String? Form_typeshop;
@@ -213,7 +221,7 @@ class Man_BillingNoteInvlice_PDF {
 
     String? Cust_no, Ln_s, Zone_s, cid_;
     String? ser_user;
-    String Con_remark = '';
+    String Con_remark = '', remark = '';
     /////////////////////------------------------->
     var round_p, paper, paper_run;
 
@@ -244,7 +252,12 @@ class Man_BillingNoteInvlice_PDF {
     var nFormat = (rt_Language.toString().trim() == 'LA')
         ? NumberFormat("#,##0", "en_US")
         : NumberFormat("#,##0.00", "en_US");
+    var signature = preferences.getString('signature');
+    var fnames = preferences.getString('fname');
+    var lnames = preferences.getString('lname');
+    var fullname = '$fnames $lnames';
 
+    print('signature>>>>> $signature');
 ////////////--------------------------->
 
     String url_1 =
@@ -277,6 +290,7 @@ class Man_BillingNoteInvlice_PDF {
           Con_remark = (_InvoiceModel.con_remark == null)
               ? ''
               : _InvoiceModel.con_remark!;
+          remark = (_InvoiceModel.remark == null) ? '' : _InvoiceModel.remark!;
 
           round_p = _InvoiceModel.round_p;
           paper = _InvoiceModel.paper;
@@ -285,9 +299,8 @@ class Man_BillingNoteInvlice_PDF {
       }
     } catch (e) {}
     /////////////////////------------------------->
-    final paperRunNum = int.tryParse('$paper_run') ?? 0;
     String url_paper_run =
-        '${MyConstant().domain_chao}/UP_Paper_Run.php?isAdd=true&ren=$ren&ciddoc=$docnoin&paper_run=${paperRunNum + 1}&type=inv';
+        '${MyConstant().domain_chao}/UP_Paper_Run.php?isAdd=true&ren=$ren&ciddoc=$docnoin&paper_run=${int.parse('$paper_run') + 1}&type=inv';
     try {
       var response = await http.get(Uri.parse(url_paper_run));
       var result = json.decode(response.body);
@@ -298,6 +311,7 @@ class Man_BillingNoteInvlice_PDF {
 
     String url_usersell =
         '${MyConstant().domain_chao}/GC_User_PDF.php?isAdd=true&serUser=$ser_user';
+    print(url_usersell);
     try {
       var response = await http.get(Uri.parse(url_usersell));
       var result = json.decode(response.body);
@@ -351,11 +365,11 @@ class Man_BillingNoteInvlice_PDF {
           Form_aser = teNantModel.aser.toString();
           Form_qty = teNantModel.qty.toString();
           customer_name = teNantModel.customer_name.toString();
-          if (ren.toString() == '106' || ren.toString() == '145') {
+          if (ren.toString() == '106' ||
+              ren.toString() == '145' ||
+              ren.toString() == '185') {
             fname = teNantModel.name_user.toString();
           }
-          preferences.setBool('allowedBill',
-              (teNantModel.e_bill.toString() == '0') ? true : false);
         }
       }
     } catch (e) {}
@@ -437,7 +451,115 @@ class Man_BillingNoteInvlice_PDF {
 ///////////////////----------------------------------------->
     double sum_total = (sum_amt - sum_disamt);
 
-    final tableData003 = [];
+    final tableData003 = [
+      // for (int index = 0; index < _InvoiceHistoryModels.length; index++)
+      //   [
+      //     '${_InvoiceHistoryModels[index].unitser}',
+
+      //     ///---0
+      //     '${_InvoiceHistoryModels[index].date}',
+
+      //     ///---1
+      //     '${_InvoiceHistoryModels[index].descr.toString().trim()}',
+
+      //     ///---2
+      //     '${nFormat.format((_InvoiceHistoryModels[index].nvat == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].vat!))}',
+
+      //     ///---3
+      //     '${nFormat.format((_InvoiceHistoryModels[index].wht == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].wht!))}',
+
+      //     ///---4
+      //     '${nFormat.format((_InvoiceHistoryModels[index].amt == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].amt!))}',
+
+      //     ///---5
+      //     '${nFormat.format((_InvoiceHistoryModels[index].total_t == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].total_t!))}',
+
+      //     ///---6
+      //     '${nFormat.format((_InvoiceHistoryModels[index].pri == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].pri!))}',
+
+      //     ///---7
+      //     '${_InvoiceHistoryModels[index].ovalue}',
+
+      //     ///---8
+      //     '${_InvoiceHistoryModels[index].nvalue}',
+
+      //     ///---9
+      //     '${nFormat.format((_InvoiceHistoryModels[index].qty == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].qty!))}',
+
+      //     ///---10
+      //     '${_InvoiceHistoryModels[index].refno}',
+
+      //     ///---11
+      //     double.parse(_InvoiceHistoryModels[index].tf!) == 0.00
+      //         ? '${nFormat.format(double.parse(_InvoiceHistoryModels[index].qty!))}'
+      //         : '${nFormat.format(double.parse(_InvoiceHistoryModels[index].qty!))}',
+      //     //'(${int.parse(_InvoiceHistoryModels[index].ovalue!)} - ${int.parse(_InvoiceHistoryModels[index].nvalue!)}) ${double.parse(_InvoiceHistoryModels[index].qty!)}',
+
+      //     ///---12
+      //     double.parse(_InvoiceHistoryModels[index].tf!) != 0.00
+      //         ? '${nFormat.format(double.parse((_InvoiceHistoryModels[index].pri == null) ? '0.00' : _InvoiceHistoryModels[index].pri!))} (tf ${nFormat.format((double.parse((_InvoiceHistoryModels[index].amt == null) ? '0.00' : _InvoiceHistoryModels[index].amt!) - (double.parse((_InvoiceHistoryModels[index].vat == null) ? '0.00' : _InvoiceHistoryModels[index].vat!) + double.parse((_InvoiceHistoryModels[index].pvat == null) ? '0.00' : _InvoiceHistoryModels[index].pvat!))))})'
+      //         : '${nFormat.format(double.parse((_InvoiceHistoryModels[index].nvat == null) ? '0.00' : _InvoiceHistoryModels[index].nvat!))}',
+      //     //'${nFormat.format(double.parse((_InvoiceHistoryModels[index].nvat == null) ? '0.00' : _InvoiceHistoryModels[index].nvat!))}',
+
+      //     ///---13
+
+      //     '${_InvoiceHistoryModels[index].ele_ty}',
+
+      //     ///---14
+      //     '${nFormat.format((_InvoiceHistoryModels[index].pvat == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].pvat!))}',
+
+      //     ///---15
+      //     (_InvoiceHistoryModels[index].zn != null)
+      //         ? (_InvoiceHistoryModels[index].zn!.split('_')[0].length <= 4)
+      //             ? '${_InvoiceHistoryModels[index].refno}/0${_InvoiceHistoryModels[index].zn!.split('_')[0]}'
+      //             : '${_InvoiceHistoryModels[index].refno}/${_InvoiceHistoryModels[index].zn!.split('_')[0]}'
+      //         : (_InvoiceHistoryModels[index].zn!.split('_')[0].length <= 4)
+      //             ? '-/0${_InvoiceHistoryModels[index].zn!.split('_')[0]}'
+      //             : '-/${_InvoiceHistoryModels[index].zn!.split('_')[0]}',
+
+      //     ///---16
+      //     '${_InvoiceHistoryModels[index].vat_dis}',
+
+      //     ///---17
+      //     (_InvoiceHistoryModels[index].dis == null)
+      //         ? '0.00'
+      //         : '${nFormat.format((_InvoiceHistoryModels[index].dis == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].dis!))}',
+      //     // '${_InvoiceHistoryModels[index].dis}',
+
+      //     ///---18
+      //     (_InvoiceHistoryModels[index].dis == null)
+      //         ? '0.00'
+      //         : (_InvoiceHistoryModels[index].pri.toString() == '0.00' ||
+      //                 _InvoiceHistoryModels[index].pri.toString() == '0')
+      //             ? '${nFormat.format((_InvoiceHistoryModels[index].amt == null) ? 0.00 - double.parse(_InvoiceHistoryModels[index].dis!) : double.parse(_InvoiceHistoryModels[index].amt!) - double.parse(_InvoiceHistoryModels[index].dis!))}'
+      //             : '${nFormat.format((_InvoiceHistoryModels[index].pri == null) ? 0.00 - double.parse(_InvoiceHistoryModels[index].dis!) : double.parse(_InvoiceHistoryModels[index].pri!) - double.parse(_InvoiceHistoryModels[index].dis!))}',
+
+      //     ///---19 (AMT Dis)
+      //     (_InvoiceHistoryModels[index].dis == null)
+      //         ? '0.00'
+      //         : '${nFormat.format((_InvoiceHistoryModels[index].pvat == null) ? 0.00 - double.parse(_InvoiceHistoryModels[index].dis!) : double.parse(_InvoiceHistoryModels[index].pvat!) - double.parse(_InvoiceHistoryModels[index].dis!))}',
+
+      //     ///---20 (PVAT Dis)
+      //     (_InvoiceHistoryModels[index].vat_dis == null ||
+      //             _InvoiceHistoryModels[index].vat_dis.toString() == '0')
+      //         ? '0.00'
+      //         : '${nFormat.format((_InvoiceHistoryModels[index].nvat == null) ? 0.00 - double.parse(_InvoiceHistoryModels[index].vat_dis!) : double.parse(_InvoiceHistoryModels[index].vat!) - double.parse(_InvoiceHistoryModels[index].vat_dis!))}',
+
+      //     ///---21 (VAT Dis)
+      //     (_InvoiceHistoryModels[index].dis == null ||
+      //             _InvoiceHistoryModels[index].dis.toString() == '0')
+      //         ? '0.00'
+      //         : '${nFormat.format((_InvoiceHistoryModels[index].total_t == null) ? 0.00 - double.parse(_InvoiceHistoryModels[index].dis!) : double.parse(_InvoiceHistoryModels[index].total_t!) - double.parse(_InvoiceHistoryModels[index].dis!))}',
+
+      //     ///---22 (Total Dis)
+      //     '${nFormat.format((_InvoiceHistoryModels[index].pvat == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].pvat!) + ((_InvoiceHistoryModels[index].vat == null) ? 0.00 : double.parse(_InvoiceHistoryModels[index].vat!)))}',
+
+      //     ///---23 (Total pvat+vat)
+      //     '${nFormat.format(((_InvoiceHistoryModels[index].pvat == null) ? 0.00 - double.parse(_InvoiceHistoryModels[index].dis!) : double.parse(_InvoiceHistoryModels[index].pvat!) - double.parse(_InvoiceHistoryModels[index].dis!)) + ((_InvoiceHistoryModels[index].nvat == null) ? 0.00 - double.parse(_InvoiceHistoryModels[index].vat_dis!) : double.parse(_InvoiceHistoryModels[index].vat!) - double.parse(_InvoiceHistoryModels[index].vat_dis!)))}',
+
+      //     ///---24 (Total pvat Dis +vat Dis )
+      //   ],
+    ];
 
 ///////////////--------------------------------------------------->
     Future.delayed(Duration(milliseconds: 500), () async {
@@ -487,7 +609,10 @@ class Man_BillingNoteInvlice_PDF {
             TitleType_Default_Receipt_Name,
             fonts_pdf,
             Con_remark,
-            customer_name);
+            customer_name,
+            signature,
+            fullname,
+            billingFormat);
         // Pdfgen_BillingNoteInvlice_TP3_V2.exportPDF_BillingNoteInvlice_TP3_V2(
         //     _InvoiceHistoryModels,
         //     foder,
@@ -580,7 +705,10 @@ class Man_BillingNoteInvlice_PDF {
             TitleType_Default_Receipt_Name,
             fonts_pdf,
             Con_remark,
-            customer_name);
+            customer_name,
+            signature,
+            fullname,
+            billingFormat);
       } else if (tem_page_ser.toString() == '2') {
         if (rtser.toString() == '102') {
           Pdfgen_BillingNoteInvlice_TP7_Ama
@@ -631,57 +759,62 @@ class Man_BillingNoteInvlice_PDF {
                   End_Bill_Paydate,
                   fonts_pdf,
                   Con_remark,
-                  customer_name);
+                  customer_name,
+                  signature);
         } else if (rtser.toString() == '148') {
           Pdfgen_BillingNoteInvlice_TP7_LAMPHUN
               .exportPDF_BillingNoteInvlice_TP7_LAMPHUN(
-                  _InvoiceHistoryModels,
-                  foder,
-                  Cust_no,
-                  cid_,
-                  Zone_s,
-                  Ln_s,
-                  fname,
-                  // ser,
-                  tableData003,
-                  context,
-                  Get_Value_cid,
-                  namenew,
-                  sum_pvat,
-                  sum_vat,
-                  sum_wht,
-                  sum_amt,
-                  sum_disamt,
-                  sum_total,
-                  renTal_name,
-                  Form_bussshop,
-                  Form_address,
-                  Form_tel,
-                  Form_email,
-                  Form_tax,
-                  Form_nameshop,
-                  bill_addr,
-                  bill_email,
-                  bill_tel,
-                  bill_tax,
-                  bill_name,
-                  newValuePDFimg,
-                  numinvoice,
-                  Datex_invoice,
-                  payment_Ptname1,
-                  payment_Ptname2,
-                  payment_Bno1,
-                  payment_Ptser1,
-                  bank1,
-                  img1,
-                  btype1,
-                  ptser1,
-                  ptname1,
-                  Preview_ser,
-                  End_Bill_Paydate,
-                  fonts_pdf,
-                  Con_remark,
-                  customer_name);
+            _InvoiceHistoryModels,
+            foder,
+            Cust_no,
+            cid_,
+            Zone_s,
+            Ln_s,
+            fname,
+            // ser,
+            tableData003,
+            context,
+            Get_Value_cid,
+            namenew,
+            sum_pvat,
+            sum_vat,
+            sum_wht,
+            sum_amt,
+            sum_disamt,
+            sum_total,
+            renTal_name,
+            Form_bussshop,
+            Form_address,
+            Form_tel,
+            Form_email,
+            Form_tax,
+            Form_nameshop,
+            bill_addr,
+            bill_email,
+            bill_tel,
+            bill_tax,
+            bill_name,
+            newValuePDFimg,
+            numinvoice,
+            Datex_invoice,
+            payment_Ptname1,
+            payment_Ptname2,
+            payment_Bno1,
+            payment_Ptser1,
+            bank1,
+            img1,
+            btype1,
+            ptser1,
+            ptname1,
+            Preview_ser,
+            End_Bill_Paydate,
+            fonts_pdf,
+            Con_remark,
+            customer_name,
+            signature,
+            fullname,
+            billingFormat,
+          );
         } else if (rtser.toString() == '145') {
           Pdfgen_BillingNoteInvlice_TP7_nim
               .exportPDF_BillingNoteInvlice_TP7_nim(
@@ -780,7 +913,10 @@ class Man_BillingNoteInvlice_PDF {
               End_Bill_Paydate,
               fonts_pdf,
               Con_remark,
-              customer_name);
+              customer_name,
+              signature,
+              fullname,
+              billingFormat);
         }
       } else if (tem_page_ser.toString() == '3') {
         if (rtser.toString() == '72' ||
@@ -835,7 +971,8 @@ class Man_BillingNoteInvlice_PDF {
                   End_Bill_Paydate,
                   fonts_pdf,
                   Con_remark,
-                  customer_name);
+                  customer_name,
+                  signature);
         } else if (rtser.toString() == '106') {
           Pdfgen_BillingNoteInvlice_TP8_Choice
               .exportPDF_BillingNoteInvlice_TP8_Choice(
@@ -889,57 +1026,11 @@ class Man_BillingNoteInvlice_PDF {
                   '${int.parse('$paper_run') + 1}',
                   sum_net_amount_pvat,
                   sum_net_non_pvat,
-                  customer_name);
+                  customer_name,
+                  signature,
+                  remark);
         } else {
           Pdfgen_BillingNoteInvlice_TP9.exportPDF_BillingNoteInvlice_TP9(
-              // _InvoiceHistoryModels,
-              // foder,
-              // Cust_no,
-              // cid_,
-              // Zone_s,
-              // Ln_s,
-              // fname,
-              // // ser,
-              // tableData003,
-              // context,
-              // Get_Value_cid,
-              // namenew,
-              // sum_pvat,
-              // sum_vat,
-              // sum_wht,
-              // sum_amt,
-              // sum_disamt,
-              // sum_total,
-              // renTal_name,
-              // Form_bussshop,
-              // Form_address,
-              // Form_tel,
-              // Form_email,
-              // Form_tax,
-              // Form_nameshop,
-              // bill_addr,
-              // bill_email,
-              // bill_tel,
-              // bill_tax,
-              // bill_name,
-              // newValuePDFimg,
-              // numinvoice,
-              // Datex_invoice,
-              // payment_Ptname1,
-              // payment_Ptname2,
-              // payment_Bno1,
-              // TitleType_Default_Receipt_Name,
-              // payment_Ptser1,
-              // bank1,
-              // ptser1,
-              // ptname1,
-              // img1,
-              // Preview_ser,
-              // End_Bill_Paydate,
-              // fonts_pdf,
-              // Water_electricity,
-              // Con_remark,
-              // customer_name);
               _InvoiceHistoryModels,
               foder,
               Cust_no,
@@ -991,57 +1082,63 @@ class Man_BillingNoteInvlice_PDF {
               '${int.parse('$paper_run') + 1}',
               sum_net_amount_pvat,
               sum_net_non_pvat,
-              customer_name);
+              customer_name,
+              signature,
+              fullname,
+              billingFormat,
+              remark);
         }
       } else if (tem_page_ser.toString() == '4') {
-        Pdfgen_BillingNoteInvlice_TP9_Lao.exportPDF_BillingNoteInvlice_TP9_Lao(
-            _InvoiceHistoryModels,
-            foder,
-            Cust_no,
-            cid_,
-            Zone_s,
-            Ln_s,
-            fname,
-            // ser,
-            tableData003,
-            context,
-            Get_Value_cid,
-            namenew,
-            sum_pvat,
-            sum_vat,
-            sum_wht,
-            sum_amt,
-            sum_disamt,
-            sum_total,
-            renTal_name,
-            Form_bussshop,
-            Form_address,
-            Form_tel,
-            Form_email,
-            Form_tax,
-            Form_nameshop,
-            bill_addr,
-            bill_email,
-            bill_tel,
-            bill_tax,
-            bill_name,
-            newValuePDFimg,
-            numinvoice,
-            Datex_invoice,
-            payment_Ptname1,
-            payment_Ptname2,
-            payment_Bno1,
-            TitleType_Default_Receipt_Name,
-            payment_Ptser1,
-            bank1,
-            ptser1,
-            ptname1,
-            img1,
-            Preview_ser,
-            End_Bill_Paydate,
-            fonts_pdf,
-            Con_remark,
-            customer_name);
+        Pdfgen_BillingNoteInvlice_TP9_Lao_ScreenshotPreview
+            .exportPDF_BillingNoteInvlice_TP9_Lao_ScreenshotPreview(
+                _InvoiceHistoryModels,
+                foder,
+                Cust_no,
+                cid_,
+                Zone_s,
+                Ln_s,
+                fname,
+                // ser,
+                tableData003,
+                context,
+                Get_Value_cid,
+                namenew,
+                sum_pvat,
+                sum_vat,
+                sum_wht,
+                sum_amt,
+                sum_disamt,
+                sum_total,
+                renTal_name,
+                Form_bussshop,
+                Form_address,
+                Form_tel,
+                Form_email,
+                Form_tax,
+                Form_nameshop,
+                bill_addr,
+                bill_email,
+                bill_tel,
+                bill_tax,
+                bill_name,
+                newValuePDFimg,
+                numinvoice,
+                Datex_invoice,
+                payment_Ptname1,
+                payment_Ptname2,
+                payment_Bno1,
+                TitleType_Default_Receipt_Name,
+                payment_Ptser1,
+                bank1,
+                ptser1,
+                ptname1,
+                img1,
+                Preview_ser,
+                End_Bill_Paydate,
+                fonts_pdf,
+                Con_remark,
+                customer_name,
+                remark);
       } else if (tem_page_ser.toString() == '5') {
         Pdfgen_BillingNoteInvlice_TP9.exportPDF_BillingNoteInvlice_TP9(
             // _InvoiceHistoryModels,
@@ -1143,7 +1240,11 @@ class Man_BillingNoteInvlice_PDF {
             '${int.parse('$paper_run') + 1}',
             sum_net_amount_pvat,
             sum_net_non_pvat,
-            customer_name);
+            customer_name,
+            signature,
+            fullname,
+            billingFormat,
+            remark);
       } else if (tem_page_ser.toString() == '6') {
         Pdfgen_BillingNoteInvlice_TP10.exportPDF_BillingNoteInvlice_TP10(
             _InvoiceHistoryModels,
@@ -1197,7 +1298,168 @@ class Man_BillingNoteInvlice_PDF {
             '${int.parse('$paper_run') + 1}',
             sum_net_amount_pvat,
             sum_net_non_pvat,
-            customer_name);
+            customer_name,
+            signature,
+            billingFormat);
+      } else if (tem_page_ser.toString() == '7') {
+        Pdfgen_BillingNoteInvlice_58MM.exportPDF_BillingNoteInvlice_58MM(
+          invoiceHistoryModels: _InvoiceHistoryModels,
+          foder: foder,
+          Cust_no: Cust_no,
+          cid_: cid_,
+          Zone_s: Zone_s,
+          Ln_s: Ln_s,
+          fname: fname,
+          tableData003: tableData003,
+          context: context,
+          Num_cid: Get_Value_cid,
+          Namenew: namenew,
+          SubTotal: sum_pvat,
+          Vat: sum_vat,
+          Deduct: sum_wht,
+          Sum_SubTotal: sum_amt,
+          DisC: sum_disamt,
+          Total: sum_total,
+          renTal_name: renTal_name,
+          sname_: Form_bussshop,
+          addr_: Form_address,
+          tel_: Form_tel,
+          email_: Form_email,
+          tax_: Form_tax,
+          cname_: Form_nameshop,
+          bill_addr: bill_addr,
+          bill_email: bill_email,
+          bill_tel: bill_tel,
+          bill_tax: bill_tax,
+          bill_name: bill_name,
+          newValuePDFimg: newValuePDFimg,
+          cFinn: numinvoice,
+          date_Transaction: Datex_invoice,
+          paymentName1: payment_Ptname1,
+          paymentName2: payment_Ptname2,
+          selectedValue_bank_bno: payment_Bno1,
+          bank1: bank1,
+          ptser1: ptser1,
+          ptname1: ptname1,
+          img1: img1,
+          Preview_ser: Preview_ser,
+          End_Bill_Paydate: End_Bill_Paydate,
+          TitleType_Default_Receipt_Name: TitleType_Default_Receipt_Name,
+          fonts_pdf: fonts_pdf,
+          Con_remark: Con_remark,
+          customer_name: customer_name,
+          signature: signature,
+          fullname: fullname,
+          billingFormat: billingFormat,
+        );
+      } else if (tem_page_ser.toString() == '8') {
+        Pdfgen_BillingNoteInvlice_60MM.exportPDF_BillingNoteInvlice_60MM(
+          invoiceHistoryModels: _InvoiceHistoryModels,
+          foder: foder,
+          Cust_no: Cust_no,
+          cid_: cid_,
+          Zone_s: Zone_s,
+          Ln_s: Ln_s,
+          fname: fname,
+          tableData003: tableData003,
+          context: context,
+          Num_cid: Get_Value_cid,
+          Namenew: namenew,
+          SubTotal: sum_pvat,
+          Vat: sum_vat,
+          Deduct: sum_wht,
+          Sum_SubTotal: sum_amt,
+          DisC: sum_disamt,
+          Total: sum_total,
+          renTal_name: renTal_name,
+          sname_: Form_bussshop,
+          addr_: Form_address,
+          tel_: Form_tel,
+          email_: Form_email,
+          tax_: Form_tax,
+          cname_: Form_nameshop,
+          bill_addr: bill_addr,
+          bill_email: bill_email,
+          bill_tel: bill_tel,
+          bill_tax: bill_tax,
+          bill_name: bill_name,
+          newValuePDFimg: newValuePDFimg,
+          cFinn: numinvoice,
+          date_Transaction: Datex_invoice,
+          paymentName1: payment_Ptname1,
+          paymentName2: payment_Ptname2,
+          selectedValue_bank_bno: payment_Bno1,
+          bank1: bank1,
+          ptser1: ptser1,
+          ptname1: ptname1,
+          img1: img1,
+          Preview_ser: Preview_ser,
+          End_Bill_Paydate: End_Bill_Paydate,
+          TitleType_Default_Receipt_Name: TitleType_Default_Receipt_Name,
+          fonts_pdf: fonts_pdf,
+          Con_remark: Con_remark,
+          customer_name: customer_name,
+          signature: signature,
+          fullname: fullname,
+          billingFormat: billingFormat,
+        );
+      } else if (tem_page_ser.toString() == '9') {
+        Pdfgen_BillingNoteInvlice_80MM.exportPDF_BillingNoteInvlice_80MM(
+          invoiceHistoryModels: _InvoiceHistoryModels,
+          foder: foder,
+          Cust_no: Cust_no,
+          cid_: cid_,
+          Zone_s: Zone_s,
+          Ln_s: Ln_s,
+          lncode: Form_lncode,
+          fname: fname,
+          tableData003: tableData003,
+          context: context,
+          Num_cid: Get_Value_cid,
+          Namenew: namenew,
+          SubTotal: sum_pvat,
+          Vat: sum_vat,
+          Deduct: sum_wht,
+          Sum_SubTotal: sum_amt,
+          DisC: sum_disamt,
+          Total: sum_total,
+          renTal_name: renTal_name,
+          sname_: Form_bussshop,
+          addr_: Form_address,
+          tel_: Form_tel,
+          email_: Form_email,
+          tax_: Form_tax,
+          cname_: Form_nameshop,
+          bill_addr: bill_addr,
+          bill_email: bill_email,
+          bill_tel: bill_tel,
+          bill_tax: bill_tax,
+          bill_name: bill_name,
+          newValuePDFimg: newValuePDFimg,
+          cFinn: numinvoice,
+          date_Transaction: Datex_invoice,
+          paymentName1: payment_Ptname1,
+          paymentName2: payment_Ptname2,
+          selectedValue_bank_bno: payment_Bno1,
+          TitleType_Default_Receipt_Name: TitleType_Default_Receipt_Name,
+          payment_Ptser1: payment_Ptser1,
+          bank1: bank1,
+          ptser1: ptser1,
+          ptname1: ptname1,
+          img1: img1,
+          Preview_ser: Preview_ser,
+          End_Bill_Paydate: End_Bill_Paydate,
+          fonts_pdf: fonts_pdf,
+          Con_remark: Con_remark,
+          paper: paper,
+          paper_run: '${int.parse('$paper_run') + 1}',
+          sum_net_amount_pvat: sum_net_amount_pvat,
+          sum_net_non_pvat: sum_net_non_pvat,
+          customer_name: customer_name,
+          signature: signature,
+          billingFormat: billingFormat,
+          remark: remark,
+        );
       }
     });
   }

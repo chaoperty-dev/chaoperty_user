@@ -1,4 +1,4 @@
-﻿// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use
 
 import 'dart:async';
 import 'dart:convert';
@@ -6,10 +6,12 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui';
+import 'package:chaoperty_user/CRC_16_Prompay/generate_Ewallet_qrcode.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsContractx_Fine_Model.dart';
 import 'package:chaoperty_user/screen_Intents/Model/IntentsInv_history_Model.dart';
 import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
+import 'package:chaoperty_user/screen_Intents_V3/payment_mainV3_InvAll.dart';
 import 'package:flutter/material.dart';
 // หรือ
 import 'package:flutter/widgets.dart';
@@ -28,11 +30,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:flutter_timer_countdown/flutter_timer_countdown.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-
 import 'package:http_parser/http_parser.dart';
 // import 'package:image_downloader_web/image_downloader_web.dart';
 import 'package:gal/gal.dart';
 import 'package:intl/intl.dart';
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:mime/mime.dart';
 import 'package:panara_dialogs/panara_dialogs.dart';
@@ -52,6 +54,7 @@ import '../INSERT_Log/Insert_log.dart';
 import '../Model/GetCFinnancetrans_Model.dart';
 import '../Model/GetContractx_Fine_Model.dart';
 import '../Model/GetInvoice_Model.dart';
+import '../Model/GetInvoiceRe_Model.dart';
 import '../Model/GetInvoice_diapay_Model.dart';
 import '../Model/GetInvoice_history_Model.dart';
 import '../Model/GetInvoice_pay_Model.dart';
@@ -84,7 +87,9 @@ class paymentSubV4InvAll extends StatefulWidget {
   final String? cuslang;
   final String? serPayment;
   final String? serptPayment;
+
   final List<String>? selectedDocNos;
+  final bool fromIntent;
   paymentSubV4InvAll({
     Key? key,
     this.mainScreenAnimationController,
@@ -94,6 +99,7 @@ class paymentSubV4InvAll extends StatefulWidget {
     this.serPayment,
     this.serptPayment,
     this.selectedDocNos,
+    this.fromIntent = false,
   }) : super(key: key);
 
   @override
@@ -122,7 +128,22 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   DateTime datex = DateTime.now();
   bool? isChecked = false;
   bool isLoading = true;
+  bool _initialLoading = true; // show 1-sec splash on first enter
   bool _isExporting = false;
+
+  /// กัน _initData() ถูกเรียกซ้อนกัน (ผู้ใช้แตะแท็บรัว ๆ)
+  ///
+  /// ทำไมต้องมี: _initData() มี HTTP หลายชุดและ async ยาว ถ้าเรียกซ้อน
+  /// แต่ละรอบจะ clearing _InvoiceModels ตอนเริ่ม แล้ว addAll ชุดบิลเดียวกัน
+  /// ตอนจบ ⇒ บิลซ้ำ + sum_*_in / sum_tran_fine_in ถูกบวกทับ ⇒ ยอดเบิ้ล
+  ///
+  /// ใช้แทนการเช็ค isLoading เพราะ isLoading ถูก setState ระหว่าง sub-request
+  /// ได้ จึงไม่ใช่ lock ที่เชื่อถือได้
+  bool _isInitializingData = false;
+
+  /// นับรอบการโหลด — รอบที่เก่ากลับช้ากว่ารอบใหม่จะไม่ถูกนำมา apply
+  /// (defense-in-depth คู่กับ _isInitializingData)
+  int _dataLoadEpoch = 0;
   Uint8List? _exportQrBytes;
   GlobalKey qrImageKey = GlobalKey();
   GlobalKey qrBlockKey = GlobalKey();
@@ -184,6 +205,14 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
   String? selectedValue;
   String? numinvoice, paymentSer1, paymentName1, paymentSer2, paymentName2;
+
+  String? Payment_bno,
+      Payment_bname,
+      Payment_bname_en,
+      Payment_bank_ncode,
+      Payment_paytype_ncode,
+      Payment_remark;
+
   final Form_payment1 = TextEditingController();
   final Form_payment2 = TextEditingController();
   List<TeNantModel> teNantModels = [];
@@ -207,6 +236,88 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       sum_amt_in = 0,
       sum_disamt_in = 0;
   int tap = 0, select_pay = 0, gopay = 0, show_qr = 0, selectTap = 1;
+
+  // ✅ นับจำนวนรายการในแต่ละแท็บ (intents based)
+  int get _countAwaitingSlip {
+    return paymentIntents
+        .where((p) =>
+            _isAwaitingSlipStatus(p.status) || _isSelectedIntentAwaitingSlip(p))
+        .length;
+  }
+
+  int get _countAwaitingVerify {
+    return paymentIntents
+        .where((p) => _isAwaitingVerifyStatus(p.status))
+        .length;
+  }
+
+  // ✅ helper: ตรวจสอบ status intent
+  bool _isAwaitingSlipStatus(String? status) {
+    final s = (status ?? '').toLowerCase();
+    // รอแนบหลักฐาน = intent ใหม่ที่รอชำระ (มี QR แล้วแต่ user ยังไม่จ่าย)
+    final isPaidIntent =
+        s.contains('รอชำระเงิน') || s.contains('awaiting') || s.contains('pay');
+    final hasReview =
+        s.contains('ตรวจ') || s.contains('review') || s.contains('pending');
+    return isPaidIntent && !hasReview;
+  }
+
+  bool _isAwaitingVerifyStatus(String? status) {
+    final s = (status ?? '').toLowerCase();
+    // รอระบบตรวจสอบ = user แนบ slip แล้ว รอ admin ตรวจ
+    return s.contains('ตรวจ') ||
+        s.contains('review') ||
+        s.contains('pending') ||
+        s.contains('รอการ');
+  }
+
+  bool _isSelectedIntent(PaymentIntent intent) {
+    if (!widget.fromIntent || widget.selectedDocNos == null) return false;
+    return intent.invoices.any((invoice) {
+      final ref = (invoice.billReference ?? '').trim();
+      return ref.isNotEmpty && widget.selectedDocNos!.contains(ref);
+    });
+  }
+
+  bool _isSelectedIntentAwaitingSlip(PaymentIntent intent) {
+    if (!_isSelectedIntent(intent)) return false;
+    final hasProof = intent.latestSlip != null ||
+        (intent.systemStatus ?? '').toLowerCase() == 'slip_uploaded' ||
+        _isAwaitingVerifyStatus(intent.status);
+    return !hasProof;
+  }
+
+  // ✅ helper: แสดงข้อความเมื่อ tab ว่าง
+  Widget _emptyTabMsg(String msg) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 28),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.inbox_outlined, size: 40, color: Colors.grey.shade400),
+          const SizedBox(height: 8),
+          Text(
+            msg,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: Font_.Fonts_T,
+              color: Colors.grey.shade600,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // กันสลับแท็บอัตโนมัติซ้ำ — ทำเฉพาะตอนเปิดหน้าครั้งแรก
+  bool _hasAutoSwitched = false;
   double dis_sum_Pakan = 0.00;
   String? cFinn,
       Value_newDateY = '',
@@ -242,6 +353,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   String? return_qr_refapi1, return_qr_refapi2, return_qr_refapi3;
   String? qr_expiresAt, qr_softExpiresAt, activeQrSessionSoftExpire;
   String? qr_payload;
+  String? qrDataNoIntens;
   // ใช้ค่าล่าสุด (อาจถูกอัปเดตจาก renew)
   String? nowExpiresIso;
   DateTime? expiryLocal;
@@ -249,6 +361,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   String? _slipImageName;
   String? intentsAttacheSlipNo; // Added
   late Stream<int> _timerStream;
+  // Added 2026-07-08: hold subscription so we can cancel on dispose.
+  StreamSubscription<int>? _timerSub;
   // ================= Helpers for Right Panel =================
 
   double _d(dynamic v) {
@@ -282,11 +396,29 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     _timerStream =
         Stream.periodic(const Duration(seconds: 1), (_) => secondsUntilExpire())
             .asBroadcastStream();
+    // Hold a listener so we can cancel it on dispose; previously
+    // the broadcast stream kept running 1Hz until app exit.
+    _timerSub = _timerStream.listen((_) {});
     if (widget.mainScreenAnimationController == null) {
       _usingLocalController = true;
       _localController = AnimationController(vsync: this, value: 1.0);
       _localAnimation = AlwaysStoppedAnimation(1.0);
     }
+
+    // splash loading 1 วินาที ตอนเข้าหน้าครั้งแรก
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) setState(() => _initialLoading = false);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) _showAttachSlipWarning();
+      });
+    });
+
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   _showAttachSlipWarning();
+    // });
 
     checkPreferance().then((value) {
       Value_newDateY1 = DateFormat('yyyy-MM-dd').format(newDatetime);
@@ -298,18 +430,245 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     });
   }
 
+  void _showAttachSlipWarning() {
+    final isEN = widget.cuslang == 'EN';
+    double dx = 0.0;
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => StatefulBuilder(
+            builder: (_, setSS) => Dialog(
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20)),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.85,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 28),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 68,
+                              height: 68,
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.warning_rounded,
+                                  color: Colors.red, size: 38),
+                            ),
+                            const SizedBox(height: 14),
+                            Text(
+                              isEN
+                                  ? 'Important Notice'
+                                  : 'ประกาศสำคัญสำหรับผู้เช่า',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.red,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              isEN
+                                  ? 'After making a payment, tenants must attach payment evidence via the tenant app every time.'
+                                  : 'หลังจากทำการชำระเงินแล้ว\nผู้เช่าจะต้องแนบหลักฐานการชำระเงิน\nผ่านแอปผู้เช่าทุกครั้ง',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 14, height: 1.6),
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.07),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                    color: Colors.red.withValues(alpha: 0.4),
+                                    width: 1.5),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      isEN
+                                          ? 'If no evidence is attached,\nthe system will treat it as\n"No Payment Made" in all cases'
+                                          : 'หากไม่แนบหลักฐานในแอปผู้เช่า\nระบบจะถือว่า\n"ยังไม่มีการชำระเงิน" ทุกกรณี',
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.red,
+                                        height: 1.65,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            // ── Slide-to-dismiss button ──
+                            LayoutBuilder(builder: (_, constraints) {
+                              const double handleSize = 46.0;
+                              const double trackHeight = 52.0;
+                              const double pad = 4.0;
+                              final double maxDrag =
+                                  constraints.maxWidth - handleSize - pad * 2;
+                              final double pct = (dx / maxDrag).clamp(0.0, 1.0);
+
+                              return Container(
+                                height: trackHeight,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Color.lerp(Colors.grey,
+                                          Colors.grey.shade800, pct)!,
+                                      Colors.grey.shade800,
+                                    ],
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                  ),
+                                  borderRadius:
+                                      BorderRadius.circular(trackHeight / 2),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color:
+                                          Colors.grey.withValues(alpha: 0.35),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.centerLeft,
+                                  children: [
+                                    // label — จางลงเมื่อเลื่อน
+                                    Center(
+                                      child: Opacity(
+                                        opacity:
+                                            (1.0 - pct * 2).clamp(0.0, 1.0),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              isEN
+                                                  ? 'Slide to close'
+                                                  : 'เลื่อนเพื่อปิด',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // handle
+                                    AnimatedPositioned(
+                                      duration: dx == 0
+                                          ? const Duration(milliseconds: 300)
+                                          : Duration.zero,
+                                      curve: Curves.elasticOut,
+                                      left: pad + dx,
+                                      child: GestureDetector(
+                                        onHorizontalDragUpdate: (d) {
+                                          setSS(() {
+                                            dx = (dx + d.delta.dx)
+                                                .clamp(0.0, maxDrag);
+                                          });
+                                        },
+                                        onHorizontalDragEnd: (_) {
+                                          if (dx >= maxDrag * 0.72) {
+                                            Navigator.of(ctx,
+                                                    rootNavigator: true)
+                                                .pop();
+                                          } else {
+                                            setSS(() => dx = 0.0);
+                                          }
+                                        },
+                                        child: Container(
+                                          width: handleSize,
+                                          height: handleSize,
+                                          decoration: const BoxDecoration(
+                                            color: Colors.white,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black26,
+                                                blurRadius: 6,
+                                                offset: Offset(2, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            Icons.arrow_forward_rounded,
+                                            color: Colors.grey.shade700,
+                                            size: 24,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                )));
+  }
+
   @override
   void dispose() {
     if (_usingLocalController) {
       _localController.dispose();
     }
+    _timerSub?.cancel();
+    _qrUpdateTrigger.dispose();
     super.dispose();
   }
 
-  int _toU16(String? v) =>
-      (int.tryParse((v ?? '0').trim()) ?? 0) +
-      65535; // ✅ 16-bit unsigned (0..65535)
+  String _toU16(String? v) => (v ?? '0').trim();
+
+  /// แตะแท็บแล้วโหลดข้อมูลใหม่
+  ///
+  /// - แตะแท็บเดิม (selectTap == tab) → ไม่ทำอะไร ไม่ยิง API ซ้ำ
+  /// - มีรอบโหลดค้างอยู่ → ไม่ทำอะไร (รอรอบนั้นจบ)
+  /// - ปกติ → _initData() แล้วค่อยสลับแท็บ
+  ///
+  /// เหตุผลที่ต้องกัน: ผู้ใช้แตะรัว ๆ ทำให้ _initData() ซ้อนกัน เกิดบิลซ้ำ/ยอดเบิ้ล
+  Future<void> _selectTabAndRefresh(int tab) async {
+    if (selectTap == tab) return;
+    if (_isInitializingData) return;
+    await _initData();
+    if (!mounted) return;
+    setState(() => selectTap = tab);
+  }
+
   Future<void> _initData() async {
+    // single-flight: ถ้ามีรอบโหลดค้างอยู่ ให้รอบนั้นทำงานต่อเพียงรอบเดียว
+    if (_isInitializingData) return;
+    _isInitializingData = true;
+    final loadEpoch = ++_dataLoadEpoch;
+    try {
+      await _initDataInner(loadEpoch);
+    } finally {
+      _isInitializingData = false;
+    }
+  }
+
+  Future<void> _initDataInner(int loadEpoch) async {
     setState(() {
       isLoading = true;
       paymentSer1 = null;
@@ -327,8 +686,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
     var renPreferences = await preferences.getString('renTalSer');
 
-    String? custno16Bit = await _toU16('$custnoPreferences').toString();
-    final ren16Bit = await _toU16('$renPreferences');
+    String? custno16Bit = _toU16('$custnoPreferences');
+    final ren16Bit = _toU16('$renPreferences');
     debugPrint(
         '_initData Step: redPaymentIntents: cusno=$custnoPreferences, propertyno=$renPreferences');
     debugPrint(
@@ -356,6 +715,60 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     // Consolidated initialization to prevent race conditions & duplication
     await _initSubData();
     // await QrGenRef();
+
+    // รอบที่เก่ากว่าห้ามเขียนทับ state ของรอบใหม่
+    if (!mounted || loadEpoch != _dataLoadEpoch) return;
+
+    // ─── Auto-switch แท็บ ครั้งแรกที่เปิดหน้า ────────────────────────
+    // ถ้าแท็บเริ่มต้น "ที่ต้องชำระ" (selectTap=1) มี 0 รายการ
+    // → สลับไปแท็บถัดไปที่มีรายการอัตโนมัติ (2: รอแนบหลักฐาน / 3: รอระบบตรวจสอบ)
+    // ✅ ถ้ามาจาก intent card (selectedDocNos มีค่าและตรงกับ intent) → สลับไปแท็บที่ตรงสถานะ
+    if (!_hasAutoSwitched) {
+      // กรณี A: มาจาก intent card → ตรวจสถานะ intent แล้วเลือกแท็บ
+      final cameFromIntent = widget.selectedDocNos != null &&
+          widget.selectedDocNos!.isNotEmpty &&
+          paymentIntents.any((p) => p.invoices.any((inv) {
+                final ref = (inv.billReference ?? '').trim();
+                return widget.selectedDocNos!.contains(ref);
+              }));
+
+      if (cameFromIntent) {
+        // ✅ หา intent ที่เกี่ยวข้อง (เฉพาะบิลที่ user ติ๊ก)
+        final relatedIntents = paymentIntents.where((p) {
+          return p.invoices.any((inv) {
+            final ref = (inv.billReference ?? '').trim();
+            return widget.selectedDocNos!.contains(ref);
+          });
+        }).toList();
+
+        // ✅ นับสถานะของ intents ที่เกี่ยวข้อง
+        final hasVerify =
+            relatedIntents.any((p) => _isAwaitingVerifyStatus(p.status));
+        final hasSlip =
+            relatedIntents.any((p) => _isAwaitingSlipStatus(p.status));
+
+        // ✅ ลำดับความสำคัญ: intent status มาก่อน (เพราะ user กดจาก card intent)
+        if (hasVerify) {
+          selectTap = 3; // รอระบบตรวจสอบ (เช่น "แนบหลักฐานแล้ว")
+        } else if (hasSlip ||
+            relatedIntents.any(_isSelectedIntentAwaitingSlip)) {
+          selectTap = 2; // รอแนบหลักฐาน (เช่น "กดเพื่อแนบหลักฐาน")
+        } else {
+          // ✅ ไม่มี intent (ทุกบิลยังไม่ถูก initiate) → ไปแท็บ 1
+          selectTap = 1;
+        }
+      }
+      // กรณี B: แท็บ 1 ว่าง → สลับไปแท็บถัดไป
+      else if (_InvoiceModels.isEmpty) {
+        if (_countAwaitingSlip > 0) {
+          selectTap = 2;
+        } else if (_countAwaitingVerify > 0) {
+          selectTap = 3;
+        }
+      }
+      _hasAutoSwitched = true;
+    }
+
     if (mounted) {
       setState(() {
         isLoading = false;
@@ -375,9 +788,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       sum_disamt_in = 0;
     });
     await read_GC_fine();
-    if (contractxFineModels.isNotEmpty) {
-      await in_Trans_fine_re();
-    } // ---------- dteilData ----------
+    // Always populate invoicePayModels — handles both with/without fine internally
+    await in_Trans_fine_re();
+    // ---------- dteilData ----------
     for (var Indexinv = 0; Indexinv < _InvoiceModels.length; Indexinv++) {
       final rowInv = _InvoiceModels[Indexinv];
 
@@ -555,7 +968,24 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     return res;
   }
 
+  /// กัน CreatePaymentItem ถูกเรียกซ้อน
+  ///
+  /// ขั้นตอนนี้ยิง API สร้าง payment intent จริง (PostPaymentIntent) ⇒ กด
+  /// ปุ่ม "เริ่มการชำระ" ซ้ำระหว่างที่รอบแรกยังวิ่ง = intent ซ้ำ = ยอดเบิ้ล
+  ///
+  /// ทำไม overlay spinner กันไม่ได้: showDialog ด้านในไม่ถูก await และ
+  /// finally ปิด overlay เอง ⇒ ระหว่างที่ยังโหลดอยู่ overlay อาจถูกปิดไปแล้ว
+  /// จึงต้องมี flag ที่ชั้น logic
+  bool _isCreatingPaymentItem = false;
+
   Future<Null> CreatePaymentItem() async {
+    // reentry guard: รอบสองถูกปฏิเสธทันที ไม่แตะ network/accumulator ใด ๆ
+    //
+    // สำคัญกว่าที่คิด: body ด้านล่างรีเซ็ต sum_*_in = 0 ตั้งแต่ต้น (บรรทัด
+    // ราว 978-986) ถ้ารอบสองเข้าไปจะล้างค่ากลางคันของรอบแรกที่กำลังจะใช้
+    // คำนวณ requestedAmountTotalBill ⇒ ได้ยอด 0 หรือยอดผิด
+    if (_isCreatingPaymentItem) return;
+    _isCreatingPaymentItem = true;
     try {
       showDialog(
         context: context,
@@ -600,9 +1030,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
       // 0) Prepare fine data once
       await read_GC_fine();
-      if (contractxFineModels.isNotEmpty) {
-        await in_Trans_fine_re();
-      }
+      // Always populate invoicePayModels — handles both with/without fine internally
+      await in_Trans_fine_re();
 
       // ---------- dteilData ----------
       for (var Indexinv = 0; Indexinv < _InvoiceModels.length; Indexinv++) {
@@ -636,6 +1065,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                 ? [
                     {
                       "docno": rowInv.docno,
+                      "duedate": invFine['duedate'],
                       "expser": int.tryParse('${invFine['expser'] ?? 0}') ?? 0,
                       "expname": invFine['expname'] ?? "ชำระเกินกำหนด",
                       "no": int.tryParse('${invFine['no'] ?? 0}') ?? 0,
@@ -686,7 +1116,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         final wht = _d(rowInv.wht);
         final amtnet = (_d(rowInv.amt) + _d(rowInv.vat)) - _d(rowInv.wht);
         final dis = _d(rowInv.dis);
-        final total = _d(rowInv.amtall);
+        // `total_bill` คือยอดบิลรวม VAT ที่ผู้ใช้เห็นและต้องชำระจริง
+        // `amtall` เป็นยอดก่อน VAT — ห้ามใช้เป็น total ของ invoice payload
+        final billTotal = _d(rowInv.total_bill);
 
         String fineStr = '0';
         try {
@@ -700,11 +1132,18 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         }
         final totalfine = _d(fineStr);
 
+        // total ต้องรวมค่าปรับเข้าไปด้วย ไม่ใช่ยอดบิลล้วน
+        // (ของเดิม total = amtall เฉย ๆ ⇒ 1000 + late_fee 250 ควรเป็น 1250
+        //  แต่ส่ง 1000 ⇒ server เห็นยอดรวมไม่ตรงกับผลรวมรายการ)
+        // อ้างอิงสูตรเดียวกับ payment_subV4/models/payment_intent_payload.dart:183
+        final total =
+            (billTotal > 0 ? billTotal : _d(rowInv.amtall)) + totalfine;
+
         // ---------- invoices ----------
         invs.add({
           "invoice_id": 0,
           "bill_reference": rowInv.docno,
-          "amount": amtnet,
+          "amount": billTotal > 0 ? billTotal : amtnet,
           "late_fee": totalfine,
           "discount_amount": dis,
           "deposit_amount": 0, // ถ้ามี
@@ -715,7 +1154,36 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
           "metadata": metadataList,
         });
       }
-
+      // ✅ Build groupedTrans: group _InvoiceHistory by refno
+      final Map<String, List<IntentsInvoiceHistoryModel>> groupedTrans = {};
+      for (final h in _InvoiceHistory) {
+        final key = '${h.refno ?? ''}'.trim();
+        if (key.isEmpty) continue;
+        groupedTrans.putIfAbsent(key, () => []).add(h);
+      }
+      // ✅ Build invoiceByDocno: map docno → InvoiceModel
+      // ใช้ dynamic เพื่อรองรับทั้ง InvoiceModel (c_zn/c_ln) และ InvoiceReModel (zn/ln, cname, zser, aser)
+      final Map<String, dynamic> invoiceByDocno = {
+        for (final inv in _InvoiceModels) '${inv.docno ?? ''}'.trim(): inv,
+      };
+      final customer_data =
+          groupedTrans.values.map<Map<String, dynamic>>((group) {
+        final first = group.first;
+        final docno = '${first.docno ?? ''}'.trim();
+        final inv = invoiceByDocno[docno];
+        return {
+          "customer_no": "${first.custno ?? ''}",
+          "cid": "${first.cid ?? ''}",
+          "sname": "${first.sname ?? ''}",
+          "cname": "${first.cname ?? ''}",
+          "zser": "${first.zser ?? ''}",
+          "zn": "${first.zn ?? ''}",
+          "aser": "${first.aser ?? ''}",
+          "ln": "${first.ln ?? ''}",
+          "lncode": "",
+          "invoices": docno,
+        };
+      }).toList();
       // print({
       //   'cusNo': custno16Bit,
       //   'propertyNo': ren16Bit,
@@ -733,21 +1201,38 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
           (sum_disamt + sum_disamt_in) +
           (sum_amt_in + sum_tran_fine_in) +
           (fine_total);
-      await PostPaymentIntents(
-        cusNo: custno16Bit,
-        propertyNo: ren16Bit,
-        payedType: "invoice",
-        payser: int.tryParse('${widget.serPayment}') ?? 0,
-        typepayser: int.tryParse('${widget.serptPayment}') ?? 0,
-        requestedAmount: _d(requestedAmountTotalBill), // ✅ ไม่ใช้ string format
-        lateFee: All_lateFee,
-        discountAmount: All_discountAmount,
-        depositAmount: All_depositAmount,
-        insuranceAmount: All_insuranceAmount,
-        withholdingAmount: All_withholdingAmount,
-        inVoices: invs,
-        transselect: _InvoiceHistory.map((e) => e.toJson()).toList(),
-      );
+      if (requestedAmountTotalBill <= 0) {
+        throw Exception('ยอดชำระทั้งหมดต้องมากกว่า 0');
+      }
+      if (invs.isEmpty) {
+        throw Exception('ไม่พบข้อมูลใบแจ้งหนี้ที่ถูกต้อง');
+      }
+      if (widget.serPayment == null || widget.serPayment!.isEmpty) {
+        throw Exception('กรุณาเลือกวิธีการชำระเงิน');
+      }
+      await PostPaymentIntent(
+          cusNo: custno16Bit,
+          propertyNo: ren16Bit,
+          payedType: "invoice",
+          payser: int.tryParse('${widget.serPayment}') ?? 0,
+          typepayser: int.tryParse('${widget.serptPayment}') ?? 0,
+          requestedAmount:
+              _d(requestedAmountTotalBill), // ✅ ไม่ใช้ string format
+          requestedTotal: _d(requestedAmountTotalBill), // ✅ API ต้องการ
+          lateFee: All_lateFee,
+          discountAmount: All_discountAmount,
+          depositAmount: All_depositAmount,
+          insuranceAmount: All_insuranceAmount,
+          withholdingAmount: All_withholdingAmount,
+          inVoices: invs,
+          transselect: _InvoiceHistory.map((e) => e.toJson()).toList(),
+          PayBno: Payment_bno ?? '',
+          PayBname: Payment_bname ?? '',
+          PayBname_en: Payment_bname_en ?? '',
+          PayBank_ncode: Payment_bank_ncode ?? '',
+          PayPaytype_ncode: Payment_paytype_ncode ?? '',
+          customerData: customer_data);
+
       // await redPaymentIntents(
       //     cusno: custno16Bit, propertyno: ren16Bit.toString() ?? '');
       // await QrGenRef();
@@ -774,6 +1259,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       //   _expandedInnerGroupKey = null;
       // });
       // await _resetToInitialState(targetPage: 1, billAll: false);
+
+      // คืน guard ก่อน pop เสมอ — ถ้าปิด overlay ไม่สำเร็จก็ยังกดซ้ำได้
+      _isCreatingPaymentItem = false;
       if (mounted) {
         Navigator.of(context).pop();
       }
@@ -785,7 +1273,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 // ----------------------
   int? bankMerchantId;
   String? ref1 = '', ref2 = '', ref3 = '';
-  Future<void> PostPaymentIntents(
+  Future<void> PostPaymentIntent(
       {required String cusNo,
       required String propertyNo,
       required String payedType,
@@ -797,10 +1285,26 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       required double depositAmount,
       required double insuranceAmount,
       required double withholdingAmount,
+      required double requestedTotal,
       required List<Map<String, dynamic>> inVoices,
-      required List<Map<String, dynamic>> transselect}) async {
+      required List<Map<String, dynamic>> transselect,
+      required String PayBno,
+      required String PayBname,
+      required String PayBname_en,
+      required String PayBank_ncode,
+      required String PayPaytype_ncode,
+      required List<Map<String, dynamic>> customerData}) async {
     debugPrint('🔄 เรียกใช้งาน PostPaymentIntents()');
-
+    final accountType = (PayPaytype_ncode == '' ||
+            PayPaytype_ncode == 'null' ||
+            PayPaytype_ncode == null)
+        ? PayBank_ncode
+        : PayPaytype_ncode;
+    if (accountType == null || accountType.isEmpty) {
+      debugPrint(
+          '❌ accountType ว่าง: PayBank_ncode="$PayBank_ncode", PayPaytype_ncode="$PayPaytype_ncode"');
+      return;
+    }
     final response = await postPaymentIntents(
         cusNo: cusNo,
         propertyNo: propertyNo,
@@ -812,13 +1316,19 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         depositAmount: depositAmount,
         insuranceAmount: insuranceAmount,
         withholdingAmount: withholdingAmount,
+        requestedTotal: requestedTotal,
         // createdById: "10101010101010",
         isAdminCreated: true,
         bankMerchantId: payser,
         bankMerchantType: typepayser,
         descripTion: "",
         inVoices: inVoices,
-        transSelect: transselect);
+        transSelect: transselect,
+        accountType: accountType,
+        accountNumber: PayBno,
+        accountNameTh: PayBname,
+        accountNameEn: PayBname_en,
+        customerData: customerData);
 
     if (response == null) {
       debugPrint('❌ ไม่มี response จาก server');
@@ -920,6 +1430,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       orElse: () => PayMentModel(
         ser: '-',
         bname: '-',
+        bno: '-',
+        ptser: '-',
       ),
     );
 
@@ -1155,6 +1667,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       this.QR_Date15Min = expLbl;
       this.qr_softExpiresAt = qr_expiresAt;
       this.payment_tser = ptser;
+      this.QR_Ref1 = ref1;
+      this.QR_Ref2 = ref2;
+      this.QR_Ref3 = ref3;
       _expireDialogShown = false;
       gopay = 1; // ✅ แสดง QR box บนหน้าหลัก
     });
@@ -1168,20 +1683,37 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     debugPrint('💳 qr_payload: $qr_payload');
     */
 
+    // ✅ ใช้ selectedValue (PromptPay ID จาก dropdown) สำหรับสร้าง QR
+    // paybno จาก intent อาจเป็นเลขอ้างอิงไม่ใช่ PromptPay ID (เช่น 010554605728801 = 15 หลัก)
+    // selectedValue คือ bno ของ bank ที่ผู้ใช้เลือก (เช่น 0843631897 = 10 หลัก) ซึ่งเป็น PromptPay ID ที่ถูกต้อง
+    final qrBno = selectedValue ?? paybno ?? '-';
+    debugPrint(
+        '💳 QrGenRef DEBUG: ptser=$ptser, paybno=$paybno, selectedValue=$selectedValue, qrBno=$qrBno, qrBno.length=${qrBno.length}, bankId=$bankId');
     final qrData = (ptser == '7')
         ? qr_payload.toString()
         : (ptser == '6')
-            ? '|$bno\r$ref1\r$ref2\r${amtRaw.replaceAll('.', '')}' // PromptPay Bill Payment
+            ? '|$qrBno\r$ref1\r$ref2\r${amtRaw.replaceAll('.', '')}' // Bill Payment
             : (ptser == '5')
-                ? generateQRCode(promptPayID: bno, amount: amtVal) // PromptPay
-                : (ptser == '2')
-                    ? '${payimg}'
-                    : '';
+                ? generateQRCode(
+                    promptPayID: qrBno, amount: amtVal) // PromptPay
+                : (ptser == '11')
+                    ? generateEwalletQRCode(
+                        promptPayID: qrBno, amount: amtVal) // PromptPay
+                    : (ptser == '2')
+                        ? '${payimg}'
+                        : '';
+
+    // Store qrData for use in _QRBox and save QR
+    qrDataNoIntens = qrData;
 
     // Notify Listeners (Dialog) that QR data changed
     _qrUpdateTrigger.value++;
 
-    // debugPrint('💳 Generated QR Data (length: ${qrData.length}): $qrData');
+    debugPrint(
+        '💳 QrGenRef: ptser=$ptser, qrBno=$qrBno, qrData length=${qrData.length}');
+    debugPrint(
+        '💳 QrGenRef: qrData=${qrData.substring(0, qrData.length > 80 ? 80 : qrData.length)}...');
+    debugPrint('💳 QrGenRef: paybno=$paybno, selectedValue=$selectedValue');
 
     // ... validation logic ...
     if (qrData.isEmpty) {
@@ -1304,10 +1836,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       'ciddoc': ciddoc,
       'docnoin': docnoin,
     };
-
     var uri =
-        Uri.parse('${MyConstant().domain_chao}/GC_bill_invoice_history.php')
+        Uri.parse('${MyConstant().domain_chao}/GC_bill_invoiceHistory_v2.php')
             .replace(queryParameters: queryParams);
+    // var uri =
+    //     Uri.parse('${MyConstant().domain_chao}/GC_bill_invoice_history.php')
+    //         .replace(queryParameters: queryParams);
     print('uri: $uri');
     try {
       var response = await http.get(uri);
@@ -1349,11 +1883,16 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   }
 
   Future<Null> in_Trans_fine_re() async {
-    if (invoicePayModels.isNotEmpty) {
-      setState(() {
-        invoicePayModels.clear();
-      });
-    }
+    // ล้างผลรอบก่อนให้ครบ "ในฟังก์ชันนี้เอง" ไม่พึ่ง caller
+    //
+    // ทำไม: ของเดิม clear แค่ invoicePayModels แต่ sum_tran_fine_in ยังค้าง
+    // ⇒ เรียกซ้ำ (จาก _initSubData / CreatePaymentItem) แล้วค่าถูก + ทับ
+    // ⇒ ยอดเบิ้ล  ต้องล้างคู่กันเสมอ
+    setState(() {
+      invoicePayModels.clear();
+      invoicePayfine = null;
+      sum_tran_fine_in = 0;
+    });
     List<Future<void>> futures =
         List.generate(_InvoiceModels.length, (index) async {
       if (contractxFineModels.isNotEmpty) {
@@ -1447,11 +1986,23 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     setState(() {
       invoicePayfine = newPayFine;
     });
-    setState(() {
-      Form_payment1.text = (double.parse(Form_payment1.text) + sum_tran_fine_in)
-          .toStringAsFixed(2)
-          .toString();
-    });
+    // คำนวณยอดใหม่ทั้งก้อนจาก source-of-truth
+    //
+    // ของเดิม: double.parse(Form_payment1.text) + sum_tran_fine_in
+    // ⇒ อ่านค่าที่แสดงอยู่มาบวกทับ ถ้าฟังก์ชันถูกเรียกซ้ำจะเบิ้ลสะสม
+    // ⇒ เปลี่ยนมาใช้สูตรชุดเดียวกับ _selectPayment() และ red_Trans_select2_fin()
+    if (mounted) {
+      setState(() {
+        Form_payment1.text = (sum_pvat +
+                sum_tran_fine -
+                dis_sum_Pakan -
+                (sum_disamt + sum_disamt_in) +
+                (sum_amt_in + sum_tran_fine_in) +
+                (fine_total))
+            .toStringAsFixed(2)
+            .toString();
+      });
+    }
   }
 
   Future<Null> in_Trans_fine(index) async {
@@ -1616,28 +2167,47 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                   .any((b) => (b.billReference ?? '').trim() == targetUuid))
               .toList();
 
-          if (_InvoiceModel.payser.toString() == '${widget.serPayment}') {
-            // ✅ Only proceed if the bill is in the selected list (if provided)
-            if (widget.selectedDocNos != null &&
-                !widget.selectedDocNos!.contains(targetUuid)) {
-              continue;
-            }
+          // ✅ Filter ตาม payser เฉพาะเมื่อมาจากการเลือกบิลปกติ (ไม่ใช่จาก intent card)
+          // ถ้ามาจาก intent card → ยอมรับบิลทุก payser ที่อยู่ใน selectedDocNos
+          final isPayerMatched =
+              _InvoiceModel.payser.toString() == '${widget.serPayment}';
+          final isFromIntent = widget.fromIntent;
+          final isInSelected = widget.selectedDocNos != null &&
+              widget.selectedDocNos!.contains(targetUuid);
 
-            if (intents.isEmpty) {
-              // Not currently in any active intent -> Available to pay
-              print('NO MATCH target=$targetUuid');
-              var in_amtx = double.parse(_InvoiceModel.amtall!);
-              var disendbill = double.parse(_InvoiceModel.disendbill!);
+          // ข้ามบิลนี้ถ้า:
+          // 1) payser ไม่ตรง และ ไม่ได้มาจาก intent
+          // 2) มี selectedDocNos แต่บิลนี้ไม่อยู่ในรายการ
+          if (!isPayerMatched && !isFromIntent) {
+            print(
+                'SKIP target=$targetUuid (payser mismatch: ${_InvoiceModel.payser} != ${widget.serPayment})');
+            continue;
+          }
+          if (widget.selectedDocNos != null &&
+              widget.selectedDocNos!.isNotEmpty &&
+              !widget.selectedDocNos!.contains(targetUuid)) {
+            print(
+                'SKIP target=$targetUuid (not in selectedDocNos, payser=${_InvoiceModel.payser})');
+            continue;
+          }
 
-              tempSumDis += disendbill;
-              tempInAmt += in_amtx;
-              tempInvoiceModels.add(_InvoiceModel);
-            } else {
-              // Already in an intent
-              print(
-                  'MATCH target=$targetUuid -> intentNos=${intents.map((e) => e.bankmerchantid).toList()}');
-              tempInvoiceInIntent.add(_InvoiceModel);
-            }
+          print(
+              'PROCESS target=$targetUuid payser=${_InvoiceModel.payser} (widget.serPayment=${widget.serPayment}, fromIntent=$isFromIntent)');
+
+          if (intents.isEmpty) {
+            // Not currently in any active intent -> Available to pay
+            print('NO MATCH target=$targetUuid (no intent)');
+            var in_amtx = double.parse(_InvoiceModel.amtall!);
+            var disendbill = double.parse(_InvoiceModel.disendbill!);
+
+            tempSumDis += disendbill;
+            tempInAmt += in_amtx;
+            tempInvoiceModels.add(_InvoiceModel);
+          } else {
+            // Already in an intent
+            print(
+                'MATCH target=$targetUuid -> intentNos=${intents.map((e) => e.bankmerchantid).toList()}');
+            tempInvoiceInIntent.add(_InvoiceModel);
           }
         }
       }
@@ -1809,9 +2379,15 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
           var ptnamex = _PayMentModel.ptname;
           // if (_PayMentModel.ser_payweb.toString() == '1') {
           if (_PayMentModel.ser.toString() == '${widget.serPayment}') {
-            setState(() {
-              _PayMentModels.add(_PayMentModel);
-            });
+            // setState(() {
+            _PayMentModels.add(_PayMentModel);
+            Payment_bno = _PayMentModel.bno;
+            Payment_bname = _PayMentModel.bname;
+            Payment_bname_en = _PayMentModel.bnameEn;
+            Payment_bank_ncode = _PayMentModel.bankNcode;
+            Payment_paytype_ncode = _PayMentModel.paytypeNcode;
+            Payment_remark = _PayMentModel.remark;
+            // });
           } else {}
         }
       }
@@ -1863,7 +2439,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
             bill_default = bill_defaultx;
             bill_tser = bill_tserx;
             imglogo_ =
-                '${MyConstant().domain}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
+                '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
             renTalModels.add(renTalModel);
             if (bill_defaultx == 'P') {
               bills_name_ = 'บิลธรรมดา';
@@ -1882,7 +2458,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   var file_;
   Future<void> uploadFile_Slip() async {
     final imagePicker = ImagePicker();
-    final pickedFile = await imagePicker.pickImage(source: ImageSource.gallery);
+    final pickedFile = await imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 55,
+      maxWidth: 700,
+      maxHeight: 700,
+    );
 
     if (pickedFile == null) {
       return;
@@ -1941,13 +2522,16 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       fileName_Slip = 'slip_${ciddoc_}_${date}_$Time_.$extension_';
     });
     try {
+      final imageBase64 = (base64_Slip == 'ready' && _slipImageBytes != null)
+          ? base64Encode(_slipImageBytes!)
+          : base64_Slip;
       final url =
           '${MyConstant().domain_chao}/File_uploadSlip_NewEdit.php?name=$fileName_Slip&Foder=$foder&extension=$extension_';
 
       final response = await http.post(
         Uri.parse(url),
         body: {
-          'image': base64_Slip,
+          'image': imageBase64,
           'Foder': foder,
           'name': fileName_Slip,
           'ex': extension_.toString()
@@ -1981,101 +2565,268 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     return value.toString();
   }
 
+  /// ขั้นตอนชำระเงินตาม UI target: กระชับ 4 ขั้นตอนใน card สีขาวเดิม
   Widget _howToBox() {
-    Widget step(int i, String t) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 26,
-                height: 26,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: Colors.indigo.withOpacity(.08),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                      color: Colors.indigo.withOpacity(.25), width: .7),
-                ),
-                child: Text('$i',
-                    style: TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.indigo.shade700)),
+    final isEN = widget.cuslang == 'EN';
+
+    Widget step(int number, List<InlineSpan> spans,
+        {bool isFinalStep = false}) {
+      final accent =
+          isFinalStep ? const Color(0xFFFF7A00) : const Color(0xFF3B82F6);
+      final background =
+          isFinalStep ? const Color(0xFFFFF0E3) : const Color(0xFFF1F7FF);
+      final border =
+          isFinalStep ? const Color(0xFFFFC38F) : const Color(0xFFD5E8FF);
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 27,
+              height: 27,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: background,
+                shape: BoxShape.circle,
+                border: Border.all(color: border, width: .8),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: Text(t,
-                      style: const TextStyle(
-                          fontFamily: Font_.Fonts_T, fontSize: 13.5))),
+              child: Text(
+                '$number',
+                style: TextStyle(
+                  fontFamily: Font_.Fonts_T,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Text.rich(
+                  TextSpan(children: spans),
+                  style: TextStyle(
+                    fontFamily: Font_.Fonts_T,
+                    fontSize: 13.5,
+                    fontWeight: isFinalStep ? FontWeight.w500 : FontWeight.w500,
+                    height: 1.45,
+                    color: isFinalStep
+                        ? const Color(0xFFFF6B00)
+                        : const Color(0xFF4B5563),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // คง card สีขาวเดิมตาม UI ที่ผู้ใช้ต้องการ — ปรับเฉพาะหัวข้อ/4 ขั้นตอน
+    return Column(
+      children: [
+        const SizedBox(height: 30),
+        Row(
+          children: [
+            const Icon(Icons.info_outline, color: Colors.black, size: 17),
+            const SizedBox(width: 6),
+            Text(
+              isEN ? 'Easy payment in 4 steps' : 'วิธีชำระเงินง่ายๆ 4 ขั้นตอน',
+              style: const TextStyle(
+                fontFamily: Font_.Fonts_T,
+                fontWeight: FontWeight.w800,
+                fontSize: 15,
+                color: Colors.black,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.black12, width: .5),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(.04),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
             ],
           ),
-        );
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12, width: .5),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(.04),
-              blurRadius: 12,
-              offset: const Offset(0, 6))
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(widget.cuslang == 'EN' ? 'Payment method' : 'วิธีชำระเงิน',
-              style: const TextStyle(
-                  fontFamily: Font_.Fonts_T,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15)),
-          const SizedBox(height: 10),
-          step(
-              1,
-              widget.cuslang == 'EN'
-                  ? 'Verify that the "information" is correct.'
-                  : 'ตรวจสอบ “ข้อมูล”  ว่าถูกต้องหรือไม่'),
-          step(
-              2,
-              widget.cuslang == 'EN'
-                  ? 'Press “Save” the PromptPay QR code image above to your mobile phone.'
-                  : 'กด “บันทึก” รูป QR พร้อมเพย์ด้านบนลงในโทรศัพท์มือถือของคุณ'),
-          step(
-              3,
-              widget.cuslang == 'EN'
-                  ? 'Open your banking application to make a payment.'
-                  : 'เปิดแอปพลิเคชันธนาคารที่คุณมี เพื่อชำระเงิน'),
-          step(
-              4,
-              widget.cuslang == 'EN'
-                  ? 'Go to the "Scan/Scan to Pay" menu and press "Image" to select the saved QR image.'
-                  : 'ไปที่เมนู “สแกน/สแกนจ่าย” แล้วกด “รูปภาพ” เพื่อเลือกรูป QR ที่บันทึกไว้'),
-          step(
-              5,
-              widget.cuslang == 'EN'
-                  ? 'After completing the payment, return to the app to confirm the payment.'
-                  : 'กลับมาที่แอพ เพื่อยืนยันการชำระเงิน'),
-          step(
-              6,
-              widget.cuslang == 'EN'
-                  ? 'After confirming the payment, the system will verify your payment. It may take 1-3 business days, depending on the bank.'
-                  : 'เมื่อยืนยันการชำระเงินเรียบร้อยแล้ว ระบบจะตรวจสอบการชำระของคุณ อาจใช้เวลา 1-3 วันทำการ ขึ้นอยู่กับแต่ละธนาคาร'),
-          step(
-              7,
-              widget.cuslang == 'EN'
-                  ? 'Please keep the payment proof for future reference when contacting customer service.'
-                  : 'โปรดเก็บหลักฐานการชำระเงินไว้ทุกครั้ง เพื่อใช้ในการติดต่อฝ่ายบริการลูกค้า'),
-          step(
-              8,
-              widget.cuslang == 'EN'
-                  ? 'If you encounter any issues during payment, please contact customer service.'
-                  : 'หากเกิดปัญหาในการชำระเงิน กรุณาติดต่อฝ่ายบริการลูกค้า'),
-        ],
-      ),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: (payment_tser == '1' || payment_tser == '2')
+                ? [
+                    // payment_tser 1/2 = โอนเข้าบัญชี หรือ QR จาก server
+                    // ใช้ flow "โอนเงิน" ตามภาพเป้าหมาย ไม่ใช่ flow บันทึก QR
+                    step(
+                      1,
+                      isEN
+                          ? const [
+                              TextSpan(
+                                  text:
+                                      'Copy the account number and verify the payment amount.'),
+                            ]
+                          : const [
+                              TextSpan(
+                                  text: 'คัดลอกเลขที่บัญชี และตรวจสอบยอดเงิน'),
+                            ],
+                    ),
+                    step(
+                      2,
+                      isEN
+                          ? const [
+                              TextSpan(
+                                  text:
+                                      'Open your banking application and select '),
+                              TextSpan(
+                                  text: '“Transfer money”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                            ]
+                          : const [
+                              TextSpan(
+                                  text:
+                                      'เปิดแอปพลิเคชันธนาคารของคุณแล้วเลือกเมนู '),
+                              TextSpan(
+                                  text: '“โอนเงิน”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                            ],
+                    ),
+                    step(
+                      3,
+                      isEN
+                          ? const [
+                              TextSpan(
+                                  text:
+                                      'Enter the account number and payment amount exactly as shown.'),
+                            ]
+                          : const [
+                              TextSpan(
+                                  text:
+                                      'วางเลขที่บัญชีและระบุยอดเงินให้ตรงกับที่ระบุ'),
+                            ],
+                    ),
+                    step(
+                      4,
+                      isEN
+                          ? const [
+                              TextSpan(text: 'After transfer, press '),
+                              TextSpan(
+                                  text: '“Attach proof and confirm”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(text: ' below.'),
+                            ]
+                          : const [
+                              TextSpan(text: 'เมื่อโอนสำเร็จ กดปุ่ม '),
+                              TextSpan(
+                                  text: '“แนบหลักฐานและยืนยัน”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(text: ' ด้านล่าง'),
+                            ],
+                      isFinalStep: true,
+                    ),
+                  ]
+                : [
+                    step(
+                      1,
+                      isEN
+                          ? const [
+                              TextSpan(text: 'Press '),
+                              TextSpan(
+                                  text: '“Save QR Code”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(
+                                  text:
+                                      ' to save it to your phone or copy the account number.'),
+                            ]
+                          : const [
+                              TextSpan(text: 'กดปุ่ม '),
+                              TextSpan(
+                                  text: '“บันทึก QR Code”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(
+                                  text: ' ลงในโทรศัพท์ หรือคัดลอกเลขที่บัญชี'),
+                            ],
+                    ),
+                    step(
+                      2,
+                      isEN
+                          ? const [
+                              TextSpan(text: 'Open your banking application ('),
+                              TextSpan(
+                                  text: 'K PLUS, SCB EASY, Krungthai NEXT',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(text: ', etc.).'),
+                            ]
+                          : const [
+                              TextSpan(text: 'เปิดแอปพลิเคชันธนาคารที่คุณมี ('),
+                              TextSpan(
+                                  text: 'K PLUS, SCB EASY, Krungthai NEXT',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(text: ' ฯลฯ)'),
+                            ],
+                    ),
+                    step(
+                      3,
+                      isEN
+                          ? const [
+                              TextSpan(text: 'Select '),
+                              TextSpan(
+                                  text: '“Scan / QR Code”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(
+                                  text:
+                                      ', then select the QR image from your album.'),
+                            ]
+                          : const [
+                              TextSpan(text: 'เลือกเมนู '),
+                              TextSpan(
+                                  text: '“สแกน / QR Code”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(text: ' แล้วกดเลือกรูปภาพจากอัลบั้ม'),
+                            ],
+                    ),
+                    step(
+                      4,
+                      isEN
+                          ? const [
+                              TextSpan(text: 'After payment, press '),
+                              TextSpan(
+                                  text: '“Attach proof and confirm”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(text: ' below.'),
+                            ]
+                          : const [
+                              TextSpan(text: 'เมื่อชำระสำเร็จ กดปุ่ม '),
+                              TextSpan(
+                                  text: '“แนบหลักฐานและยืนยัน”',
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.w800)),
+                              TextSpan(text: ' ด้านล่าง'),
+                            ],
+                      isFinalStep: true,
+                    ),
+                  ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -2149,7 +2900,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     double width = MediaQuery.of(context).size.width;
     bool isMobile = width < 480;
     bool isDesktop = width >= 900;
-    double qrSize = isDesktop ? 200 : 160;
+    double qrSize = isDesktop ? 120 : 120;
     final String targetUuid = '$numinvoice';
 
     // ✅ หา Intent และ Bank Item (re-logic)
@@ -2162,6 +2913,15 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     String ref1 = return_qr_refapi1 ?? '-';
     String ref2 = return_qr_refapi2 ?? '-';
     String ref3 = return_qr_refapi3 ?? '-';
+    final bank = (payment_bank ?? '').toString();
+    final bankInfo = bankCodeMap[bank];
+    final bankCode = bankInfo?['code'];
+    final bankEn = bankInfo?['en'];
+    final bankName = widget.cuslang == 'EN' ? (bankEn ?? bank) : bank;
+    final bankCodeText =
+        (bankCode == null || bankCode.isEmpty) ? '' : ' ($bankCode)';
+    final bankDisplayName =
+        '${widget.cuslang == 'EN' ? 'Bank ' : 'ธนาคาร '}$bankName$bankCodeText';
     // String soft_expire_at = qr_softExpiresAt ?? '-'; // Removed unused
     String imgUrl = '';
 
@@ -2203,17 +2963,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     // debugPrint('💳 Soft Expire At: $soft_expire_at');
     // debugPrint('💳 qr_payload: $qr_payload');
 
-    final qrData = (ptser == '7')
-        ? (qr_payload ?? '')
-        : (ptser == '6')
-            ? '|$bno\r$ref1\r$ref2\r${amtRaw.replaceAll('.', '')}'
-            : (ptser == '5' || payment_tser == '5' || payment_tser == '6')
-                ? generateQRCode(
-                    promptPayID: "$selectedValue",
-                    amount: double.tryParse(amtRaw) ?? 0.0)
-                : (ptser == '2')
-                    ? '${payment_img}'
-                    : '';
+    // ✅ ใช้ qrDataNoIntens ที่ถูกสร้างใน QrGenRef แล้ว (เหมือน V3)
+    final qrData = qrDataNoIntens ?? "";
 
     // debugPrint('💳 Generated QR Data ');
 
@@ -2221,11 +2972,34 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: Column(
         children: [
+          if (selectTap == 1) ...[
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Spacer(),
+                Icon(Icons.info_outline, color: Colors.red.shade700, size: 20),
+                InkWell(
+                  onTap: () => _showCancelPaymentDialog(context),
+                  child: Text(
+                    widget.cuslang == 'EN'
+                        ? 'Cancel Payment'
+                        : 'ยกเลิกการชำระเงิน',
+                    style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red.shade700),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+          ],
           Card(
             color: Colors.white,
-            elevation: 4,
+            elevation: 0.4,
+            margin: const EdgeInsets.symmetric(vertical: 4),
             shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
@@ -2233,7 +3007,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                 RepaintBoundary(
                   key: useKey,
                   child: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    color: Colors.white,
                     child: Column(
                       children: [
                         if (payment_tser == '2') ...[
@@ -2309,8 +3085,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                         payment_img!.isNotEmpty &&
                                                 payment_img != '' &&
                                                 payment_img != 'null'
-                                            ? '${MyConstant().domain_chao}/files/$foder/payment/$payment_img'
-                                            : '${MyConstant().domain_chao}/Awaitdownload/imagenot.png',
+                                            ? '${MyConstant().domain_chao_img}/files/$foder/payment/$payment_img'
+                                            : '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png',
                                         width: double.infinity,
                                         height: qrSize + qrSize,
                                         fit: BoxFit.contain,
@@ -2369,13 +3145,137 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                           ),
                         ] else if (payment_tser == '7' ||
                             payment_tser == '6' ||
-                            payment_tser == '5') ...[
-                          Image.asset(
-                            'images/thai_qr_payment.png',
-                            width: double.infinity,
-                            fit: BoxFit.contain,
+                            payment_tser == '5' ||
+                            payment_tser == '11') ...[
+                          // Image.asset(
+                          //   'images/thai_qr_payment.png',
+                          //   width: double.infinity,
+                          //   fit: BoxFit.contain,
+                          // ),
+                          // SizedBox(height: isMobile ? 4 : 4),
+                          ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(14)),
+                            child: Image.asset(
+                              'images/thai_qr_payment_2.png',
+                              width: double.infinity,
+                              height: 65,
+                              fit: BoxFit.fitWidth,
+                            ),
                           ),
-                          SizedBox(height: isMobile ? 4 : 4),
+                          // Reminder to attach slip — flush with banner
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo.shade50,
+                              border: Border(
+                                bottom: BorderSide(
+                                    color: Colors.indigo.shade100, width: 0.7),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber_outlined,
+                                    size: 14, color: Colors.red.shade700),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Center(
+                                    child: Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Don \'t forget to attach your payment slip after paying.'
+                                          : 'อย่าลืมแนบหลักฐานการชำระเงินหลังจากชำระแล้ว',
+                                      style: TextStyle(
+                                        fontFamily: Font_.Fonts_T,
+                                        fontSize: 11,
+                                        color: Colors.indigo.shade700,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // const SizedBox(height: 2),
+                          if (Payment_remark != 'null' &&
+                              Payment_remark != '' &&
+                              Payment_remark!.isNotEmpty) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.indigo.shade50,
+                                border: Border(
+                                  bottom: BorderSide(
+                                      color: Colors.indigo.shade100,
+                                      width: 0.7),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline,
+                                      size: 14, color: Colors.orange.shade700),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Center(
+                                      child: Text(
+                                        widget.cuslang == 'EN'
+                                            ? Payment_remark! ?? ""
+                                            : Payment_remark! ?? "",
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontFamily: Font_.Fonts_T,
+                                          fontSize: 11,
+                                          color: Colors.orange.shade700,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 2),
+                                  InkWell(
+                                      onTap: () {
+                                        Clipboard.setData(new ClipboardData(
+                                            text: '$Payment_remark'));
+                                        Fluttertoast.showToast(
+                                            timeInSecForIosWeb: 3,
+                                            msg: widget.cuslang == 'EN'
+                                                ? 'Copy : $Payment_remark'
+                                                : 'คัดลอก : $Payment_remark',
+                                            backgroundColor: Colors.black,
+                                            textColor: Colors.white,
+                                            webPosition: "center",
+                                            webBgColor: "#000000",
+                                            toastLength: Toast.LENGTH_SHORT);
+                                      },
+                                      child: Icon(
+                                        Icons.content_copy_outlined,
+                                        size: 14,
+                                        color: Colors.grey.shade600,
+                                      )),
+                                ],
+                              ),
+                            ),
+                            // Text(
+                            //   widget.cuslang == 'EN'
+                            //       ? 'Remark: ' + Payment_remark! ?? ""
+                            //       : 'หมายเหตุ: ' + Payment_remark! ?? "",
+                            //   textAlign: TextAlign.center,
+                            //   style: TextStyle(
+                            //     fontFamily: Font_.Fonts_T,
+                            //     fontWeight: FontWeight.w700,
+                            //     fontSize: isDesktop ? 12 : 11,
+                            //     color: Colors.black.withOpacity(.65),
+                            //   ),
+                            // ),
+                          ],
+                          const SizedBox(height: 8),
                           (_expireDialogShown == true)
                               ? Container(
                                   width: double.infinity,
@@ -2452,14 +3352,16 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                               QrErrorCorrectLevel.M,
                                           roundEdges: true,
                                         )
-                                  : (payment_tser == '5' || payment_tser == '6')
+                                  : (payment_tser == '5' ||
+                                          payment_tser == '6' ||
+                                          payment_tser == '11')
                                       ? (_isExporting && _exportQrBytes != null)
                                           ? Image.memory(_exportQrBytes!,
-                                              width: 150,
-                                              height: 150,
+                                              width: 100,
+                                              height: 100,
                                               fit: BoxFit.contain)
                                           : PrettyQr(
-                                              size: 150,
+                                              size: 100,
                                               // size: qrSize,
                                               data: qrData,
                                               image: const AssetImage(
@@ -2520,7 +3422,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                             ),
                           ),
                         ],
-                        SizedBox(height: isMobile ? 4 : 6),
+                        SizedBox(height: isMobile ? 2 : 2),
                         Text(
                           '฿${nFormat.format(double.parse(Form_payment1.text))}',
                           textAlign: TextAlign.center,
@@ -2528,17 +3430,19 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                             fontFamily: Font_.Fonts_T,
                             fontWeight: FontWeight.w700,
                             fontSize: isDesktop ? 18 : 16,
-                            color: Colors.red.shade900,
+                            color: Colors.red.shade800,
                           ),
                         ),
-                        const SizedBox(height: 3),
+                        const SizedBox(height: 0),
                         Text(
                           '$payment_bname',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontFamily: Font_.Fonts_T,
                             fontWeight: FontWeight.w700,
-                            fontSize: isDesktop ? 16 : 14,
+                            fontSize: isDesktop ? 15 : 14,
                             color: Colors.black.withOpacity(.65),
                           ),
                         ),
@@ -2548,36 +3452,53 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                             Text(
                               '$selectedValue',
                               textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontFamily: Font_.Fonts_T,
                                 fontWeight: FontWeight.w700,
-                                fontSize: isDesktop ? 16 : 14,
+                                fontSize: isDesktop ? 15 : 14,
                                 color: Colors.black.withOpacity(.65),
                               ),
                             ),
-                            InkWell(
-                                onTap: () {
-                                  Clipboard.setData(new ClipboardData(
-                                      text: '$selectedValue'));
-                                  Fluttertoast.showToast(
-                                      timeInSecForIosWeb: 3,
-                                      msg: widget.cuslang == 'EN'
-                                          ? 'Copy : $selectedValue'
-                                          : 'คัดลอก : $selectedValue',
-                                      backgroundColor: Colors.black,
-                                      textColor: Colors.white,
-                                      webPosition: "center",
-                                      webBgColor: "#000000",
-                                      toastLength: Toast.LENGTH_SHORT);
-                                },
-                                child: Icon(
-                                  Icons.content_copy_outlined,
-                                  size: 14,
-                                )),
+                            if (payment_tser != '5' && payment_tser != '6') ...[
+                              const SizedBox(width: 6),
+                              InkWell(
+                                  onTap: () {
+                                    Clipboard.setData(new ClipboardData(
+                                        text: '$selectedValue'));
+                                    Fluttertoast.showToast(
+                                        timeInSecForIosWeb: 3,
+                                        msg: widget.cuslang == 'EN'
+                                            ? 'Copy : $selectedValue'
+                                            : 'คัดลอก : $selectedValue',
+                                        backgroundColor: Colors.black,
+                                        textColor: Colors.white,
+                                        webPosition: "center",
+                                        webBgColor: "#000000",
+                                        toastLength: Toast.LENGTH_SHORT);
+                                  },
+                                  child: Icon(
+                                    Icons.content_copy_outlined,
+                                    size: 16,
+                                    color: Colors.grey.shade600,
+                                  )),
+                            ]
                           ],
                         ),
-                        Divider(height: 2, color: Colors.grey.shade600),
-                        // const SizedBox(height: 2),
+                        const SizedBox(height: 2),
+                        Divider(height: 1, color: Colors.grey.shade300),
+                        const SizedBox(height: 2),
+                        Text(
+                          bankDisplayName,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontWeight: FontWeight.w700,
+                            fontSize: isDesktop ? 12 : 11,
+                            color: Colors.black.withOpacity(.65),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -2595,10 +3516,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                   ? 'Pay within ${activeQrSessionSoftExpire != null ? DateFormat('dd-MM-yyyy HH:mm').format(DateTime.parse(activeQrSessionSoftExpire!).toLocal()) : ''}  |  Ref: $ref3'
                                   : 'ชำระภายใน ${activeQrSessionSoftExpire != null ? DateFormat('dd-MM-yyyy HH:mm').format(DateTime.parse(activeQrSessionSoftExpire!).toLocal()) : ''}  |  Ref: $ref3',
                               textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 fontFamily: Font_.Fonts_T,
                                 fontWeight: FontWeight.w700,
-                                fontSize: isDesktop ? 13 : 11,
+                                fontSize: isDesktop ? 10 : 8,
                                 color: Colors.black.withOpacity(.65),
                               ),
                             ),
@@ -2616,105 +3539,105 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                       horizontal: 4.0, vertical: 4.0),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            try {
-                              RenderRepaintBoundary boundary =
-                                  useKey.currentContext!.findRenderObject()
-                                      as RenderRepaintBoundary;
-                              ui.Image image =
-                                  await boundary.toImage(pixelRatio: 3.0);
-                              ByteData? byteData = await image.toByteData(
-                                  format: ui.ImageByteFormat.png);
-                              Uint8List bytes = byteData!.buffer.asUint8List();
+                      // Expanded(
+                      //   child: OutlinedButton.icon(
+                      //     onPressed: () async {
+                      //       try {
+                      //         RenderRepaintBoundary boundary =
+                      //             useKey.currentContext!.findRenderObject()
+                      //                 as RenderRepaintBoundary;
+                      //         ui.Image image =
+                      //             await boundary.toImage(pixelRatio: 3.0);
+                      //         ByteData? byteData = await image.toByteData(
+                      //             format: ui.ImageByteFormat.png);
+                      //         Uint8List bytes = byteData!.buffer.asUint8List();
 
-                              if (kIsWeb) {
-                                // Check if Web Share API is available (works on mobile browsers)
-                                if (html.window.navigator.share != null) {
-                                  try {
-                                    html.Blob blob =
-                                        html.Blob([bytes], 'image/png');
-                                    html.File file = html.File(
-                                        [blob],
-                                        'payment_qr.png',
-                                        {'type': 'image/png'});
+                      //         if (kIsWeb) {
+                      //           // Check if Web Share API is available (works on mobile browsers)
+                      //           if (html.window.navigator.share != null) {
+                      //             try {
+                      //               html.Blob blob =
+                      //                   html.Blob([bytes], 'image/png');
+                      //               html.File file = html.File(
+                      //                   [blob],
+                      //                   'payment_qr.png',
+                      //                   {'type': 'image/png'});
 
-                                    await html.window.navigator.share({
-                                      'files': [file],
-                                      'title': 'Payment QR Code',
-                                    });
+                      //               await html.window.navigator.share({
+                      //                 'files': [file],
+                      //                 'title': 'Payment QR Code',
+                      //               });
 
-                                    Fluttertoast.showToast(
-                                        timeInSecForIosWeb: 3,
-                                        msg: widget.cuslang == 'EN'
-                                            ? "Shared successfully"
-                                            : "แชร์สำเร็จ",
-                                        backgroundColor: Colors.black,
-                                        textColor: Colors.white,
-                                        webPosition: "center",
-                                        webBgColor: "#000000",
-                                        toastLength: Toast.LENGTH_SHORT);
-                                  } catch (e) {
-                                    print('Web Share error: $e');
-                                    Fluttertoast.showToast(
-                                        timeInSecForIosWeb: 3,
-                                        msg: widget.cuslang == 'EN'
-                                            ? "Share cancelled or not supported"
-                                            : "ยกเลิกการแชร์หรือไม่รองรับ",
-                                        backgroundColor: Colors.black,
-                                        textColor: Colors.white,
-                                        webPosition: "center",
-                                        webBgColor: "#000000",
-                                        toastLength: Toast.LENGTH_SHORT);
-                                  }
-                                } else {
-                                  Fluttertoast.showToast(
-                                      timeInSecForIosWeb: 3,
-                                      msg: widget.cuslang == 'EN'
-                                          ? "Share not supported on this browser"
-                                          : "เบราว์เซอร์นี้ไม่รองรับการแชร์",
-                                      backgroundColor: Colors.black,
-                                      textColor: Colors.white,
-                                      webPosition: "center",
-                                      webBgColor: "#000000",
-                                      toastLength: Toast.LENGTH_SHORT);
-                                }
-                              } else {
-                                final directory = await getTemporaryDirectory();
-                                final file =
-                                    File('${directory.path}/payment_qr.png');
-                                await file.writeAsBytes(bytes);
-                                await Share.shareXFiles([XFile(file.path)],
-                                    text: 'Payment QR Code');
-                              }
-                            } catch (e) {
-                              print(e);
-                              Fluttertoast.showToast(
-                                  timeInSecForIosWeb: 3,
-                                  msg: "Failed to share",
-                                  backgroundColor: Colors.black,
-                                  textColor: Colors.white,
-                                  webPosition: "center",
-                                  webBgColor: "#000000",
-                                  toastLength: Toast.LENGTH_SHORT);
-                            }
-                          },
-                          icon: Icon(Icons.share, color: Colors.black),
-                          label: Text(
-                              widget.cuslang == 'EN'
-                                  ? 'Share QR'
-                                  : 'แบ่งปัน QR',
-                              style: TextStyle(color: Colors.black)),
-                          style: OutlinedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(vertical: 4),
-                            side: BorderSide(color: Colors.grey.shade300),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 12),
+                      //               Fluttertoast.showToast(
+                      //                   timeInSecForIosWeb: 3,
+                      //                   msg: widget.cuslang == 'EN'
+                      //                       ? "Shared successfully"
+                      //                       : "แชร์สำเร็จ",
+                      //                   backgroundColor: Colors.black,
+                      //                   textColor: Colors.white,
+                      //                   webPosition: "center",
+                      //                   webBgColor: "#000000",
+                      //                   toastLength: Toast.LENGTH_SHORT);
+                      //             } catch (e) {
+                      //               print('Web Share error: $e');
+                      //               Fluttertoast.showToast(
+                      //                   timeInSecForIosWeb: 3,
+                      //                   msg: widget.cuslang == 'EN'
+                      //                       ? "Share cancelled or not supported"
+                      //                       : "ยกเลิกการแชร์หรือไม่รองรับ",
+                      //                   backgroundColor: Colors.black,
+                      //                   textColor: Colors.white,
+                      //                   webPosition: "center",
+                      //                   webBgColor: "#000000",
+                      //                   toastLength: Toast.LENGTH_SHORT);
+                      //             }
+                      //           } else {
+                      //             Fluttertoast.showToast(
+                      //                 timeInSecForIosWeb: 3,
+                      //                 msg: widget.cuslang == 'EN'
+                      //                     ? "Share not supported on this browser"
+                      //                     : "เบราว์เซอร์นี้ไม่รองรับการแชร์",
+                      //                 backgroundColor: Colors.black,
+                      //                 textColor: Colors.white,
+                      //                 webPosition: "center",
+                      //                 webBgColor: "#000000",
+                      //                 toastLength: Toast.LENGTH_SHORT);
+                      //           }
+                      //         } else {
+                      //           final directory = await getTemporaryDirectory();
+                      //           final file =
+                      //               File('${directory.path}/payment_qr.png');
+                      //           await file.writeAsBytes(bytes);
+                      //           await Share.shareXFiles([XFile(file.path)],
+                      //               text: 'Payment QR Code');
+                      //         }
+                      //       } catch (e) {
+                      //         print(e);
+                      //         Fluttertoast.showToast(
+                      //             timeInSecForIosWeb: 3,
+                      //             msg: "Failed to share",
+                      //             backgroundColor: Colors.black,
+                      //             textColor: Colors.white,
+                      //             webPosition: "center",
+                      //             webBgColor: "#000000",
+                      //             toastLength: Toast.LENGTH_SHORT);
+                      //       }
+                      //     },
+                      //     icon: Icon(Icons.share, color: Colors.black),
+                      //     label: Text(
+                      //         widget.cuslang == 'EN'
+                      //             ? 'Share QR'
+                      //             : 'แบ่งปัน QR',
+                      //         style: TextStyle(color: Colors.black)),
+                      //     style: OutlinedButton.styleFrom(
+                      //       padding: EdgeInsets.symmetric(vertical: 4),
+                      //       side: BorderSide(color: Colors.grey.shade300),
+                      //       shape: RoundedRectangleBorder(
+                      //           borderRadius: BorderRadius.circular(8)),
+                      //     ),
+                      //   ),
+                      // ),
+                      // SizedBox(width: 12),
                       Expanded(
                         child: OutlinedButton.icon(
                           onPressed: () async {
@@ -2728,7 +3651,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                   payment_img!.isNotEmpty &&
                                   payment_img != 'null') {
                                 final imgUrl =
-                                    '${MyConstant().domain_chao}/files/$foder/payment/$payment_img';
+                                    '${MyConstant().domain_chao_img}/files/$foder/payment/$payment_img';
 
                                 String userAgent = html
                                     .window.navigator.userAgent
@@ -2811,21 +3734,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                     ua.contains('ipad') ||
                                     ua.contains('ipod');
 
-                                // FINAL SAFE MODE: Direct CPU Generation (No Text)
-                                // Avoids all Capture/Canvas issues on iOS Web.
+                                // ✅ ใช้ qrDataNoIntens ที่ถูกสร้างใน QrGenRef แล้ว (เหมือน _QRBox)
                                 try {
-                                  // Gen QR Data
-                                  final qrData = (payment_tser == '6')
-                                      ? '|$selectedValue\r$QR_Ref1\r$QR_Ref2\r${Form_payment1.text.replaceAll('.', '')}\r'
-                                      : generateQRCode(
-                                          promptPayID: "$selectedValue",
-                                          amount: double.parse(
-                                              Form_payment1.text.isEmpty
-                                                  ? "0"
-                                                  : Form_payment1.text));
+                                  final qrData = qrDataNoIntens ?? '';
 
-                                  // Gen Image (CPU) - 100% Safe (QR + Logos)
-                                  // Note: Text drawing disabled to avoid errors.
                                   final cpuQrBytes =
                                       await buildQrPngWithCenterLogo(
                                     data: qrData,
@@ -2836,8 +3748,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                     bottomname: '$payment_bname',
                                     bottombankno: '$selectedValue',
                                     bottomRef: widget.cuslang == 'EN'
-                                        ? 'Pay within $QR_Date15Min  |  Ref: $QR_Ref1'
-                                        : 'ชำระภายใน $QR_Date15Min  |  Ref: $QR_Ref1',
+                                        ? 'Pay within $QR_Date15Min  |  Ref: $return_qr_refapi1'
+                                        : 'ชำระภายใน $QR_Date15Min  |  Ref: $return_qr_refapi1',
                                   );
 
                                   // Save
@@ -2860,9 +3772,14 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                   // Notify User
                                   if (isIOS) {
                                     Fluttertoast.showToast(
+                                        timeInSecForIosWeb: 3,
                                         msg: widget.cuslang == 'EN'
                                             ? "Saved (Text not supported on iOS Web)"
                                             : "บันทึกแล้ว (ไม่รองรับข้อความบน iOS Web)",
+                                        backgroundColor: Colors.black,
+                                        textColor: Colors.white,
+                                        webPosition: "center",
+                                        webBgColor: "#000000",
                                         toastLength: Toast.LENGTH_LONG);
                                   }
                                 } catch (e) {
@@ -3073,9 +3990,13 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                           },
                           icon: Icon(Icons.download, color: Colors.black),
                           label: Text(
-                              widget.cuslang == 'EN' ? 'Save QR' : 'บันทึก QR',
+                              widget.cuslang == 'EN'
+                                  ? 'Save QR to device'
+                                  : 'บันทึกภาพ QR Code ลงเครื่อง',
                               style: TextStyle(color: Colors.black)),
                           style: OutlinedButton.styleFrom(
+                            backgroundColor:
+                                Colors.blueGrey.shade200.withOpacity(.1),
                             padding: EdgeInsets.symmetric(vertical: 4),
                             side: BorderSide(color: Colors.grey.shade300),
                             shape: RoundedRectangleBorder(
@@ -3137,7 +4058,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     // final bankEn = bankInfo?['en'];
     return Card(
       elevation: 0.4,
+      color: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -3246,13 +4170,20 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     );
   } */
 
-  Widget _IntentBox() {
+  Widget _IntentBox({
+    List<PaymentIntent>? filteredIntents,
+    bool isVerifyTab = false,
+  }) {
     String _fmtExpireLocal(String? isoUtc) {
       final d =
           (isoUtc == null || isoUtc.isEmpty) ? null : DateTime.tryParse(isoUtc);
       if (d == null) return '-';
       return DateFormat('d-MM-yyyy HH:mm').format(d.toLocal());
     }
+
+    // ✅ ใช้ filtered intents ถ้ามี (จาก tab 2/3) ไม่งั้นใช้ทั้งหมด
+    final List<PaymentIntent> displayIntents =
+        (filteredIntents ?? paymentIntents);
 
     // Helper helper for chip
     Widget chip(String text, Color bg, Color fg) => Container(
@@ -3284,6 +4215,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       required VoidCallback onTap,
       double fine = 0,
       bool showCheckbox = true,
+      bool showSlipAttachedText = false,
     }) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -3372,7 +4304,30 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                       )
                     ],
                   ])
-                ]
+                ],
+                // ✅ ถ้าติ๊ก (แนบหลักฐานแล้ว) → แสดงข้อความ "แนบหลักฐานแล้ว" ใต้บิล (ด้านนอก)
+                if (showSlipAttachedText)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2, top: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle,
+                            size: 14, color: Colors.green.shade700),
+                        const SizedBox(width: 4),
+                        Text(
+                          widget.cuslang == 'EN'
+                              ? 'Slip attached'
+                              : 'แนบหลักฐานแล้ว',
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
@@ -3380,12 +4335,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       );
     }
 
-    if (paymentIntents.isEmpty) {
+    if (displayIntents.isEmpty) {
       return const SizedBox.shrink();
     }
 
     return Column(
-      children: paymentIntents.map((intent) {
+      children: displayIntents.map((intent) {
         // 1. Find matching PaymentModel for bank info
         PayMentModel? paymentModel;
         try {
@@ -3412,6 +4367,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         final double totalAmount = (intent as dynamic).amount ?? 0.0;
         final String? paymentIntentNo = intent.paymentIntentNo ?? "-";
         final String? paymentIntentUuid = intent.intentUuid ?? "-";
+
         final String? statusIntentUuid = intent.status ?? "-";
         final String? systemStatusIntentUuid = intent.systemStatus ?? "-";
 
@@ -3420,226 +4376,306 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
         final String? createdAt = intent.createdAt?.toIso8601String() ?? "-";
 
+        final bool isWaitingCheck =
+            statusIntentUuid.toString() == 'รอตรวจสอบ' ||
+                statusIntentUuid.toString() == 'รอการตรวจสอบ';
+        final bool isSlipUploaded =
+            systemStatusIntentUuid.toString() == 'slip_uploaded';
+        final bool showSlipAction =
+            intent.latestSlip != null || isSlipUploaded || isWaitingCheck;
+
+        // ✅ สี status pill ตรงกับสีแท็บ
+        // - รอแนบหลักฐาน (awaitingSlip) → สีส้ม (Tab 2)
+        // - รอระบบตรวจสอบ (awaitingVerify) → สีเขียว (Tab 3)
+        // - อื่นๆ (รอจ่าย/สถานะอื่น) → สีฟ้า (fallback)
+        final isAwaitingSlip = _isAwaitingSlipStatus(intent.status) ||
+            _isSelectedIntentAwaitingSlip(intent);
+        final Color stBgColor = _isAwaitingVerifyStatus(intent.status)
+            ? Colors.green.shade100
+            : isAwaitingSlip
+                ? Colors.orange.shade100
+                : Colors.cyan.shade100;
+        final Color stTextColor = _isAwaitingVerifyStatus(intent.status)
+            ? Colors.green.shade700
+            : isAwaitingSlip
+                ? Colors.orange.shade700
+                : Colors.cyan.shade700;
+
         return Card(
           elevation: 0.4,
+          color: Colors.white,
+          margin: const EdgeInsets.symmetric(vertical: 2),
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          clipBehavior: Clip.antiAlias,
           child: Theme(
             data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
+              dense: true,
+              visualDensity: const VisualDensity(vertical: -4),
               initiallyExpanded: false,
               tilePadding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  const EdgeInsets.only(left: 12, right: 12, top: 2, bottom: 0),
               childrenPadding:
-                  const EdgeInsets.only(left: 6, right: 6, bottom: 12),
+                  const EdgeInsets.only(left: 12, right: 12, bottom: 8),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14)),
-              title: Row(
+                  borderRadius: BorderRadius.circular(12)),
+              trailing: const Icon(Icons.keyboard_arrow_down,
+                  color: Colors.grey, size: 20),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: Colors.white,
-                    child:
-                        Icon(Icons.receipt_long, size: 20, color: Colors.grey),
-                    //  logoFile != null && logoFile.isNotEmpty
-                    //     ? Image.asset(
-                    //         'assets/images/LogoBank/$logoFile',
-                    //         height: 26,
-                    //         errorBuilder: (_, __, ___) => const Icon(
-                    //             Icons.account_balance,
-                    //             size: 20,
-                    //             color: Colors.grey),
-                    //       )
-                    //     : const Icon(Icons.account_balance,
-                    //         size: 20, color: Colors.grey),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'เลขที่แจ้งชำระ: ${paymentIntentNo ?? '-'}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15.5),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: stBgColor,
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        Text(
-                          '# ${paymentIntentUuid ?? '-'}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 5,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: stTextColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                                widget.cuslang == 'EN'
+                                    ? '${systemStatusIntentUuid}'
+                                    : '${statusIntentUuid}',
+                                style: TextStyle(
+                                  color: stTextColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: Font_.Fonts_T,
+                                )),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '#${paymentIntentNo ?? '-'}',
                           style: const TextStyle(
-                              fontFamily: Font_.Fonts_T, fontSize: 8.5),
+                              color: Colors.grey,
+                              fontSize: 11.5,
+                              fontFamily: Font_.Fonts_T),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '฿${nFormat.format(totalAmount)}',
+                    style: const TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 19,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.access_time,
+                            size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          flex: 3,
+                          child: Text(
+                            widget.cuslang == 'EN'
+                                ? 'Expire ${_fmtExpireLocal(softExpireAt)}'
+                                : 'หมดอายุ ${_fmtExpireLocal(softExpireAt)}',
+                            style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 11.5,
+                                fontFamily: Font_.Fonts_T),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(Icons.receipt_long,
+                            size: 14, color: Colors.grey.shade600),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          flex: 1,
+                          child: Text(
+                            widget.cuslang == "EN"
+                                ? "$billCount Bill"
+                                : "$billCount บิล",
+                            style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 11.5,
+                                fontFamily: Font_.Fonts_T),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  chip(
-                      widget.cuslang == 'EN'
-                          ? '${systemStatusIntentUuid}'
-                          : '${statusIntentUuid}',
-                      Colors.orange.withOpacity(.08),
-                      Colors.orange.shade700),
                 ],
               ),
               subtitle: Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 6,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    // if (paymentIntentNo != null)
-                    //   Row(mainAxisSize: MainAxisSize.min, children: [
-                    //     const Icon(Icons.confirmation_number_outlined,
-                    //         size: 15, color: Colors.black54),
-                    //     const SizedBox(width: 6),
-                    //     Text('$paymentIntentNo',
-                    //         style: const TextStyle(
-                    //             fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                    //   ]),
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.money, size: 15, color: Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                          widget.cuslang == 'EN'
-                              ? 'Total: ${nFormat.format(totalAmount)}'
-                              : 'ยอดสุทธิ: ${nFormat.format(totalAmount)}',
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                    ]),
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.calendar_today,
-                          size: 15, color: Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                          widget.cuslang == 'EN'
-                              ? 'Created At: ${_fmtExpireLocal(createdAt)}'
-                              : 'วันที่สร้าง: ${_fmtExpireLocal(createdAt)}',
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                    ]),
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      const Icon(Icons.date_range,
-                          size: 15, color: Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                          widget.cuslang == 'EN'
-                              ? 'Expire At: ${_fmtExpireLocal(softExpireAt)}'
-                              : 'หมดอายุ: ${_fmtExpireLocal(softExpireAt)}',
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                    ]),
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      // const Spacer(),
-                      const Icon(Icons.receipt,
-                          size: 15, color: Colors.black54),
-                      const SizedBox(width: 6),
-                      Text(
-                          widget.cuslang == "EN"
-                              ? "Bill All : $billCount "
-                              : "บิลทั้งหมด : $billCount ",
-                          style: const TextStyle(
-                              color: Colors.grey,
-                              fontFamily: Font_.Fonts_T,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700)),
-                      const SizedBox(width: 6),
-                      if (intent.latestSlip != null ||
-                          systemStatusIntentUuid.toString() ==
-                              'slip_uploaded' ||
-                          statusIntentUuid.toString() == 'รอตรวจสอบ' ||
-                          statusIntentUuid.toString() == 'รอการตรวจสอบ') ...[
-                        InkWell(
-                          child: SizedBox(
-                            child: Row(
-                              children: [
-                                Text(
-                                    widget.cuslang == "EN"
-                                        ? "payment proof"
-                                        : "หลักฐานการชำระ",
-                                    style: const TextStyle(
-                                        decoration: TextDecoration.underline,
-                                        color: Colors.green,
+                child: showSlipAction
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          // ✅ ปิดปุ่ม "หลักฐานการชำระ" ถ้า status เป็น "รอตรวจสอบ"
+                          // (user แนบ slip ไปแล้ว รอ admin ตรวจ)
+                          if (!_isAwaitingVerifyStatus(intent.status))
+                            InkWell(
+                              onTap: () async {
+                                setState(() {
+                                  numinvoice = intent.intentUuid;
+                                  sum_amt = totalAmount;
+                                });
+                                await QrGenRef(
+                                  QR_Ref1: intent.ref1 ?? '',
+                                  QR_Ref2: intent.ref2 ?? '',
+                                  QR_Ref3: intent.ref3 ?? '',
+                                  softExpireAt:
+                                      intent.softExpireAt?.toIso8601String() ??
+                                          '',
+                                );
+                                if (!mounted) return;
+                                _showPaymentConfirmationSheet(context,
+                                    totalAmount: totalAmount);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.indigo.shade50,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.description_outlined,
+                                        color: Colors.indigo.shade800,
+                                        size: 18),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      widget.cuslang == "EN"
+                                          ? "Payment proof"
+                                          : "หลักฐานการชำระ",
+                                      style: TextStyle(
+                                        color: Colors.indigo.shade800,
                                         fontFamily: Font_.Fonts_T,
                                         fontSize: 12.5,
-                                        fontWeight: FontWeight.w700)),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.green,
-                                )
-                              ],
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Icon(Icons.chevron_right,
+                                        color: Colors.indigo.shade800,
+                                        size: 18),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ),
-                          onTap: () async {
-                            setState(() {
-                              numinvoice = intent.intentUuid;
-                              sum_amt = intent.total ?? 0.0;
-                            });
-                            await QrGenRef(
-                              QR_Ref1: intent.ref1 ?? '',
-                              QR_Ref2: intent.ref2 ?? '',
-                              QR_Ref3: intent.ref3 ?? '',
-                              softExpireAt:
-                                  intent.softExpireAt?.toIso8601String() ?? '',
-                            );
-                            if (!mounted) return;
-                            _showPaymentConfirmationSheet(context);
-                          },
-                        ),
-                      ] else ...[
-                        InkWell(
-                          child: SizedBox(
-                            child: Row(
-                              children: [
-                                Text(
-                                    widget.cuslang == "EN"
-                                        ? "Press to pay"
-                                        : "กดเพื่อยืนยัน",
-                                    style: const TextStyle(
-                                        decoration: TextDecoration.underline,
-                                        color: Colors.green,
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Builder(builder: (_) {
+                            // ✅ Map status → label & icon & color
+                            // - "รอแนบหลักฐาน" → กดเพื่อแนบหลักฐาน (สีส้ม)
+                            // - "รอยืนยัน/รอตรวจสอบ" → กดเพื่อดูหลักฐาน (สีเขียว)
+                            final awaitingSlip = isAwaitingSlip;
+                            final awaitingVerify =
+                                _isAwaitingVerifyStatus(intent.status);
+
+                            IconData btnIcon;
+                            Color btnBg;
+                            Color btnFg;
+                            String btnLabel;
+                            if (awaitingVerify) {
+                              btnIcon = Icons.verified_outlined;
+                              btnBg = Colors.green.shade50;
+                              btnFg = Colors.green.shade800;
+                              btnLabel = widget.cuslang == "EN"
+                                  ? "View proof"
+                                  : "กดเพื่อดูหลักฐาน";
+                            } else if (awaitingSlip) {
+                              btnIcon = Icons.attach_file_rounded;
+                              btnBg = Colors.orange.shade50;
+                              btnFg = Colors.orange.shade800;
+                              btnLabel = widget.cuslang == "EN"
+                                  ? "Attach proof"
+                                  : "กดเพื่อแนบหลักฐาน";
+                            } else {
+                              btnIcon = Icons.credit_card;
+                              btnBg = Colors.indigo.shade50;
+                              btnFg = Colors.indigo.shade800;
+                              btnLabel = widget.cuslang == "EN"
+                                  ? "Press to pay"
+                                  : "กดเพื่อยืนยัน";
+                            }
+
+                            return InkWell(
+                              onTap: () async {
+                                setState(() {
+                                  numinvoice = intent.intentUuid;
+                                  sum_amt = totalAmount;
+                                });
+                                await QrGenRef(
+                                  QR_Ref1: intent.ref1 ?? '',
+                                  QR_Ref2: intent.ref2 ?? '',
+                                  QR_Ref3: intent.ref3 ?? '',
+                                  softExpireAt:
+                                      intent.softExpireAt?.toIso8601String() ??
+                                          '',
+                                );
+                                if (!mounted) return;
+                                _showPaymentConfirmationSheet(context,
+                                    totalAmount: totalAmount);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: btnBg,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(btnIcon, color: btnFg, size: 18),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      btnLabel,
+                                      style: TextStyle(
+                                        color: btnFg,
                                         fontFamily: Font_.Fonts_T,
                                         fontSize: 12.5,
-                                        fontWeight: FontWeight.w700)),
-                                const Icon(
-                                  Icons.chevron_right,
-                                  color: Colors.green,
-                                )
-                              ],
-                            ),
-                          ),
-                          onTap: () async {
-                            setState(() {
-                              numinvoice = intent.intentUuid;
-                              sum_amt = intent.total ?? 0.0;
-                            });
-                            await QrGenRef(
-                              QR_Ref1: intent.ref1 ?? '',
-                              QR_Ref2: intent.ref2 ?? '',
-                              QR_Ref3: intent.ref3 ?? '',
-                              softExpireAt:
-                                  intent.softExpireAt?.toIso8601String() ?? '',
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             );
-                            if (!mounted) return;
-                            _showPaymentConfirmationSheet(context);
-                            // if (paymentModel != null) {
-                            //   final index = _PayMentModels.indexOf(paymentModel);
-                            //   if (index != -1) {
-                            //     _selectPayment(index);
-                            //   }
-                            // }
-                          },
-                        ),
-                      ]
-                    ]),
-                  ],
-                ),
+                          }),
+                        ],
+                      ),
               ),
               children: [
                 const Divider(height: 1),
@@ -3656,6 +4692,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                   final double invAmount =
                       (inv as dynamic).total ?? (inv as dynamic).amount ?? 0.0;
 
+                  // ✅ แสดง checkbox ติ๊กถูกเสมอ (เพราะเป็นบิลใน Tab 2/3 = กำลังดำเนินการ)
+                  // ✅ แสดงข้อความ "แนบหลักฐานแล้ว" ใต้บิล เฉพาะ Tab 3 (รอตรวจ)
                   return _invoiceItem(
                       index: 0,
                       docNo: inv.billReference ?? '',
@@ -3664,7 +4702,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                       isSelected: true,
                       lateFee: inv.lateFee ?? 0.0,
                       onTap: () {},
-                      showCheckbox: false);
+                      showCheckbox: true,
+                      showSlipAttachedText: isVerifyTab);
                 }).toList(),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -3739,6 +4778,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     final bno = _PayMentModels.isNotEmpty ? (_PayMentModels[0].bno ?? '') : '';
     final bname =
         _PayMentModels.isNotEmpty ? (_PayMentModels[0].bname ?? '') : '';
+    final PaymaentRemark =
+        _PayMentModels.isNotEmpty ? (_PayMentModels[0].remark ?? '') : '';
     Widget _invoiceItem({
       required int index,
       required String docNo,
@@ -3923,8 +4964,11 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     final bankEn = bankInfo?['en'];
 
     return Card(
+      color: Colors.white,
       elevation: 0.4,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -4002,15 +5046,15 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                 // 1. Fine
                 if ((sum_tran_fine + sum_tran_fine_in) > 0)
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.warning_amber_rounded,
-                        size: 15, color: Colors.red),
+                    Icon(Icons.warning_amber_rounded,
+                        size: 15, color: Colors.orange.shade700),
                     const SizedBox(width: 6),
                     Text(
                         '${widget.cuslang == "EN" ? "Fine" : "ค่าปรับ"}: ${nFormat.format(sum_tran_fine + sum_tran_fine_in)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontFamily: Font_.Fonts_T,
                             fontSize: 12.5,
-                            color: Colors.red)),
+                            color: Colors.orange.shade700)),
                   ]),
                 // // 2. Service Charge
                 // if ((sum_pvat + sum_pvat_in) > 0)
@@ -4074,26 +5118,40 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                 // 8. Charge (Fee)
                 if (fine_total > 0)
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.add_card, size: 15, color: Colors.red),
+                    Icon(Icons.add_card,
+                        size: 15, color: Colors.orange.shade700),
                     const SizedBox(width: 6),
                     Text(
                         '${widget.cuslang == "EN" ? "Charge" : "ค่าธรรมเนียม"}: ${nFormat.format(fine_total)}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontFamily: Font_.Fonts_T,
                             fontSize: 12.5,
-                            color: Colors.red)),
+                            color: Colors.orange.shade700)),
                   ]),
+
                 // 9. Payment Amount (Final)
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   const Icon(Icons.payments, size: 15, color: Colors.black87),
                   const SizedBox(width: 6),
                   Text(
-                      '${widget.cuslang == "EN" ? "Payment Amount" : "ยอดชำระสุทธิ"}: ${fmtMoney(totalBill)}',
-                      style: const TextStyle(
-                          fontFamily: Font_.Fonts_T,
-                          fontSize: 13.5,
+                      '${widget.cuslang == "EN" ? "Payment Amount" : "ยอดต้องชำระ"}: ${fmtMoney(totalBill)}',
+                      style: TextStyle(
+                          fontFamily: FontWeight_.Fonts_T,
+                          color: Colors.red.shade700,
+                          fontSize: 14.5,
                           fontWeight: FontWeight.w800)),
                 ]),
+                // 10. Payment Remark
+                // if (PaymaentRemark != null && PaymaentRemark.isNotEmpty)
+                //   Row(mainAxisSize: MainAxisSize.min, children: [
+                //     const Icon(Icons.info, size: 15, color: Colors.black54),
+                //     const SizedBox(width: 6),
+                //     Text('${PaymaentRemark}',
+                //         style: const TextStyle(
+                //             fontFamily: Font_.Fonts_T,
+                //             fontSize: 12.5,
+                //             color: Colors.black54)),
+                //   ]),
               ],
             ),
           ),
@@ -4194,7 +5252,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 //  bool tt =false
     return Card(
       elevation: 0.4,
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.antiAlias,
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
@@ -4206,6 +5267,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
           initiallyExpanded: false,
           trailing: const SizedBox(),
           title: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircleAvatar(
                 radius: 18,
@@ -4274,6 +5336,30 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
   @override
   Widget build(BuildContext context) {
+    if (_initialLoading) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF2F3F8),
+        body: Center(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: CircleAvatar(
+                  backgroundColor: Colors.transparent,
+                  radius: 30,
+                  backgroundImage: AssetImage('assets/images/Icon-chao.png'),
+                ),
+              ),
+              LoadingAnimationWidget.inkDrop(
+                color: Colors.indigo,
+                size: 70,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return AnimatedBuilder(
         animation: _effectiveController,
         builder: (BuildContext context, Widget? child) {
@@ -4288,30 +5374,178 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                 centerTitle: true,
                 leading: IconButton(
                   icon: Icon(Icons.arrow_back_ios, color: Colors.black),
-                  onPressed: () {
-                    PanaraConfirmDialog.showAnimatedGrow(
-                      context,
-                      title: widget.cuslang == 'EN' ? "Warning" : "แจ้งเตือน",
-                      message: widget.cuslang == 'EN'
-                          ? "If paid, please attach proof and confirm. Or close to pay later."
-                          : "หากชำระแล้วอย่าลืมแนบหลักฐานและยืนยัน หรือปิดไว้ชำระอีกครั้งภายหลัง",
-                      confirmButtonText: widget.cuslang == 'EN'
-                          ? "Attach Proof"
-                          : "แนบหลักฐาน",
-                      cancelButtonText: widget.cuslang == 'EN'
-                          ? "Pay Later"
-                          : "ปิดไว้ชำระภายหลัง",
-                      onTapConfirm: () {
-                        Navigator.pop(context); // Close dialog
-                        // _showPaymentConfirmationSheet(context);
-                      },
-                      onTapCancel: () {
-                        Navigator.pop(context); // Close dialog
-                        Navigator.pop(context); // Close screen
-                      },
-                      panaraDialogType: PanaraDialogType.warning,
+                  onPressed: () async {
+                    showDialog(
+                      context: context,
                       barrierDismissible: true,
+                      builder: (ctx) {
+                        final isEN = widget.cuslang == 'EN';
+                        return Dialog(
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24)),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 28, vertical: 28),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 72,
+                                  height: 72,
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.orange.shade200,
+                                        width: 2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                          color: Colors.orange
+                                              .withValues(alpha: 0.25),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 4))
+                                    ],
+                                  ),
+                                  child: Icon(Icons.warning_amber_rounded,
+                                      color: Colors.orange.shade700, size: 38),
+                                ),
+                                const SizedBox(height: 18),
+                                Text(
+                                  isEN ? 'Warning' : 'แจ้งเตือน',
+                                  style: TextStyle(
+                                      fontSize: 19,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade900,
+                                      fontFamily: Font_.Fonts_T),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  isEN
+                                      ? 'If paid, please attach proof and confirm.\nOr close to pay later.'
+                                      : 'หากชำระแล้ว กรุณาแนบหลักฐานและยืนยัน',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                      fontFamily: Font_.Fonts_T,
+                                      height: 1.6),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 24),
+                                // Primary: แนบหลักฐาน
+                                // SizedBox(
+                                //   width: double.infinity,
+                                //   height: 48,
+                                //   child: Container(
+                                //     decoration: BoxDecoration(
+                                //       gradient: const LinearGradient(
+                                //           colors: [
+                                //             Colors.indigo,
+                                //             Color(0xFF283593)
+                                //           ],
+                                //           begin: Alignment.centerLeft,
+                                //           end: Alignment.centerRight),
+                                //       borderRadius: BorderRadius.circular(14),
+                                //       boxShadow: [
+                                //         BoxShadow(
+                                //             color: Colors.indigo
+                                //                 .withValues(alpha: 0.35),
+                                //             blurRadius: 10,
+                                //             offset: const Offset(0, 4))
+                                //       ],
+                                //     ),
+                                //     child: Material(
+                                //       color: Colors.transparent,
+                                //       child: InkWell(
+                                //         borderRadius: BorderRadius.circular(14),
+                                //         onTap: () async {
+                                //           Navigator.of(ctx, rootNavigator: true)
+                                //               .pop();
+                                //         },
+                                //         child: Center(
+                                //             child: Text(
+                                //                 isEN
+                                //                     ? 'Attach Proof'
+                                //                     : 'แนบหลักฐาน',
+                                //                 style: const TextStyle(
+                                //                     color: Colors.white,
+                                //                     fontSize: 15,
+                                //                     fontWeight:
+                                //                         FontWeight.bold))),
+                                //       ),
+                                //     ),
+                                //   ),
+                                // ),
+                                // const SizedBox(height: 10),
+                                // Secondary: ชำระภายหลัง
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48,
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(
+                                          color: Colors.grey.shade400),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(14)),
+                                    ),
+                                    onPressed: () async {
+                                      // ✅ กด "ชำระภายหลัง" → ปิด dialog แล้วไปหน้าหลัก (เปิด tab "การชำระ" ทันที)
+                                      final nav = Navigator.of(ctx,
+                                          rootNavigator: true);
+                                      nav.pop(); // ปิด dialog
+                                      SharedPreferences preferences =
+                                          await SharedPreferences.getInstance();
+                                      var custno =
+                                          preferences.getString('custno');
+                                      Navigator.of(context).pushAndRemoveUntil(
+                                        MaterialPageRoute(
+                                          builder: (_) => FitnessAppHomeScreen(
+                                            custno_s: custno,
+                                            pageroot:
+                                                'PAY', // ✅ เปิด tab "การชำระ" ทันที
+                                          ),
+                                        ),
+                                        (route) => false,
+                                      );
+                                    },
+                                    child: Text(
+                                        isEN ? 'Pay Later' : 'ชำระภายหลัง',
+                                        style: TextStyle(
+                                            color: Colors.grey.shade700,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     );
+                    // PanaraConfirmDialog.showAnimatedGrow(
+                    //   context,
+                    //   title: widget.cuslang == 'EN' ? "Warning" : "แจ้งเตือน",
+                    //   message: widget.cuslang == 'EN'
+                    //       ? "If paid, please attach proof and confirm. Or close to pay later."
+                    //       : "หากชำระแล้วอย่าลืมแนบหลักฐานและยืนยัน หรือปิดไว้ชำระอีกครั้งภายหลัง",
+                    //   confirmButtonText: widget.cuslang == 'EN'
+                    //       ? "Attach Proof"
+                    //       : "แนบหลักฐาน",
+                    //   cancelButtonText: widget.cuslang == 'EN'
+                    //       ? "Pay Later"
+                    //       : "ปิดไว้ชำระภายหลัง",
+                    //   onTapConfirm: () {
+                    //     Navigator.pop(context); // Close dialog
+                    //     // _showPaymentConfirmationSheet(context);
+                    //   },
+                    //   onTapCancel: () {
+                    //     Navigator.pop(context); // Close dialog
+                    //     Navigator.pop(context); // Close screen
+                    //   },
+                    //   panaraDialogType: PanaraDialogType.warning,
+                    //   barrierDismissible: true,
+                    // );
                   },
                 ),
                 title: Row(
@@ -4417,7 +5651,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                         preferredSize: Size.fromHeight(0),
                         child: SizedBox.shrink(),
                       )), // FAB Removed
-            // backgroundColor: Colors.white,
+            backgroundColor: const Color(0xFFF2F3F8),
             body: Stack(
               children: [
                 FadeTransition(
@@ -4448,194 +5682,383 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                         width: 1.5),
                                   ),
                                 ),
-                                child: Row(
-                                  children: [
-                                    // Tab 1: ค้างชำระ
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () async {
-                                          await _initData();
-                                          setState(() => selectTap = 1);
-                                        },
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: 11),
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.receipt_long_rounded,
-                                                    size: 15,
-                                                    color: selectTap == 1
-                                                        ? Colors.black87
-                                                        : Colors.grey.shade400,
-                                                  ),
-                                                  const SizedBox(width: 5),
-                                                  Text(
-                                                    'ค้างชำระ',
-                                                    style: TextStyle(
-                                                      fontSize: 13,
-                                                      fontWeight: selectTap == 1
-                                                          ? FontWeight.w700
-                                                          : FontWeight.w500,
+                                child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                  // ✅ Responsive: ลดขนาดเมื่อจอเล็ก (<380px)
+                                  final bool isNarrow =
+                                      constraints.maxWidth < 380;
+                                  final double iconSize = isNarrow ? 12 : 15;
+                                  final double gapSmall = isNarrow ? 3 : 5;
+                                  final double tabFontSize = isNarrow ? 11 : 13;
+                                  final double badgeH = isNarrow ? 6 : 8;
+                                  final double badgeV = isNarrow ? 1 : 2;
+                                  final double vPad = isNarrow ? 8 : 11;
+                                  final double badgeFont = isNarrow ? 10 : 12;
+
+                                  return Row(
+                                    children: [
+                                      // Tab 1: ค้างชำระ
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () => _selectTabAndRefresh(1),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    vertical: vPad),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      Icons
+                                                          .receipt_long_rounded,
+                                                      size: iconSize,
                                                       color: selectTap == 1
                                                           ? Colors.black87
                                                           : Colors
                                                               .grey.shade400,
                                                     ),
-                                                  ),
-                                                  const SizedBox(width: 5),
-                                                  AnimatedContainer(
-                                                    duration: const Duration(
-                                                        milliseconds: 200),
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 7,
-                                                        vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: selectTap == 1
-                                                          ? Colors.red.shade400
-                                                          : Colors
-                                                              .grey.shade200,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              20),
+                                                    SizedBox(width: gapSmall),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'ที่ต้องชำระ',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: tabFontSize,
+                                                          fontWeight:
+                                                              selectTap == 1
+                                                                  ? FontWeight
+                                                                      .w700
+                                                                  : FontWeight
+                                                                      .w500,
+                                                          color: selectTap == 1
+                                                              ? Colors.black87
+                                                              : Colors.grey
+                                                                  .shade400,
+                                                        ),
+                                                      ),
                                                     ),
-                                                    child: Text(
-                                                      '${_InvoiceModels.length}',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        fontWeight:
-                                                            FontWeight.bold,
+                                                    SizedBox(width: gapSmall),
+                                                    AnimatedContainer(
+                                                      duration: const Duration(
+                                                          milliseconds: 200),
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                              horizontal:
+                                                                  badgeH,
+                                                              vertical: badgeV),
+                                                      decoration: BoxDecoration(
                                                         color: selectTap == 1
-                                                            ? Colors.white
+                                                            ? Colors
+                                                                .red.shade600
                                                             : Colors
-                                                                .grey.shade500,
+                                                                .red.shade100,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20),
+                                                        boxShadow: selectTap ==
+                                                                1
+                                                            ? [
+                                                                BoxShadow(
+                                                                  color: Colors
+                                                                      .red
+                                                                      .withValues(
+                                                                          alpha:
+                                                                              0.4),
+                                                                  blurRadius: 6,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 2),
+                                                                ),
+                                                              ]
+                                                            : null,
+                                                      ),
+                                                      constraints:
+                                                          BoxConstraints(
+                                                              minWidth: isNarrow
+                                                                  ? 18
+                                                                  : 22),
+                                                      child: Text(
+                                                        '${_InvoiceModels.length}',
+                                                        style: TextStyle(
+                                                          fontSize: badgeFont,
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                          color: selectTap == 1
+                                                              ? Colors.white
+                                                              : Colors
+                                                                  .red.shade700,
+                                                        ),
                                                       ),
                                                     ),
-                                                  ),
-                                                ],
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                            AnimatedContainer(
-                                              duration: const Duration(
-                                                  milliseconds: 250),
-                                              height: 2.5,
-                                              margin:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 20),
-                                              decoration: BoxDecoration(
-                                                color: selectTap == 1
-                                                    ? Colors.black87
-                                                    : Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(2),
+                                              AnimatedContainer(
+                                                duration: const Duration(
+                                                    milliseconds: 250),
+                                                height: 2.5,
+                                                margin:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 20),
+                                                decoration: BoxDecoration(
+                                                  color: selectTap == 1
+                                                      ? Colors.black87
+                                                      : Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(2),
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    // Tab 2: รอยืนยัน
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () async {
-                                          await _initData();
-                                          setState(() => selectTap = 2);
-                                        },
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      vertical: 11),
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons
-                                                        .hourglass_bottom_rounded,
-                                                    size: 15,
-                                                    color: selectTap == 2
-                                                        ? Colors.black87
-                                                        : Colors.grey.shade400,
-                                                  ),
-                                                  const SizedBox(width: 5),
-                                                  Text(
-                                                    'รอยืนยัน',
-                                                    style: TextStyle(
-                                                      fontSize: 13,
-                                                      fontWeight: selectTap == 2
-                                                          ? FontWeight.w700
-                                                          : FontWeight.w500,
+                                      // Tab 2: รอแนบหลักฐาน
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () => _selectTabAndRefresh(2),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    vertical: vPad),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.attach_file_rounded,
+                                                      size: iconSize,
                                                       color: selectTap == 2
                                                           ? Colors.black87
                                                           : Colors
                                                               .grey.shade400,
                                                     ),
-                                                  ),
-                                                  const SizedBox(width: 5),
-                                                  AnimatedContainer(
-                                                    duration: const Duration(
-                                                        milliseconds: 200),
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 7,
-                                                        vertical: 2),
-                                                    decoration: BoxDecoration(
-                                                      color: selectTap == 2
-                                                          ? Colors
-                                                              .orange.shade500
-                                                          : Colors
-                                                              .grey.shade200,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              20),
-                                                    ),
-                                                    child: Text(
-                                                      '${paymentIntents.length}',
-                                                      style: TextStyle(
-                                                        fontSize: 11,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: selectTap == 2
-                                                            ? Colors.white
-                                                            : Colors
-                                                                .grey.shade500,
+                                                    SizedBox(width: gapSmall),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'รอแนบหลักฐาน',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: tabFontSize,
+                                                          fontWeight:
+                                                              selectTap == 2
+                                                                  ? FontWeight
+                                                                      .w700
+                                                                  : FontWeight
+                                                                      .w500,
+                                                          color: selectTap == 2
+                                                              ? Colors.black87
+                                                              : Colors.grey
+                                                                  .shade400,
+                                                        ),
                                                       ),
                                                     ),
-                                                  ),
-                                                ],
+                                                    SizedBox(width: gapSmall),
+                                                    AnimatedContainer(
+                                                      duration: const Duration(
+                                                          milliseconds: 200),
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                              horizontal:
+                                                                  badgeH,
+                                                              vertical: badgeV),
+                                                      decoration: BoxDecoration(
+                                                        color: selectTap == 2
+                                                            ? Colors
+                                                                .orange.shade600
+                                                            : Colors.orange
+                                                                .shade100,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20),
+                                                        boxShadow: selectTap ==
+                                                                2
+                                                            ? [
+                                                                BoxShadow(
+                                                                  color: Colors
+                                                                      .orange
+                                                                      .withValues(
+                                                                          alpha:
+                                                                              0.4),
+                                                                  blurRadius: 6,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 2),
+                                                                ),
+                                                              ]
+                                                            : null,
+                                                      ),
+                                                      constraints:
+                                                          BoxConstraints(
+                                                              minWidth: isNarrow
+                                                                  ? 18
+                                                                  : 22),
+                                                      child: Text(
+                                                        '${_countAwaitingSlip}',
+                                                        style: TextStyle(
+                                                          fontSize: badgeFont,
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                          color: selectTap == 2
+                                                              ? Colors.white
+                                                              : Colors.orange
+                                                                  .shade700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                            AnimatedContainer(
-                                              duration: const Duration(
-                                                  milliseconds: 250),
-                                              height: 2.5,
-                                              margin:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 20),
-                                              decoration: BoxDecoration(
-                                                color: selectTap == 2
-                                                    ? Colors.black87
-                                                    : Colors.transparent,
-                                                borderRadius:
-                                                    BorderRadius.circular(2),
+                                              AnimatedContainer(
+                                                duration: const Duration(
+                                                    milliseconds: 250),
+                                                height: 2.5,
+                                                margin:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 20),
+                                                decoration: BoxDecoration(
+                                                  color: selectTap == 2
+                                                      ? Colors.orange.shade600
+                                                      : Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(2),
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
-                                ),
+                                      // Tab 3: รอระบบตรวจสอบ
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () => _selectTabAndRefresh(3),
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Padding(
+                                                padding: EdgeInsets.symmetric(
+                                                    vertical: vPad),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(
+                                                      Icons
+                                                          .verified_user_rounded,
+                                                      size: iconSize,
+                                                      color: selectTap == 3
+                                                          ? Colors.black87
+                                                          : Colors
+                                                              .grey.shade400,
+                                                    ),
+                                                    SizedBox(width: gapSmall),
+                                                    Flexible(
+                                                      child: Text(
+                                                        'รอระบบตรวจสอบ',
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                        style: TextStyle(
+                                                          fontSize: tabFontSize,
+                                                          fontWeight:
+                                                              selectTap == 3
+                                                                  ? FontWeight
+                                                                      .w700
+                                                                  : FontWeight
+                                                                      .w500,
+                                                          color: selectTap == 3
+                                                              ? Colors.black87
+                                                              : Colors.grey
+                                                                  .shade400,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    SizedBox(width: gapSmall),
+                                                    AnimatedContainer(
+                                                      duration: const Duration(
+                                                          milliseconds: 200),
+                                                      padding:
+                                                          EdgeInsets.symmetric(
+                                                              horizontal:
+                                                                  badgeH,
+                                                              vertical: badgeV),
+                                                      decoration: BoxDecoration(
+                                                        color: selectTap == 3
+                                                            ? Colors
+                                                                .green.shade600
+                                                            : Colors
+                                                                .green.shade100,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(20),
+                                                        boxShadow: selectTap ==
+                                                                3
+                                                            ? [
+                                                                BoxShadow(
+                                                                  color: Colors
+                                                                      .green
+                                                                      .withValues(
+                                                                          alpha:
+                                                                              0.4),
+                                                                  blurRadius: 6,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 2),
+                                                                ),
+                                                              ]
+                                                            : null,
+                                                      ),
+                                                      constraints:
+                                                          BoxConstraints(
+                                                              minWidth: isNarrow
+                                                                  ? 18
+                                                                  : 22),
+                                                      child: Text(
+                                                        '${_countAwaitingVerify}',
+                                                        style: TextStyle(
+                                                          fontSize: badgeFont,
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                          color: selectTap == 3
+                                                              ? Colors.white
+                                                              : Colors.green
+                                                                  .shade700,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              AnimatedContainer(
+                                                duration: const Duration(
+                                                    milliseconds: 250),
+                                                height: 2.5,
+                                                margin:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 20),
+                                                decoration: BoxDecoration(
+                                                  color: selectTap == 3
+                                                      ? Colors.green.shade600
+                                                      : Colors.transparent,
+                                                  borderRadius:
+                                                      BorderRadius.circular(2),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }),
                               ),
                               const SizedBox(
                                 height: 5,
@@ -4659,11 +6082,42 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                               if (selectTap == 2) ...[
                                 LayoutBuilder(builder: (context, constraints) {
                                   final maxW = constraints.maxWidth;
+                                  // ✅ filter intents: รอแนบหลักฐาน (สถานะ "รอชำระเงิน" / awaiting)
+                                  final awaitingSlip = paymentIntents
+                                      .where((p) =>
+                                          _isAwaitingSlipStatus(p.status) ||
+                                          _isSelectedIntentAwaitingSlip(p))
+                                      .toList();
                                   return Column(
                                     children: [
                                       _groupTile2(),
                                       const SizedBox(height: 2),
-                                      _IntentBox(),
+                                      if (awaitingSlip.isEmpty)
+                                        _emptyTabMsg('ไม่มีรายการรอแนบหลักฐาน')
+                                      else
+                                        _IntentBox(
+                                            filteredIntents: awaitingSlip),
+                                    ],
+                                  );
+                                })
+                              ] else if (selectTap == 3) ...[
+                                LayoutBuilder(builder: (context, constraints) {
+                                  final maxW = constraints.maxWidth;
+                                  // ✅ filter intents: รอระบบตรวจสอบ
+                                  final awaitingVerify = paymentIntents
+                                      .where((p) =>
+                                          _isAwaitingVerifyStatus(p.status))
+                                      .toList();
+                                  return Column(
+                                    children: [
+                                      _groupTile2(),
+                                      const SizedBox(height: 2),
+                                      if (awaitingVerify.isEmpty)
+                                        _emptyTabMsg('ไม่มีรายการรอระบบตรวจสอบ')
+                                      else
+                                        _IntentBox(
+                                            filteredIntents: awaitingVerify,
+                                            isVerifyTab: true),
                                     ],
                                   );
                                 })
@@ -4695,7 +6149,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                                       0, 10, 0, 0),
                                               child: Column(
                                                 children: [
-                                                  _groupTile(),
+                                                  if (!showQR) ...[
+                                                    _groupTile(),
+                                                  ],
                                                   const SizedBox(height: 16),
                                                   _howToBox(),
                                                 ],
@@ -4707,7 +6163,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                     } else {
                                       return Column(
                                         children: [
-                                          _groupTile(),
+                                          if (!showQR) ...[
+                                            _groupTile(),
+                                          ],
                                           const SizedBox(height: 2),
                                           if (showQR) ...[
                                             _QRBox(),
@@ -4751,108 +6209,212 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                   ),
               ],
             ),
-            bottomNavigationBar: (selectTap == 2) ||
-                    (invoicePayModels.length == 0)
+            bottomNavigationBar: (selectTap == 2 || selectTap == 3) ||
+                    _InvoiceModels.isEmpty
                 ? null
                 : Container(
-                    padding: EdgeInsets.all(16.0),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.grey.withOpacity(0.3),
-                          spreadRadius: 1,
-                          blurRadius: 10,
-                          offset: Offset(0, -2),
+                          color: Colors.black.withValues(alpha: 0.08),
+                          spreadRadius: 0,
+                          blurRadius: 20,
+                          offset: const Offset(0, -4),
                         ),
                       ],
                     ),
                     child: SafeArea(
-                      child: SizedBox(
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: (invoicePayModels.length == 0)
-                              ? () {
-                                  PanaraInfoDialog.showAnimatedGrow(
-                                    context,
-                                    title: "Oops",
-                                    message: widget.cuslang == 'EN'
-                                        ? "No payment amount!!!"
-                                        : "ไม่มียอดชำระ !!!",
-                                    buttonText: widget.cuslang == 'EN'
-                                        ? "acknowledge"
-                                        : "รับทราบ",
-                                    onTapDismiss: () async {
-                                      Navigator.of(
-                                        context,
-                                        rootNavigator: true,
-                                      ).pop();
-                                    },
-                                    panaraDialogType: PanaraDialogType.error,
-                                    barrierDismissible: false,
-                                  );
-                                }
-                              : (paymentSer1 != null &&
-                                      gopay != 0 &&
-                                      qr_expiresAt != null &&
-                                      !_isQrExpired())
-                                  ? () async {
-                                      _showPaymentConfirmationSheet(context);
-                                    }
-                                  : () async {
-                                      // Reset expired QR state before creating new
-                                      if (_isQrExpired()) {
-                                        setState(() {
-                                          qr_expiresAt = null;
-                                          qr_softExpiresAt = null;
-                                          activeQrSessionSoftExpire = null;
-                                          numinvoice = null;
-                                          gopay = 0;
-                                        });
-                                      }
-                                      await CreatePaymentItem();
-                                    },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: select_pay == 0
-                                ? Colors.black87 // Colors.green.shade900
-                                : (QR_Ref1 == null ||
-                                        QR_Ref1 == 'null' ||
-                                        QR_Ref1 == '' ||
-                                        selectedValue == null ||
-                                        selectedValue == 'null' ||
-                                        selectedValue == '')
-                                    ? Colors.grey
-                                    : Colors.black87,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: Text(
-                            (invoicePayModels.length == 0)
-                                ? widget.cuslang == 'EN'
-                                    ? "No payment amount"
-                                    : "ไม่มียอดชำระ"
+                      child: () {
+                        final bool noInvoice = _InvoiceModels.isEmpty;
+                        final bool isConfirm = paymentSer1 != null &&
+                            gopay != 0 &&
+                            qr_expiresAt != null;
+                        final bool isEN = widget.cuslang == 'EN';
+
+                        // ยอดเดียวกับที่ CTA ใช้เปิด sheet แนบหลักฐาน และหลัง
+                        // restore intent Form_payment1 ถูก set จาก requestedAmount/QR
+                        // ใช้ tryParse เพื่อไม่ให้ bottom bar crash ถ้า controller ว่าง
+                        final totalToTransfer =
+                            double.tryParse(Form_payment1.text) ?? 0.0;
+                        final showTransferTotal =
+                            isConfirm && totalToTransfer > 0;
+
+                        final List<Color> grad = noInvoice
+                            ? [Colors.grey.shade300, Colors.grey.shade400]
+                            : isConfirm
+                                ? [
+                                    const Color(0xFFFF8F00),
+                                    const Color(0xFFE65100),
+                                  ]
+                                : [
+                                    const Color(0xFF43A047),
+                                    const Color(0xFF00897B),
+                                  ];
+
+                        final IconData icon = noInvoice
+                            ? Icons.remove_circle_outline_rounded
+                            : isConfirm
+                                ? Icons.attach_file_rounded
                                 : select_pay == 0
-                                    ? (widget.cuslang == 'EN'
-                                        ? 'Payment Next'
-                                        : 'ชำระเงินต่อไป')
-                                    : (paymentSer1 != null &&
-                                            gopay != 0 &&
-                                            qr_expiresAt != null)
-                                        ? (widget.cuslang == 'EN'
-                                            ? 'Confirm Payment'
-                                            : 'ยืนยันการชำระ')
-                                        : (widget.cuslang == 'EN'
-                                            ? 'Start Payment'
-                                            : 'เริ่มการชำระ'),
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: Font_.Fonts_T,
+                                    ? Icons.arrow_forward_rounded
+                                    : Icons.payment_rounded;
+
+                        final String label = noInvoice
+                            ? (isEN ? 'No Payment Amount' : 'ไม่มียอดชำระ')
+                            : select_pay == 0
+                                ? (isEN ? 'Payment Next' : 'ชำระเงินต่อไป')
+                                : isConfirm
+                                    ? (isEN
+                                        ? 'Confirm Payment'
+                                        : 'กดเพื่อ "แนบหลักฐานและยืนยัน"')
+                                    : (isEN
+                                        ? 'Start Payment'
+                                        : 'กดเพื่อ "เริ่มการชำระ"');
+
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // if (showTransferTotal) ...[
+                            // Summary แบบเรียบ ไม่มี card/border แย่งความเด่นจาก CTA
+                            // ยอดเป็น requestedAmount เดียวกับ QR และ sheet แนบสลิป
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFFFF1D6),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.account_balance_wallet_outlined,
+                                      color: Color(0xFFFF8F00),
+                                      size: 18,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 9),
+                                  Expanded(
+                                    child: Text(
+                                      isEN
+                                          ? 'Amount to Transfer'
+                                          : 'จำนวนที่ต้องชำระ',
+                                      style: const TextStyle(
+                                        fontFamily: Font_.Fonts_T,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Color(0xFF6B7280),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Expanded + Align บังคับยอดไปชิดขอบขวาจริง
+                                  // (Flexible เดิมกินแค่ intrinsic width จึงเหลือช่องว่างขวา)
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerRight,
+                                      child: FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerRight,
+                                        child: Text(
+                                          isEN
+                                              ? '${nFormat.format(totalToTransfer)} THB'
+                                              : '฿${nFormat.format(totalToTransfer)}',
+                                          style: const TextStyle(
+                                            fontFamily: Font_.Fonts_T,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w900,
+                                            color: Color(0xFF111827),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
+                            const SizedBox(height: 8),
+                            // ],
+                            Container(
+                              height: 56,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: grad,
+                                  begin: Alignment.centerLeft,
+                                  end: Alignment.centerRight,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: noInvoice
+                                    ? []
+                                    : [
+                                        BoxShadow(
+                                          color:
+                                              grad.last.withValues(alpha: 0.45),
+                                          blurRadius: 14,
+                                          offset: const Offset(0, 5),
+                                        ),
+                                      ],
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(14),
+                                  onTap: noInvoice
+                                      ? () {
+                                          _showNoPaymentWarningDialog(isEN);
+                                        }
+                                      : isConfirm
+                                          ? () async {
+                                              // กันเปิด sheet ซ้อน — กดรัว ๆ ตอนนี้
+                                              // จะเปิด bottom sheet หลายชั้น แล้ว
+                                              // ผู้ใช้ลากยืนยันได้หลายรอบ ⇒ ชำระซ้ำ
+                                              if (_isSubmittingPayment) return;
+                                              _showPaymentConfirmationSheet(
+                                                  context,
+                                                  totalAmount: double.parse(
+                                                      Form_payment1.text ??
+                                                          "0"));
+                                            }
+                                          : () async {
+                                              // Reset expired QR state before creating new
+                                              if (_isQrExpired()) {
+                                                setState(() {
+                                                  qr_expiresAt = null;
+                                                  qr_softExpiresAt = null;
+                                                  activeQrSessionSoftExpire =
+                                                      null;
+                                                  numinvoice = null;
+                                                  gopay = 0;
+                                                });
+                                              }
+                                              await CreatePaymentItem();
+                                            },
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(icon, color: Colors.white, size: 22),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        label,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          fontFamily: Font_.Fonts_T,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }(),
                     ),
                   ),
           );
@@ -4927,6 +6489,114 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     } catch (e) {
       // print(e);
     }
+  }
+
+  Future<void> _showNoPaymentWarningDialog(bool isEN) {
+    return showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 40),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.orange.shade200, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.orange.withValues(alpha: 0.25),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.warning_amber_rounded,
+                    color: Colors.orange.shade700,
+                    size: 38,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Oops',
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade900,
+                    fontFamily: Font_.Fonts_T,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  isEN ? 'No payment amount!!!' : 'ไม่มียอดชำระ !!!',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                    fontFamily: Font_.Fonts_T,
+                    height: 1.6,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Colors.indigo, Color(0xFF283593)],
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.indigo.withValues(alpha: 0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          Navigator.of(ctx, rootNavigator: true).pop();
+                        },
+                        child: Center(
+                          child: Text(
+                            isEN ? 'acknowledge' : 'รับทราบ',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: Font_.Fonts_T,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showMyDialogPay_Error(text) {
@@ -5349,7 +7019,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       if (renTalModels[0].imglogo!.trim() == '') {
       } else {
         newValuePDFimg.add(
-            '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+            '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
       }
     }
     DateTime now = DateTime.now();
@@ -5584,151 +7254,252 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   //   });
   // }
 
+  /// กันการยืนยันชำระซ้อน (ผู้ใช้ลากสไลด์ยืนยันซ้ำ)
+  ///
+  /// จุดที่ผู้ใช้กดจริงคือ onConfirmation ของ _SlideToConfirm (ไม่ใช่
+  /// _processPaymentConfirmation ที่ไม่มีใครเรียกแล้ว) — ขั้นตอนนั้นอัปโหลด
+  /// สลิปจริงและยิง API ปิด intent ถ้าวิ่งซ้อนจะเกิดรายการชำระซ้ำ
+  bool _isSubmittingPayment = false;
+
+  /// กัน _processPaymentConfirmation ถูกเรียกซ้อน (ผู้ใช้ยืนยันซ้ำ)
+  ///
+  /// ขั้นตอนนี้คือ "ส่งสลิป + ปิด intent จริง" — ถ้าวิ่งซ้อนจะอัปโหลดสลิปซ้ำ
+  /// และยิง in_Trans_invoice ซ้ำ ⇒ เกิดรายการชำระซ้ำ
+  ///
+  /// ปัจจุบันไม่มีใครเรียกฟังก์ชันนี้ (ทั้ง V4/V3/V2 คอมเมนต์ไว้) — guard นี้
+  /// กันไว้เผื่อเปิดใช้กลับ ส่วนเส้นทางที่ใช้จริงมี guard แยกที่ onConfirmation
+  /// ของ _SlideToConfirm
   Future<void> _processPaymentConfirmation(BuildContext ctx) async {
-    Navigator.of(ctx).pop(); // Close the dialog
-    SharedPreferences preferences = await SharedPreferences.getInstance();
-    List newValuePDFimg = [];
-    for (int index = 0; index < 1; index++) {
-      if (renTalModels[0].imglogo!.trim() != '') {
-        newValuePDFimg.add(
-            '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
-      }
-    }
+    // reentry guard: รอบสองถูกปฏิเสธทันที ไม่แตะ network/state ใด ๆ
+    if (_isSubmittingPayment) return;
+    _isSubmittingPayment = true;
     try {
-      sucress(onDismiss: () {
-        Navigator.pushAndRemoveUntil(context,
-            MaterialPageRoute(builder: (context) {
-          return FitnessAppHomeScreen(
-              custno_s: preferences.getString('custno'));
-        }), (route) => false);
-      });
-      OKuploadFile_Slip(newValuePDFimg)
-          .then((value) => in_Trans_invoice(newValuePDFimg));
-    } catch (e) {
-      _showMyDialogPay_Error(widget.cuslang == 'EN'
-          ? "An error occurred. Please check the information. Please try again!"
-          : 'เกิดข้อผิดพลาด ตรวจสอบความถูกต้อง กรุณาลองอีกครั้ง!');
+      Navigator.of(ctx).pop(); // Close the dialog
+      SharedPreferences preferences = await SharedPreferences.getInstance();
+      List newValuePDFimg = [];
+      for (int index = 0; index < 1; index++) {
+        if (renTalModels[0].imglogo!.trim() != '') {
+          newValuePDFimg.add(
+              '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+        }
+      }
+      try {
+        sucress(onDismiss: () {
+          Navigator.pushAndRemoveUntil(context,
+              MaterialPageRoute(builder: (context) {
+            return FitnessAppHomeScreen(
+                custno_s: preferences.getString('custno'));
+          }), (route) => false);
+        });
+        // await ให้จบก่อน แล้วค่อยต่อ — เดิม fire-and-forget ทำให้ caller
+        // ไม่รู้ผล และถ้ามีการเรียกซ้ำจะทับกันโดยไม่มีลำดับ
+        //
+        // หมายเหตุ: OKuploadFile_Slip คืน void และกลืน error ในตัว (try/catch
+        // ภายใน) จึงตรวจผลลัพธ์ไม่ได้ — await เพื่อให้ลำดับถูกต้องเท่านั้น
+        await OKuploadFile_Slip(newValuePDFimg);
+        await in_Trans_invoice(newValuePDFimg);
+      } catch (e) {
+        _isSubmittingPayment = false;
+        _showMyDialogPay_Error(widget.cuslang == 'EN'
+            ? "An error occurred. Please check the information. Please try again!"
+            : 'เกิดข้อผิดพลาด ตรวจสอบความถูกต้อง กรุณาลองอีกครั้ง!');
+      }
+    } finally {
+      // ถ้าถึงตรงนี้โดยยังไม่ navigate ออก แปลว่ามีอะไรผิดพลาด —
+      // ต้องคืน flag ไม่งั้นผู้ใช้จะติดอยู่ในสถานะกดอะไรไม่ได้เลย
+      // (กรณีสำเร็จ จะ navigate ออกแล้ว การคืน flag จึงไม่มีผล)
+      _isSubmittingPayment = false;
     }
   }
 
-  void _showSlideConfirmDialog(BuildContext context) {
+  void _showSlideConfirmDialog() {
+    if (!mounted) return;
+    // กันเปิด dialog ซ้อนกับ bottom sheet ยืนยันที่เปิดอยู่ — ทั้งคู่เป็นทาง
+    // ยืนยันชำระเงิน ถ้าเปิดพร้อมกันผู้ใช้ยืนยันได้สองทาง
+    if (_isConfirmSheetOpen) return;
+    _isConfirmSheetOpen = true;
     showDialog(
-      context: context,
-      barrierDismissible: true,
+      context: context, // uses this.context
+      // ห้ามปิดด้วยการแตะนอก dialog: เดิม barrierDismissible: true ทำให้ผู้ใช้
+      // แตะนอก → dialog ปิด → ไม่มีอะไรบอกว่า "กำลังประมวลผล" → กดปุ่มเดิมซ้ำ
+      // → เปิด dialog ใหม่ → ลากยืนยันอีก ระหว่างรอบแรกยังวิ่งอยู่
+      // ใช้ false ให้ตรงกับ _showPaymentConfirmationSheet ที่ตั้งไว้แล้ว
+      barrierDismissible: false,
       builder: (BuildContext ctx) {
-        return AlertDialog(
+        return Dialog(
+          backgroundColor: Colors.white,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          contentPadding: EdgeInsets.zero,
-          content: Container(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(children: [
+                      Container(
+                        width: 4,
+                        height: 22,
+                        margin: const EdgeInsets.only(right: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.indigo,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                       Text(
                         widget.cuslang == 'EN'
                             ? 'Confirm Payment'
                             : 'ยืนยันการชำระเงิน',
-                        style: TextStyle(
-                            fontFamily: Font_.Fonts_T,
+                        style: const TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold),
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple),
                       ),
-                      IconButton(
-                        icon: Icon(Icons.close, color: Colors.grey),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
+                    ]),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
                 ),
-                Divider(height: 1),
-                SizedBox(height: 10),
-                if (_uploadedSlipData != null)
-                  Container(
-                    height: 250,
-                    width: double.infinity,
-                    color: Colors.black12,
+              ),
+              const Divider(height: 1),
+              const SizedBox(height: 14),
+              if (_uploadedSlipData != null)
+                Container(
+                  height: 240,
+                  margin: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(13),
                     child: InteractiveViewer(
                       panEnabled: true,
                       minScale: 0.1,
                       maxScale: 4.0,
-                      child: Image.memory(
-                        _uploadedSlipData!,
-                        fit: BoxFit.contain,
-                      ),
+                      child:
+                          Image.memory(_uploadedSlipData!, fit: BoxFit.contain),
                     ),
                   ),
-                SizedBox(height: 16),
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: _SlideToConfirm(
-                    label: widget.cuslang == 'EN'
-                        ? 'Slide to Confirm'
-                        : 'เลื่อนเพื่อยืนยัน',
-                    enabled: true,
-                    onConfirmation: () async {
-                      // Reset uploaded data to allow new upload
-                      setState(() {
-                        _uploadedSlipData = null;
-                      });
-                      // Trigger file picker
-                      // final success = await _pickSlipImage();
-                      if (base64_Slip != null) {
-                        if (!mounted) return;
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (BuildContext context) {
-                            return const Center(
-                              child: CircularProgressIndicator(),
-                            );
-                          },
-                        );
-                        final successUp = await _uploadSlipImage(
-                            amtRawSlip: sum_amt.toString());
-                        if (mounted) {
-                          Navigator.of(context).pop(); // Close dialog
-                          Navigator.of(context).pop(); // Close dialog
-                          Navigator.pushAndRemoveUntil(context,
-                              MaterialPageRoute(builder: (context) {
-                            return FitnessAppHomeScreen(custno_s: custno);
-                          }), (route) => false);
-                          if (successUp) {
-                            Fluttertoast.showToast(
-                                timeInSecForIosWeb: 3,
-                                msg: widget.cuslang == 'EN'
-                                    ? "Slip upload successful"
-                                    : 'อัปโหลดสลิปสำเร็จ',
-                                backgroundColor: Colors.black,
-                                textColor: Colors.white,
-                                webPosition: "center",
-                                webBgColor: "#000000",
-                                toastLength: Toast.LENGTH_SHORT);
-                          }
+                ),
+              const SizedBox(height: 12),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.indigo.shade200),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded,
+                        color: Colors.green, size: 18),
+                    const SizedBox(width: 6),
+                    Text(
+                      widget.cuslang == 'EN'
+                          ? 'Slip attached'
+                          : 'หลักฐานแนบแล้ว',
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.green.shade700,
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const Spacer(),
+                    Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerRight,
+                        child: Text(
+                          widget.cuslang == 'EN'
+                              ? "${nFormat.format(double.parse(Form_payment1.text))} THB"
+                              : "${nFormat.format(double.parse(Form_payment1.text))} บาท",
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.indigo),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                child: _SlideToConfirm(
+                  label: widget.cuslang == 'EN'
+                      ? 'Slide to Confirm'
+                      : 'เลื่อนเพื่อยืนยัน',
+                  enabled: true,
+                  onConfirmation: () async {
+                    // reentry guard: กันลากยืนยันซ้ำระหว่างที่รอบแรกยังอัปโหลด
+                    // สลิป/ยิง API อยู่ ⇒ กันรายการชำระซ้ำที่ชั้น logic
+                    // (ชั้น widget _SlideToConfirm กัน gesture ซ้ำให้อีกชั้น)
+                    if (_isSubmittingPayment) return;
+                    _isSubmittingPayment = true;
+                    // Trigger file picker
+                    // final success = await _pickSlipImage();
+                    if (base64_Slip != null) {
+                      if (!mounted) return;
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (BuildContext context) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        },
+                      );
+                      final successUp = await _uploadSlipImage(
+                          amtRawSlip: sum_amt.toString());
+                      if (mounted) {
+                        Navigator.of(context).pop(); // Close dialog
+                        Navigator.of(context).pop(); // Close dialog
+                        Navigator.pushAndRemoveUntil(context,
+                            MaterialPageRoute(builder: (context) {
+                          return FitnessAppHomeScreen(custno_s: custno);
+                        }), (route) => false);
+                        if (successUp) {
+                          Fluttertoast.showToast(
+                              timeInSecForIosWeb: 3,
+                              msg: widget.cuslang == 'EN'
+                                  ? "Slip upload successful"
+                                  : 'อัปโหลดสลิปสำเร็จ',
+                              backgroundColor: Colors.black,
+                              textColor: Colors.white,
+                              webPosition: "center",
+                              webBgColor: "#000000",
+                              toastLength: Toast.LENGTH_SHORT);
                         }
                       }
-                      // _processPaymentConfirmation(ctx);
-                    },
-                  ),
+                    } else {
+                      // ไม่มีสลิปให้ส่ง — คืน flag ให้กดใหม่ได้
+                      _isSubmittingPayment = false;
+                    }
+                    // _processPaymentConfirmation(ctx);
+                  },
                 ),
-                SizedBox(height: 8),
-              ],
-            ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
         );
       },
-    );
+      // คืน flag เมื่อ dialog ถูกปิดไม่ว่าทางใด (ปุ่มปิด / navigate ออก)
+      // ถ้าไม่คืน ผู้ใช้จะเปิด dialog ยืนยันอีกไม่ได้เลยหลังปิดครั้งแรก
+    ).whenComplete(() => _isConfirmSheetOpen = false);
   }
 
   Future<Map<String, dynamic>?> _DetailsPaymentIntentsReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
+    String _toU16(String? v) => (v ?? '0').trim();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -5763,8 +7534,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   }
 
   Future<bool> _renewQrAndReload() async {
-    int _toU16(String? v) =>
-        (int.tryParse((v ?? '0').trim()) ?? 0) + 65535; // ✅ logic เดิมคุณ
+    String _toU16(String? v) => (v ?? '0').trim();
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -6004,9 +7774,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
   Future<bool> _pickSlipImage() async {
     final completer = Completer<bool>();
+    var isProcessingVisible = false;
 
     // Helper to show loading
     void _showProcessing() {
+      if (isProcessingVisible || !mounted) return;
+      isProcessingVisible = true;
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -6043,6 +7816,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
     // Helper to request close loading
     void _hideProcessing() {
+      if (!isProcessingVisible || !mounted) return;
+      isProcessingVisible = false;
       Navigator.of(context, rootNavigator: true).pop();
     }
 
@@ -6073,22 +7848,18 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
           }
 
           if (images.isNotEmpty) {
-            Uint8List? finalImage;
-            if (images.length == 1) {
-              finalImage = images.first;
-            } else {
-              // Merge images
-              finalImage = await _mergeImages(images);
-            }
+            final Uint8List? finalImage =
+                images.length == 1 ? images.first : await _mergeImages(images);
 
             if (finalImage != null) {
               if (mounted) {
                 setState(() {
                   _slipImageBytes = finalImage;
                   _slipImageName =
-                      files.length > 1 ? "merged_slip.jpg" : files[0].name;
-                  base64_Slip = base64Encode(_slipImageBytes!);
+                      files.length > 1 ? "merged_slip.jpg" : "slip_upload.jpg";
                   _uploadedSlipData = _slipImageBytes;
+                  base64_Slip = 'ready';
+                  extension_ = 'jpg';
                 });
                 _hideProcessing();
               }
@@ -6114,31 +7885,33 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       // Mobile/Desktop: use ImagePicker
       final ImagePicker picker = ImagePicker();
       try {
-        final List<XFile> images = await picker.pickMultiImage();
+        final List<XFile> images = await picker.pickMultiImage(
+          imageQuality: 55,
+          maxWidth: 700,
+          maxHeight: 700,
+        );
 
         if (images.isNotEmpty) {
           _showProcessing();
+          await Future.delayed(const Duration(milliseconds: 80));
 
-          List<Uint8List> imageBytesList = [];
-          for (var imgFile in images) {
-            imageBytesList.add(await imgFile.readAsBytes());
-          }
+          final List<Uint8List> imageBytesList = await Future.wait(
+            images.map((imgFile) => imgFile.readAsBytes()),
+          );
 
-          Uint8List? finalImage;
-          if (imageBytesList.length == 1) {
-            finalImage = imageBytesList.first;
-          } else {
-            finalImage = await _mergeImages(imageBytesList);
-          }
+          final Uint8List? finalImage = imageBytesList.length == 1
+              ? imageBytesList.first
+              : await _mergeImages(imageBytesList);
 
           if (finalImage != null) {
             if (mounted) {
               setState(() {
                 _slipImageBytes = finalImage;
                 _slipImageName =
-                    images.length > 1 ? "merged_slip.jpg" : images[0].name;
-                base64_Slip = base64Encode(_slipImageBytes!);
+                    images.length > 1 ? "merged_slip.jpg" : "slip_upload.jpg";
                 _uploadedSlipData = _slipImageBytes;
+                base64_Slip = 'ready';
+                extension_ = 'jpg';
               });
               _hideProcessing();
             }
@@ -6155,6 +7928,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         }
       } catch (e) {
         debugPrint("Error picking mobile images: $e");
+        _hideProcessing();
         completer.complete(false);
       }
     }
@@ -6163,46 +7937,26 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   }
 
   Future<Uint8List?> _mergeImages(List<Uint8List> images) async {
+    return compute(_processSlipMergeImages, SlipMergeParams(images: images))
+        .timeout(
+      const Duration(seconds: 12),
+      onTimeout: () {
+        debugPrint('Slip image processing timed out');
+        return images.isNotEmpty ? images.first : null;
+      },
+    );
+  }
+
+  Uint8List? _slipPreviewBytes() {
+    if (_uploadedSlipData != null) return _uploadedSlipData;
+    if (_slipImageBytes != null) return _slipImageBytes;
+    final raw = base64_Slip;
+    if (raw == null || raw.isEmpty || raw == 'ready') return null;
+
     try {
-      List<img.Image> decodedImages = [];
-      int maxWidth = 800; // Fixed width for consistency
-      int totalHeight = 0;
-
-      for (var bytes in images) {
-        img.Image? decoded = img.decodeImage(bytes);
-        if (decoded != null) {
-          // Resize if wider than maxWidth
-          if (decoded.width > maxWidth) {
-            decoded = img.copyResize(decoded, width: maxWidth);
-          } else if (decoded.width < maxWidth) {
-            // For simplicity, maybe scaling up is bad, but scaling down is good.
-            // Let's just resize everything to 'maxWidth' or keep aspect ratio?
-            // Better: Resize to fit maxWidth if larger, else keep.
-            // But for stacking, they should preferably be same width or centered.
-            // Let's force width to 800 for uniform look.
-            decoded = img.copyResize(decoded, width: maxWidth);
-          }
-
-          decodedImages.add(decoded);
-          totalHeight += decoded.height;
-        }
-      }
-
-      if (decodedImages.isEmpty) return null;
-
-      // Create a merged image
-      final mergedDisplay = img.Image(width: maxWidth, height: totalHeight);
-
-      int currentY = 0;
-      for (var image in decodedImages) {
-        // Draw image at x=0, y=currentY
-        img.compositeImage(mergedDisplay, image, dstX: 0, dstY: currentY);
-        currentY += image.height;
-      }
-
-      return Uint8List.fromList(img.encodeJpg(mergedDisplay, quality: 80));
+      return base64Decode(raw);
     } catch (e) {
-      debugPrint("Error merging images: $e");
+      debugPrint('Invalid slip preview base64: $e');
       return null;
     }
   }
@@ -6291,9 +8045,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         });
 
         if (!mounted) return false;
-        int _toU16(String? v) =>
-            (int.tryParse((v ?? '0').trim()) ?? 0) +
-            65535; // ✅ 16-bit unsigned (0..65535)
+        String _toU16(String? v) => (v ?? '0').trim();
 
         String? custno16Bit = _toU16('$custno').toString();
         final ren16Bit = _toU16('$renTal_user');
@@ -6708,7 +8460,19 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     );
   }
 
-  void _showPaymentConfirmationSheet(BuildContext context) {
+  /// true ขณะ bottom sheet ยืนยันการชำระเปิดอยู่
+  ///
+  /// showModalBottomSheet ไม่ถูก await และ `isDismissible: false` กันได้แค่
+  /// การแตะฉากหลัง ไม่กันการเรียกซ้ำ ⇒ กดปุ่มรัวจะเปิด sheet ซ้อนหลายชั้น
+  /// แล้วผู้ใช้ลากยืนยันได้หลายรอบ
+  bool _isConfirmSheetOpen = false;
+
+  void _showPaymentConfirmationSheet(BuildContext context,
+      {required double totalAmount}) {
+    // กันเปิดซ้อน: sheet เปิดอยู่แล้วให้เพิกเฉย
+    if (_isConfirmSheetOpen) return;
+    _isConfirmSheetOpen = true;
+
     Widget chip(String text, Color bg, Color fg) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
@@ -6728,767 +8492,1055 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         );
     (_intentsSlipData != null)
         ? showModalBottomSheet(
-            isDismissible: false,
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (BuildContext context) {
-              return StatefulBuilder(
-                  builder: (BuildContext context, StateSetter setStateSheet) {
-                return Container(
-                  height: MediaQuery.of(context).size.height * 0.85,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
-                  ),
-                  child: Column(
-                    children: [
-                      // Header
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 12.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              widget.cuslang == 'EN'
-                                  ? 'Payment Confirmation'
-                                  : 'ยืนยันการชำระเงิน',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: Font_.Fonts_T),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.close, color: Colors.grey),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                          ],
-                        ),
+                isDismissible: false,
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (BuildContext context) {
+                  return StatefulBuilder(builder:
+                      (BuildContext context, StateSetter setStateSheet) {
+                    return Container(
+                      height: MediaQuery.of(context).size.height * 0.5,
+                      margin: const EdgeInsets.symmetric(horizontal: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(22)),
                       ),
-                      Divider(height: 1),
-
-                      Flexible(
-                          child: SingleChildScrollView(
-                              padding: EdgeInsets.all(16),
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Column(
+                        children: [
+                          // Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20.0, vertical: 12.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
                                   children: [
-                                    // Instructions
                                     Container(
-                                      padding: EdgeInsets.all(12),
+                                      width: 4,
+                                      height: 22,
+                                      margin: const EdgeInsets.only(right: 10),
                                       decoration: BoxDecoration(
-                                        color: Colors.orange.shade50,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                            color: Colors.orange.shade200),
+                                        color: Colors.indigo,
+                                        borderRadius: BorderRadius.circular(2),
                                       ),
-                                      child: Column(
-                                        children: [
-                                          Row(
+                                    ),
+                                    Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Payment Confirmation'
+                                          : 'ยืนยันการชำระเงิน',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.indigo,
+                                        fontFamily: Font_.Fonts_T,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                IconButton(
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.close,
+                                      color: Colors.grey),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          Flexible(
+                              child: SingleChildScrollView(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(20, 2, 20, 18),
+                                  child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Instructions
+                                        Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 14, vertical: 11),
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                Colors.orange.shade100,
+                                                Colors.orange.shade50
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(14),
+                                            border: Border.all(
+                                                color: Colors.orange.shade300,
+                                                width: 1.5),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.orange
+                                                    .withValues(alpha: 0.18),
+                                                blurRadius: 10,
+                                                offset: const Offset(0, 3),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Row(
                                             children: [
-                                              Icon(Icons.check_circle,
-                                                  color: Colors.green.shade800),
-                                              SizedBox(width: 10),
+                                              Container(
+                                                margin: const EdgeInsets.only(
+                                                    right: 12),
+                                                padding:
+                                                    const EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.orange.shade200,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(Icons.check_rounded,
+                                                    color:
+                                                        Colors.orange.shade800,
+                                                    size: 16),
+                                              ),
                                               Expanded(
                                                 child: Text(
                                                   widget.cuslang == 'EN'
                                                       ? "Upload completed"
                                                       : "อัปโหลดเรียบร้อยแล้ว",
                                                   style: TextStyle(
-                                                      color: Colors
-                                                          .orange.shade900,
-                                                      fontFamily: Font_.Fonts_T,
-                                                      fontWeight:
-                                                          FontWeight.bold),
+                                                    color:
+                                                        Colors.orange.shade900,
+                                                    fontFamily: Font_.Fonts_T,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13.5,
+                                                  ),
                                                 ),
                                               ),
                                             ],
                                           ),
-                                        ],
+                                        ),
+                                        const SizedBox(height: 14),
+                                        Container(
+                                          color: Colors.white,
+                                          margin: EdgeInsets.zero,
+                                          child: Column(
+                                            children: [
+                                              _slipInfoRow(
+                                                  widget.cuslang == 'EN'
+                                                      ? 'File'
+                                                      : 'ไฟล์:',
+                                                  _intentsSlipData![
+                                                          'original_filename'] ??
+                                                      '-'),
+                                              _slipInfoRow(
+                                                  widget.cuslang == 'EN'
+                                                      ? 'Amount'
+                                                      : 'จำนวนเงิน:',
+                                                  '${_intentsSlipData!['amount']} ${_intentsSlipData!['currency'] ?? ''}'),
+                                              _slipInfoRow(
+                                                  widget.cuslang == 'EN'
+                                                      ? 'D'
+                                                      : 'วันที่:',
+                                                  _intentsSlipData![
+                                                          'transfer_date'] ??
+                                                      '-'),
+                                              _slipInfoRow(
+                                                  'Ref:',
+                                                  _intentsSlipData![
+                                                          'transfer_ref_no'] ??
+                                                      '-'),
+                                              _slipInfoRow(
+                                                  widget.cuslang == 'EN'
+                                                      ? 'Status'
+                                                      : 'สถานะ:',
+                                                  _getStatusText(
+                                                      _intentsSlipData![
+                                                              'status'] ??
+                                                          '')),
+                                              const SizedBox(height: 12),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: SizedBox(
+                                                      height: 42,
+                                                      child:
+                                                          OutlinedButton.icon(
+                                                        onPressed: () async {
+                                                          // Reset uploaded data to allow new upload
+                                                          setState(() {
+                                                            _uploadedSlipData =
+                                                                null;
+                                                          });
+                                                          // Trigger file picker
+                                                          final success =
+                                                              await _pickSlipImage();
+                                                          if (success &&
+                                                              _slipImageBytes !=
+                                                                  null) {
+                                                            if (!mounted)
+                                                              return;
+                                                            showDialog(
+                                                              context: context,
+                                                              barrierDismissible:
+                                                                  false,
+                                                              builder:
+                                                                  (BuildContext
+                                                                      context) {
+                                                                return Center(
+                                                                  child: Stack(
+                                                                    alignment:
+                                                                        Alignment
+                                                                            .center,
+                                                                    children: [
+                                                                      const Padding(
+                                                                        padding:
+                                                                            EdgeInsets.all(8.0),
+                                                                        child:
+                                                                            CircleAvatar(
+                                                                          backgroundColor:
+                                                                              Colors.transparent,
+                                                                          radius:
+                                                                              30,
+                                                                          backgroundImage:
+                                                                              AssetImage('assets/images/Icon-chao.png'),
+                                                                        ),
+                                                                      ),
+                                                                      LoadingAnimationWidget
+                                                                          .inkDrop(
+                                                                        color: Colors
+                                                                            .indigo,
+                                                                        size:
+                                                                            70,
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                );
+                                                              },
+                                                            );
+                                                            final successUp =
+                                                                await _uploadSlipImage(
+                                                                    amtRawSlip:
+                                                                        sum_amt
+                                                                            .toString());
+                                                            if (mounted) {
+                                                              Navigator.of(
+                                                                      context)
+                                                                  .pop(); // Close dialog
+                                                              if (successUp) {
+                                                                ScaffoldMessenger.of(
+                                                                        context)
+                                                                    .showSnackBar(
+                                                                  SnackBar(
+                                                                    content: Text(widget.cuslang ==
+                                                                            'EN'
+                                                                        ? 'Slip upload successful!'
+                                                                        : 'อัปโหลดสลิปสำเร็จ!'),
+                                                                    backgroundColor:
+                                                                        Colors
+                                                                            .indigo,
+                                                                  ),
+                                                                );
+                                                              }
+                                                            }
+                                                          }
+                                                        },
+                                                        icon: const Icon(
+                                                            Icons.refresh,
+                                                            size: 16),
+                                                        label: Text(
+                                                            widget.cuslang ==
+                                                                    'EN'
+                                                                ? 'Re-attach'
+                                                                : 'แนบอีกครั้ง',
+                                                            style: TextStyle(
+                                                                fontSize: 12)),
+                                                        style: OutlinedButton
+                                                            .styleFrom(
+                                                          foregroundColor:
+                                                              Colors.indigo,
+                                                          side: BorderSide(
+                                                              color: Colors
+                                                                  .indigo
+                                                                  .shade100),
+                                                          backgroundColor:
+                                                              Colors.indigo
+                                                                  .shade50,
+                                                          shape:
+                                                              RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        22),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(
+                                                    width: 12,
+                                                  ),
+                                                  Expanded(
+                                                    child: SizedBox(
+                                                      height: 42,
+                                                      child:
+                                                          ElevatedButton.icon(
+                                                        onPressed: () async {
+                                                          final response =
+                                                              await getSlipPreviewPaymentIntents(
+                                                                  slipUuid:
+                                                                      intentsAttacheSlipNo ??
+                                                                          "");
+                                                          if (!mounted) return;
+
+                                                          await showDialog<
+                                                              void>(
+                                                            context: context,
+                                                            barrierDismissible:
+                                                                true,
+                                                            builder:
+                                                                (BuildContext
+                                                                    context) {
+                                                              final isSuccess =
+                                                                  response !=
+                                                                          null &&
+                                                                      response.statusCode >=
+                                                                          200 &&
+                                                                      response.statusCode <
+                                                                          300;
+
+                                                              return AlertDialog(
+                                                                shape:
+                                                                    RoundedRectangleBorder(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              20),
+                                                                ),
+                                                                backgroundColor:
+                                                                    AppbackgroundColor
+                                                                        .Sub_Abg_Colors,
+                                                                titlePadding:
+                                                                    const EdgeInsets
+                                                                        .all(
+                                                                        0.0),
+                                                                contentPadding:
+                                                                    const EdgeInsets
+                                                                        .all(
+                                                                        10.0),
+                                                                actionsPadding:
+                                                                    const EdgeInsets
+                                                                        .all(
+                                                                        6.0),
+                                                                title: Padding(
+                                                                  padding: const EdgeInsets
+                                                                      .symmetric(
+                                                                      horizontal:
+                                                                          16.0,
+                                                                      vertical:
+                                                                          12.0),
+                                                                  child: Row(
+                                                                    mainAxisAlignment:
+                                                                        MainAxisAlignment
+                                                                            .spaceBetween,
+                                                                    children: [
+                                                                      Text(
+                                                                        widget.cuslang ==
+                                                                                'EN'
+                                                                            ? 'Payment Slip'
+                                                                            : 'หลักฐานการโอนเงิน',
+                                                                        style: TextStyle(
+                                                                            fontSize:
+                                                                                18,
+                                                                            fontWeight:
+                                                                                FontWeight.bold,
+                                                                            fontFamily: Font_.Fonts_T),
+                                                                      ),
+                                                                      IconButton(
+                                                                        icon: Icon(
+                                                                            Icons
+                                                                                .close,
+                                                                            color:
+                                                                                Colors.grey),
+                                                                        onPressed:
+                                                                            () =>
+                                                                                Navigator.pop(context),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                                content:
+                                                                    SingleChildScrollView(
+                                                                  child:
+                                                                      ListBody(
+                                                                    children: <Widget>[
+                                                                      if (isSuccess &&
+                                                                          response
+                                                                              .bodyBytes
+                                                                              .isNotEmpty)
+                                                                        Image
+                                                                            .memory(
+                                                                          response
+                                                                              .bodyBytes,
+                                                                          fit: BoxFit
+                                                                              .contain,
+                                                                        )
+                                                                      else
+                                                                        Column(
+                                                                          children: [
+                                                                            const Icon(Icons.broken_image,
+                                                                                size: 50,
+                                                                                color: Colors.grey),
+                                                                            const SizedBox(height: 10),
+                                                                            Text(
+                                                                              widget.cuslang == 'EN' ? 'Unable to load image\n(Status: ${response?.statusCode ?? 'N/A'})' : 'ไม่สามารถโหลดรูปภาพได้\n(Status: ${response?.statusCode ?? 'N/A'})',
+                                                                              textAlign: TextAlign.center,
+                                                                            ),
+                                                                          ],
+                                                                        ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                                // actions: [
+                                                                //   if (isSuccess &&
+                                                                //       response.bodyBytes
+                                                                //           .isNotEmpty)
+                                                                //     TextButton.icon(
+                                                                //       icon: const Icon(
+                                                                //           Icons.download,
+                                                                //           size: 16,
+                                                                //           color: Colors.blue),
+                                                                //       label: const Text(
+                                                                //           'ดาวน์โหลด',
+                                                                //           style: TextStyle(
+                                                                //               fontFamily: Font_
+                                                                //                   .Fonts_T,
+                                                                //               color: Colors
+                                                                //                   .blue)),
+                                                                //       onPressed: () {
+                                                                //         final blob =
+                                                                //             html.Blob([
+                                                                //           response.bodyBytes
+                                                                //         ]);
+                                                                //         final url = html.Url
+                                                                //             .createObjectUrlFromBlob(
+                                                                //                 blob);
+                                                                //         final filename =
+                                                                //             _intentsSlipData![
+                                                                //                     'original_filename'] ??
+                                                                //                 'slip.jpg';
+                                                                //         html.AnchorElement(
+                                                                //             href: url)
+                                                                //           ..setAttribute(
+                                                                //               "download",
+                                                                //               filename)
+                                                                //           ..click();
+                                                                //         html.Url
+                                                                //             .revokeObjectUrl(
+                                                                //                 url);
+                                                                //       },
+                                                                //     ),
+                                                                //   TextButton(
+                                                                //     child: const Text('ปิด',
+                                                                //         style: TextStyle(
+                                                                //             fontFamily: Font_
+                                                                //                 .Fonts_T)),
+                                                                //     onPressed: () {
+                                                                //       Navigator.of(context)
+                                                                //           .pop();
+                                                                //     },
+                                                                //   ),
+                                                                // ],
+                                                              );
+                                                            },
+                                                          );
+                                                        },
+                                                        icon: const Icon(
+                                                            Icons.visibility,
+                                                            size: 16),
+                                                        label: Text(
+                                                            widget.cuslang ==
+                                                                    'EN'
+                                                                ? 'View Slip'
+                                                                : 'ดูหลักฐาน',
+                                                            style: TextStyle(
+                                                                fontSize: 12)),
+                                                        style: ElevatedButton
+                                                            .styleFrom(
+                                                          backgroundColor:
+                                                              Colors.indigo,
+                                                          foregroundColor:
+                                                              Colors.white,
+                                                          elevation: 0,
+                                                          shape:
+                                                              RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        22),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      ])))
+                        ],
+                      ),
+                    );
+                  });
+                })
+            // รีเซ็ต flag เมื่อ sheet ถูกปิดไม่ว่าด้วยทางใด (ปุ่มปิด / pop ภายใน /
+            // navigate ออก) — showModalBottomSheet คืน Future ที่ complete ตอนปิด
+            // จึง hook ที่เดียวครอบทุกทาง แทนไล่แก้ทุกปุ่ม
+            .whenComplete(() => _isConfirmSheetOpen = false)
+        : showModalBottomSheet(
+                isDismissible: false,
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (BuildContext context) {
+                  return StatefulBuilder(builder:
+                      (BuildContext context, StateSetter setStateSheet) {
+                    return Container(
+                      height: MediaQuery.of(context).size.height * 0.85,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20)),
+                      ),
+                      child: Column(
+                        children: [
+                          // Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16.0, vertical: 12.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 4,
+                                      height: 22,
+                                      margin: const EdgeInsets.only(right: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.indigo,
+                                        borderRadius: BorderRadius.circular(2),
                                       ),
                                     ),
-                                    SizedBox(height: 20),
-                                    const SizedBox(height: 8),
-                                    Card(
-                                      child: Column(
-                                        children: [
-                                          _slipInfoRow(
-                                              widget.cuslang == 'EN'
-                                                  ? 'File'
-                                                  : 'ไฟล์:',
-                                              _intentsSlipData![
-                                                      'original_filename'] ??
-                                                  '-'),
-                                          _slipInfoRow(
-                                              widget.cuslang == 'EN'
-                                                  ? 'Amount'
-                                                  : 'จำนวนเงิน:',
-                                              '${_intentsSlipData!['amount']} ${_intentsSlipData!['currency'] ?? ''}'),
-                                          _slipInfoRow(
-                                              widget.cuslang == 'EN'
-                                                  ? 'D'
-                                                  : 'วันที่:',
-                                              _intentsSlipData![
-                                                      'transfer_date'] ??
-                                                  '-'),
-                                          _slipInfoRow(
-                                              'Ref:',
-                                              _intentsSlipData![
-                                                      'transfer_ref_no'] ??
-                                                  '-'),
-                                          _slipInfoRow(
-                                              widget.cuslang == 'EN'
-                                                  ? 'Status'
-                                                  : 'สถานะ:',
-                                              _getStatusText(
-                                                  _intentsSlipData!['status'] ??
-                                                      '')),
-                                          const SizedBox(height: 12),
-                                          Row(
-                                            children: [
-                                              ElevatedButton.icon(
-                                                onPressed: () async {
-                                                  // Reset uploaded data to allow new upload
-                                                  setState(() {
-                                                    _uploadedSlipData = null;
-                                                  });
-                                                  // Trigger file picker
-                                                  final success =
-                                                      await _pickSlipImage();
-                                                  if (success &&
-                                                      _slipImageBytes != null) {
-                                                    if (!mounted) return;
-                                                    showDialog(
-                                                      context: context,
-                                                      barrierDismissible: false,
-                                                      builder: (BuildContext
-                                                          context) {
-                                                        return const Center(
-                                                          child:
-                                                              CircularProgressIndicator(),
-                                                        );
-                                                      },
-                                                    );
-                                                    final successUp =
-                                                        await _uploadSlipImage(
-                                                            amtRawSlip: sum_amt
-                                                                .toString());
-                                                    if (mounted) {
-                                                      Navigator.of(context)
-                                                          .pop(); // Close dialog
-                                                      if (successUp) {
-                                                        ScaffoldMessenger.of(
-                                                                context)
-                                                            .showSnackBar(
-                                                          SnackBar(
-                                                            content: Text(widget
-                                                                        .cuslang ==
-                                                                    'EN'
-                                                                ? 'Slip upload successful!'
-                                                                : 'อัปโหลดสลิปสำเร็จ!'),
-                                                            backgroundColor:
-                                                                Colors.green,
-                                                          ),
-                                                        );
-                                                      }
-                                                    }
-                                                  }
-                                                },
-                                                icon: const Icon(Icons.refresh,
-                                                    size: 16),
-                                                label: Text(
-                                                    widget.cuslang == 'EN'
-                                                        ? 'Re-attach'
-                                                        : 'แนบอีกครั้ง',
-                                                    style: TextStyle(
-                                                        fontSize: 12)),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.grey,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 8),
-                                                ),
-                                              ),
-                                              const SizedBox(
-                                                width: 10,
-                                              ),
-                                              ElevatedButton.icon(
-                                                onPressed: () async {
-                                                  final response =
-                                                      await getSlipPreviewPaymentIntents(
-                                                          slipUuid:
-                                                              intentsAttacheSlipNo ??
-                                                                  "");
-                                                  if (!mounted) return;
-
-                                                  await showDialog<void>(
-                                                    context: context,
-                                                    barrierDismissible: true,
-                                                    builder:
-                                                        (BuildContext context) {
-                                                      final isSuccess = response !=
-                                                              null &&
-                                                          response.statusCode >=
-                                                              200 &&
-                                                          response.statusCode <
-                                                              300;
-
-                                                      return AlertDialog(
-                                                        shape:
-                                                            RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(20),
-                                                        ),
-                                                        backgroundColor:
-                                                            AppbackgroundColor
-                                                                .Sub_Abg_Colors,
-                                                        titlePadding:
-                                                            const EdgeInsets
-                                                                .all(0.0),
-                                                        contentPadding:
-                                                            const EdgeInsets
-                                                                .all(10.0),
-                                                        actionsPadding:
-                                                            const EdgeInsets
-                                                                .all(6.0),
-                                                        title: Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .symmetric(
-                                                                  horizontal:
-                                                                      16.0,
-                                                                  vertical:
-                                                                      12.0),
-                                                          child: Row(
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .spaceBetween,
-                                                            children: [
-                                                              Text(
-                                                                widget.cuslang ==
-                                                                        'EN'
-                                                                    ? 'Payment Slip'
-                                                                    : 'หลักฐานการโอนเงิน',
-                                                                style: TextStyle(
-                                                                    fontSize:
-                                                                        18,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .bold,
-                                                                    fontFamily:
-                                                                        Font_
-                                                                            .Fonts_T),
-                                                              ),
-                                                              IconButton(
-                                                                icon: Icon(
-                                                                    Icons.close,
-                                                                    color: Colors
-                                                                        .grey),
-                                                                onPressed: () =>
-                                                                    Navigator.pop(
-                                                                        context),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        content:
-                                                            SingleChildScrollView(
-                                                          child: ListBody(
-                                                            children: <Widget>[
-                                                              if (isSuccess &&
-                                                                  response
-                                                                      .bodyBytes
-                                                                      .isNotEmpty)
-                                                                Image.memory(
-                                                                  response
-                                                                      .bodyBytes,
-                                                                  fit: BoxFit
-                                                                      .contain,
-                                                                )
-                                                              else
-                                                                Column(
-                                                                  children: [
-                                                                    const Icon(
-                                                                        Icons
-                                                                            .broken_image,
-                                                                        size:
-                                                                            50,
-                                                                        color: Colors
-                                                                            .grey),
-                                                                    const SizedBox(
-                                                                        height:
-                                                                            10),
-                                                                    Text(
-                                                                      widget.cuslang ==
-                                                                              'EN'
-                                                                          ? 'Unable to load image\n(Status: ${response?.statusCode ?? 'N/A'})'
-                                                                          : 'ไม่สามารถโหลดรูปภาพได้\n(Status: ${response?.statusCode ?? 'N/A'})',
-                                                                      textAlign:
-                                                                          TextAlign
-                                                                              .center,
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                        // actions: [
-                                                        //   if (isSuccess &&
-                                                        //       response.bodyBytes
-                                                        //           .isNotEmpty)
-                                                        //     TextButton.icon(
-                                                        //       icon: const Icon(
-                                                        //           Icons.download,
-                                                        //           size: 16,
-                                                        //           color: Colors.blue),
-                                                        //       label: const Text(
-                                                        //           'ดาวน์โหลด',
-                                                        //           style: TextStyle(
-                                                        //               fontFamily: Font_
-                                                        //                   .Fonts_T,
-                                                        //               color: Colors
-                                                        //                   .blue)),
-                                                        //       onPressed: () {
-                                                        //         final blob =
-                                                        //             html.Blob([
-                                                        //           response.bodyBytes
-                                                        //         ]);
-                                                        //         final url = html.Url
-                                                        //             .createObjectUrlFromBlob(
-                                                        //                 blob);
-                                                        //         final filename =
-                                                        //             _intentsSlipData![
-                                                        //                     'original_filename'] ??
-                                                        //                 'slip.jpg';
-                                                        //         html.AnchorElement(
-                                                        //             href: url)
-                                                        //           ..setAttribute(
-                                                        //               "download",
-                                                        //               filename)
-                                                        //           ..click();
-                                                        //         html.Url
-                                                        //             .revokeObjectUrl(
-                                                        //                 url);
-                                                        //       },
-                                                        //     ),
-                                                        //   TextButton(
-                                                        //     child: const Text('ปิด',
-                                                        //         style: TextStyle(
-                                                        //             fontFamily: Font_
-                                                        //                 .Fonts_T)),
-                                                        //     onPressed: () {
-                                                        //       Navigator.of(context)
-                                                        //           .pop();
-                                                        //     },
-                                                        //   ),
-                                                        // ],
-                                                      );
-                                                    },
-                                                  );
-                                                },
-                                                icon: const Icon(
-                                                    Icons.visibility,
-                                                    size: 16),
-                                                label: Text(
-                                                    widget.cuslang == 'EN'
-                                                        ? 'View Slip'
-                                                        : 'ดูหลักฐาน',
-                                                    style: TextStyle(
-                                                        fontSize: 12)),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.black,
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 8),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                  ])))
-                    ],
-                  ),
-                );
-              });
-            })
-        : showModalBottomSheet(
-            isDismissible: false,
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (BuildContext context) {
-              return StatefulBuilder(
-                  builder: (BuildContext context, StateSetter setStateSheet) {
-                return Container(
-                  height: MediaQuery.of(context).size.height * 0.85,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
-                  ),
-                  child: Column(
-                    children: [
-                      // Header
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0, vertical: 12.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              widget.cuslang == 'EN'
-                                  ? 'Payment Confirmation'
-                                  : 'ยืนยันการชำระเงิน',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: Font_.Fonts_T),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.close, color: Colors.grey),
-                              onPressed: () => Navigator.pop(context),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      Divider(height: 1),
-
-                      Flexible(
-                        child: SingleChildScrollView(
-                          padding: EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Instructions
-                              Container(
-                                padding: EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.orange.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border:
-                                      Border.all(color: Colors.orange.shade200),
+                                    Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Payment Confirmation'
+                                          : 'ยืนยันการชำระเงิน',
+                                      style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.indigo,
+                                          fontFamily: Font_.Fonts_T),
+                                    ),
+                                  ],
                                 ),
-                                child: Column(
-                                  children: [
-                                    Row(
+                                IconButton(
+                                  icon: const Icon(Icons.close,
+                                      color: Colors.grey),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          Divider(height: 1),
+
+                          Flexible(
+                            child: SingleChildScrollView(
+                              padding: EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Spacer(),
+                                      Text(
+                                        widget.cuslang == 'EN'
+                                            ? 'Help/Cancel Payment'
+                                            : 'ช่วยเหลือ/ยกเลิกการชำระเงิน',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.red.shade700),
+                                      ),
+                                      InkWell(
+                                        child: Icon(Icons.info_outline,
+                                            color: Colors.red.shade700,
+                                            size: 20),
+                                        onTap: () =>
+                                            _showCancelPaymentDialog(context),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 10),
+                                  // Instructions (V3 style: gradient + circle icon)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          Colors.orange.shade100,
+                                          Colors.orange.shade50
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                          color: Colors.orange.shade300,
+                                          width: 1.5),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.orange
+                                              .withValues(alpha: 0.18),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Icon(Icons.info_outline,
-                                            color: Colors.orange.shade800),
-                                        SizedBox(width: 10),
+                                        Container(
+                                          margin: const EdgeInsets.only(
+                                              top: 1, right: 12),
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.shade200,
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(Icons.info_rounded,
+                                              color: Colors.orange.shade800,
+                                              size: 18),
+                                        ),
                                         Expanded(
                                           child: Text(
                                             widget.cuslang == 'EN'
-                                                ? "Please upload proof of payment to complete the transaction."
-                                                : "กรุณาแนบหลักฐานการโอนเงินเพื่อดำเนินการให้เสร็จสมบูรณ์",
+                                                ? "Attach the payment slip and confirm the payment"
+                                                : "แนบหลักฐานการโอนเงิน และยืนยันการชำระเงิน",
                                             style: TextStyle(
-                                                color: Colors.orange.shade900,
-                                                fontFamily: Font_.Fonts_T,
-                                                fontWeight: FontWeight.bold),
+                                              color: Colors.orange.shade900,
+                                              fontFamily: Font_.Fonts_T,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 13.5,
+                                              height: 1.5,
+                                            ),
                                           ),
                                         ),
                                       ],
                                     ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(height: 20),
-
-                              // Upload Section Check
-                              Row(
-                                children: [
-                                  Text(
-                                    widget.cuslang == 'EN'
-                                        ? "Upload Slip"
-                                        : "อัปโหลดสลิป",
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontFamily: Font_.Fonts_T,
-                                        fontSize: 16),
                                   ),
-                                  SizedBox(width: 10),
-                                  if (_isBillDead)
-                                    InkWell(
-                                      child: chip(
+                                  SizedBox(height: 20),
+
+                                  // Upload Section header (V3 style: deepPurple icon + Required chip)
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.upload_file_rounded,
+                                          color: Colors.indigo, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        widget.cuslang == 'EN'
+                                            ? "Upload Slip"
+                                            : "อัปโหลดสลิป",
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.indigo,
+                                            fontSize: 14),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          border: Border.all(
+                                              color: Colors.red.shade200),
+                                        ),
+                                        child: Text(
                                           widget.cuslang == 'EN'
-                                              ? 'Order Expired - Cancel Order'
-                                              : 'รายการ หมดอายุ - ยกเลิกรายการ',
-                                          Colors.red.withOpacity(.08),
-                                          Colors.red.shade700),
-                                      onTap: () =>
-                                          _showCancelPaymentDialog(context),
-                                    )
-                                  else
-                                    InkWell(
-                                      child: chip(
-                                          widget.cuslang == 'EN'
-                                              ? 'Show QR Code'
-                                              : 'แสดง QR Code',
-                                          Colors.orange.withOpacity(.08),
-                                          Colors.orange.shade700),
-                                      onTap: () async {
-                                        final ctx = context;
-                                        if (!_isQrExpired() &&
-                                            qr_expiresAt != null) {
-                                          _showQrDialog(ctx);
-                                          return;
-                                        }
-                                        showDialog(
-                                          context: ctx,
-                                          barrierDismissible: false,
-                                          builder: (_) => const Center(
-                                              child:
-                                                  CircularProgressIndicator()),
-                                        );
-                                        await QrGenRef(
-                                            QR_Ref1: '',
-                                            QR_Ref2: '',
-                                            QR_Ref3: '',
-                                            softExpireAt: '');
-                                        if (!ctx.mounted) return;
-                                        Navigator.of(ctx).pop();
-                                        _showQrDialog(ctx);
-                                      },
+                                              ? 'Required'
+                                              : 'จำเป็น',
+                                          style: TextStyle(
+                                              fontSize: 11,
+                                              color: Colors.red.shade700,
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      if (_isBillDead)
+                                        InkWell(
+                                          child: chip(
+                                              widget.cuslang == 'EN'
+                                                  ? 'Order Expired - Cancel Order'
+                                                  : 'รายการ หมดอายุ - ยกเลิกรายการ',
+                                              Colors.red.withValues(alpha: .08),
+                                              Colors.red.shade700),
+                                          onTap: () =>
+                                              _showCancelPaymentDialog(context),
+                                        )
+                                      else
+                                        InkWell(
+                                          child: chip(
+                                              (payment_tser == '2')
+                                                  ? widget.cuslang == 'EN'
+                                                      ? 'Show Account Number'
+                                                      : 'แสดง เลขบัญชี'
+                                                  : widget.cuslang == 'EN'
+                                                      ? 'Show QR Code'
+                                                      : 'แสดง QR Code',
+                                              Colors.orange
+                                                  .withValues(alpha: .08),
+                                              Colors.orange.shade700),
+                                          onTap: () async {
+                                            final ctx = context;
+                                            if (!_isQrExpired() &&
+                                                qr_expiresAt != null) {
+                                              _showQrDialog(ctx);
+                                              return;
+                                            }
+                                            showDialog(
+                                              context: ctx,
+                                              barrierDismissible: false,
+                                              builder: (_) => const Center(
+                                                  child:
+                                                      CircularProgressIndicator()),
+                                            );
+                                            await QrGenRef(
+                                                QR_Ref1: '',
+                                                QR_Ref2: '',
+                                                QR_Ref3: '',
+                                                softExpireAt: '');
+                                            if (!ctx.mounted) return;
+                                            Navigator.of(ctx).pop();
+                                            _showQrDialog(ctx);
+                                          },
+                                        ),
+                                      // Spacer(),
+                                      // Text(
+                                      //   widget.cuslang == 'EN'
+                                      //       ? 'Help/Cancel Payment'
+                                      //       : 'ช่วยเหลือ/ยกเลิกการชำระเงิน',
+                                      //   style: const TextStyle(
+                                      //       fontSize: 11,
+                                      //       fontWeight: FontWeight.bold,
+                                      //       color: Colors.indigo),
+                                      // ),
+                                      // InkWell(
+                                      //   child: Icon(Icons.info_outline,
+                                      //       color: Colors.blueGrey, size: 20),
+                                      //   onTap: () =>
+                                      //       _showCancelPaymentDialog(context),
+                                      // ),
+                                    ],
+                                  ),
+
+                                  SizedBox(height: 10),
+
+                                  GestureDetector(
+                                    onTap: () async {
+                                      // await uploadFile_Slip();
+                                      final success = await _pickSlipImage();
+
+                                      // Force rebuild of the sheet to show the image
+                                      setStateSheet(() {});
+
+                                      // Show auto dialog removed - using Slider instead
+                                      if (success) {
+                                        _showSlideConfirmDialog();
+                                      }
+                                    },
+                                    child: Container(
+                                      width: double.infinity,
+                                      height: 210,
+                                      decoration: BoxDecoration(
+                                        color: Colors.indigo.shade50,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                            color: Colors.indigo.shade200,
+                                            width: 1.5),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.indigo
+                                                .withValues(alpha: 0.06),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: _slipPreviewBytes() == null
+                                          ? Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Container(
+                                                  width: 72,
+                                                  height: 72,
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.indigo
+                                                        .withValues(alpha: 0.1),
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.cloud_upload_outlined,
+                                                    size: 38,
+                                                    color: Colors.indigo,
+                                                  ),
+                                                ),
+                                                SizedBox(height: 10),
+                                                Text(
+                                                  widget.cuslang == 'EN'
+                                                      ? "Tap to upload payment slip"
+                                                      : "กดเพื่ออัปโหลดสลิป",
+                                                  style: TextStyle(
+                                                      color: Colors
+                                                          .indigo.shade700,
+                                                      fontFamily: Font_.Fonts_T,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      fontSize: 15),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  "JPG, PNG (Max 10MB)",
+                                                  style: TextStyle(
+                                                      color: Colors
+                                                          .indigo.shade300,
+                                                      fontSize: 12),
+                                                ),
+                                              ],
+                                            )
+                                          : ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              child: Stack(
+                                                fit: StackFit.expand,
+                                                children: [
+                                                  InteractiveViewer(
+                                                    panEnabled: true,
+                                                    minScale: 0.1,
+                                                    maxScale: 4.0,
+                                                    child: Image.memory(
+                                                      _slipPreviewBytes()!,
+                                                      fit: BoxFit.cover,
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    color: Colors.black
+                                                        .withValues(alpha: 0.3),
+                                                    child: Center(
+                                                      child: Container(
+                                                        padding: EdgeInsets
+                                                            .symmetric(
+                                                                horizontal: 16,
+                                                                vertical: 8),
+                                                        decoration: BoxDecoration(
+                                                            color: Colors.white
+                                                                .withValues(
+                                                                    alpha: 0.8),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        20)),
+                                                        child: Row(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
+                                                          children: [
+                                                            Icon(Icons.edit,
+                                                                size: 16),
+                                                            SizedBox(width: 4),
+                                                            Text(
+                                                              widget.cuslang ==
+                                                                      'EN'
+                                                                  ? "Change"
+                                                                  : "เปลี่ยนรูป",
+                                                              style: TextStyle(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontFamily: Font_
+                                                                      .Fonts_T),
+                                                            )
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  )
+                                                ],
+                                              ),
+                                            ),
                                     ),
-                                  Spacer(),
-                                  InkWell(
-                                    child: Icon(Icons.info_outline,
-                                        color: Colors.blueGrey, size: 20),
-                                    onTap: () =>
-                                        _showCancelPaymentDialog(context),
                                   ),
                                 ],
                               ),
-
-                              SizedBox(height: 10),
-
-                              GestureDetector(
-                                onTap: () async {
-                                  // await uploadFile_Slip();
-                                  final success = await _pickSlipImage();
-
-                                  // Force rebuild of the sheet to show the image
-                                  setStateSheet(() {});
-
-                                  // Show auto dialog removed - using Slider instead
-                                  if (success) {
-                                    _showSlideConfirmDialog(context);
-                                  }
-                                },
-                                child: Container(
-                                  width: double.infinity,
-                                  height: 250,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade50,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                        color: Colors.grey.shade300, width: 2),
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 16),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.indigo.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: Colors.indigo.shade200, width: 1),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(children: [
+                                  const Icon(Icons.receipt_long_rounded,
+                                      color: Colors.indigo, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    widget.cuslang == 'EN'
+                                        ? 'Total Amount'
+                                        : 'จำนวนที่ต้องชำระ',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.indigo.shade700,
+                                        fontFamily: Font_.Fonts_T),
                                   ),
-                                  child: base64_Slip == null
-                                      ? Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.cloud_upload_outlined,
-                                              size: 60,
-                                              color: Colors.blue.shade300,
-                                            ),
-                                            SizedBox(height: 10),
-                                            Text(
-                                              widget.cuslang == 'EN'
-                                                  ? "Tap to upload payment slip"
-                                                  : "กดเพื่ออัปโหลดสลิป",
-                                              style: TextStyle(
-                                                  color: Colors.grey.shade600,
-                                                  fontFamily: Font_.Fonts_T,
-                                                  fontWeight: FontWeight.bold),
-                                            ),
-                                            Text(
-                                              "JPG, PNG (Max 10MB)",
-                                              style: TextStyle(
-                                                  color: Colors.grey.shade400,
-                                                  fontSize: 12),
-                                            ),
-                                          ],
-                                        )
-                                      : ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                          child: Stack(
-                                            fit: StackFit.expand,
-                                            children: [
-                                              InteractiveViewer(
-                                                panEnabled: true,
-                                                minScale: 0.1,
-                                                maxScale: 4.0,
-                                                child: Image.memory(
-                                                  base64Decode(
-                                                      base64_Slip.toString()),
-                                                  fit: BoxFit.cover,
-                                                ),
-                                              ),
-                                              Container(
-                                                color: Colors.black
-                                                    .withOpacity(0.3),
-                                                child: Center(
-                                                  child: Container(
-                                                    padding:
-                                                        EdgeInsets.symmetric(
-                                                            horizontal: 16,
-                                                            vertical: 8),
-                                                    decoration: BoxDecoration(
-                                                        color: Colors.white
-                                                            .withOpacity(0.8),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(20)),
-                                                    child: Row(
-                                                      mainAxisSize:
-                                                          MainAxisSize.min,
-                                                      children: [
-                                                        Icon(Icons.edit,
-                                                            size: 16),
-                                                        SizedBox(width: 4),
-                                                        Text(
-                                                          widget.cuslang == 'EN'
-                                                              ? "Change"
-                                                              : "เปลี่ยนรูป",
-                                                          style: TextStyle(
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                              fontFamily: Font_
-                                                                  .Fonts_T),
-                                                        )
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                              )
-                                            ],
-                                          ),
-                                        ),
+                                ]),
+                                Text(
+                                  widget.cuslang == 'EN'
+                                      ? "${nFormat.format(double.parse(totalAmount.toString()))} "
+                                      : "${nFormat.format(double.parse(totalAmount.toString()))} ",
+                                  style: const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.indigo,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Text(
+                          //   widget.cuslang == 'EN'
+                          //       ? "Total amount to be paid: ${sum_amt.toStringAsFixed(2)} THB"
+                          //       : "รวมจำนวนเงินที่ต้องชำระ: ${sum_amt.toStringAsFixed(2)} บาท",
+                          //   style: TextStyle(
+                          //     fontSize: 14,
+                          //     color: Colors.grey.shade600,
+                          //     fontFamily: Font_.Fonts_T,
+                          //   ),
+                          // ),
+                          SizedBox(height: 2),
+                          // Footer Action
+                          Container(
+                            padding: EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.grey.withValues(alpha: 0.1),
+                                  spreadRadius: 1,
+                                  blurRadius: 5,
+                                  offset: Offset(0, -3),
+                                ),
+                              ],
+                            ),
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 60,
+                              child: Center(
+                                child: _SlideToConfirm(
+                                  label: widget.cuslang == 'EN'
+                                      ? 'Slide to Confirm'
+                                      : 'เลื่อนเพื่อยืนยันการชำระเงิน',
+                                  enabled: base64_Slip != null ||
+                                      _slipImageBytes != null,
+                                  onConfirmation: () async {
+                                    // reentry guard: กันลากยืนยันซ้ำระหว่างที่รอบแรก
+                                    // ยังอัปโหลดสลิปอยู่ ⇒ กันอัปโหลดซ้ำ/รายการชำระซ้ำ
+                                    if (_isSubmittingPayment) return;
+                                    // Trigger file picker
+                                    // final success = await _pickSlipImage();
+                                    if (base64_Slip != null ||
+                                        _slipImageBytes != null) {
+                                      _isSubmittingPayment = true;
+                                      if (!mounted) return;
+                                      showDialog(
+                                        context: context,
+                                        barrierDismissible: false,
+                                        builder: (BuildContext context) {
+                                          return const Center(
+                                            child: CircularProgressIndicator(),
+                                          );
+                                        },
+                                      );
+                                      final successUp = await _uploadSlipImage(
+                                          amtRawSlip: sum_amt.toString());
+                                      if (mounted) {
+                                        Navigator.of(context)
+                                            .pop(); // Close dialog
+                                        Navigator.pushAndRemoveUntil(context,
+                                            MaterialPageRoute(
+                                                builder: (context) {
+                                          return FitnessAppHomeScreen(
+                                              custno_s: custno);
+                                        }), (route) => false);
+                                        if (successUp) {
+                                          Fluttertoast.showToast(
+                                              timeInSecForIosWeb: 3,
+                                              msg: widget.cuslang == 'EN'
+                                                  ? "Slip upload successful"
+                                                  : 'อัปโหลดสลิปสำเร็จ',
+                                              backgroundColor: Colors.black,
+                                              textColor: Colors.white,
+                                              webPosition: "center",
+                                              webBgColor: "#000000",
+                                              toastLength: Toast.LENGTH_SHORT);
+                                        }
+                                      }
+                                    }
+                                    // Confirm Logic
+                                    // List newValuePDFimg = [];
+                                    // for (int index = 0; index < 1; index++) {
+                                    //   if (renTalModels[0].imglogo!.trim() != '') {
+                                    //     newValuePDFimg.add(
+                                    //         '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+                                    //   }
+                                    // }
+                                    // try {
+                                    //   sucress();
+                                    //   OKuploadFile_Slip(newValuePDFimg).then(
+                                    //       (value) => in_Trans_invoice(newValuePDFimg));
+                                    //   Navigator.pop(
+                                    //       context); // Close sheet after success
+                                    // } catch (e) {
+                                    //   _showMyDialogPay_Error(widget.cuslang == 'EN'
+                                    //       ? "An error occurred. Please check the information. Please try again!"
+                                    //       : 'เกิดข้อผิดพลาด ตรวจสอบความถูกต้อง กรุณาลองอีกครั้ง!');
+                                    // }
+                                  },
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        widget.cuslang == 'EN'
-                            ? "Total amount to be paid: ${sum_amt.toStringAsFixed(2)} THB"
-                            : "รวมจำนวนเงินที่ต้องชำระ: ${sum_amt.toStringAsFixed(2)} บาท",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
-                          fontFamily: Font_.Fonts_T,
-                        ),
-                      ),
-                      SizedBox(height: 2),
-                      // Footer Action
-                      Container(
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.1),
-                              spreadRadius: 1,
-                              blurRadius: 5,
-                              offset: Offset(0, -3),
                             ),
-                          ],
-                        ),
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 60,
-                          child: Center(
-                            child: _SlideToConfirm(
-                              label: widget.cuslang == 'EN'
-                                  ? 'Slide to Confirm'
-                                  : 'เลื่อนเพื่อยืนยันการชำระเงิน',
-                              enabled: base64_Slip != null,
-                              onConfirmation: () async {
-                                // Reset uploaded data to allow new upload
-                                setState(() {
-                                  _uploadedSlipData = null;
-                                });
-                                // Trigger file picker
-                                // final success = await _pickSlipImage();
-                                if (base64_Slip != null) {
-                                  if (!mounted) return;
-                                  showDialog(
-                                    context: context,
-                                    barrierDismissible: false,
-                                    builder: (BuildContext context) {
-                                      return const Center(
-                                        child: CircularProgressIndicator(),
-                                      );
-                                    },
-                                  );
-                                  final successUp = await _uploadSlipImage(
-                                      amtRawSlip: sum_amt.toString());
-                                  if (mounted) {
-                                    Navigator.of(context).pop(); // Close dialog
-                                    Navigator.pushAndRemoveUntil(context,
-                                        MaterialPageRoute(builder: (context) {
-                                      return FitnessAppHomeScreen(
-                                          custno_s: custno);
-                                    }), (route) => false);
-                                    if (successUp) {
-                                      Fluttertoast.showToast(
-                                          timeInSecForIosWeb: 3,
-                                          msg: widget.cuslang == 'EN'
-                                              ? "Slip upload successful"
-                                              : 'อัปโหลดสลิปสำเร็จ',
-                                          backgroundColor: Colors.black,
-                                          textColor: Colors.white,
-                                          webPosition: "center",
-                                          webBgColor: "#000000",
-                                          toastLength: Toast.LENGTH_SHORT);
-                                    }
-                                  }
-                                }
-                                // Confirm Logic
-                                // List newValuePDFimg = [];
-                                // for (int index = 0; index < 1; index++) {
-                                //   if (renTalModels[0].imglogo!.trim() != '') {
-                                //     newValuePDFimg.add(
-                                //         '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
-                                //   }
-                                // }
-                                // try {
-                                //   sucress();
-                                //   OKuploadFile_Slip(newValuePDFimg).then(
-                                //       (value) => in_Trans_invoice(newValuePDFimg));
-                                //   Navigator.pop(
-                                //       context); // Close sheet after success
-                                // } catch (e) {
-                                //   _showMyDialogPay_Error(widget.cuslang == 'EN'
-                                //       ? "An error occurred. Please check the information. Please try again!"
-                                //       : 'เกิดข้อผิดพลาด ตรวจสอบความถูกต้อง กรุณาลองอีกครั้ง!');
-                                // }
-                              },
-                            ),
-                          ),
-                        ),
-                      )
-                    ],
-                  ),
-                );
-              });
-            });
+                          )
+                        ],
+                      ),
+                    );
+                  });
+                })
+            // คืน flag เมื่อ sheet ปิดไม่ว่าทางใด — ถ้าไม่คืน ผู้ใช้จะเปิด
+            // sheet ยืนยันอีกไม่ได้เลยหลังปิดครั้งแรก
+            .whenComplete(() => _isConfirmSheetOpen = false);
   }
 
   Widget _howToBoxSlip({
@@ -7723,7 +9775,7 @@ class _SlideToConfirm extends StatefulWidget {
     Key? key,
     required this.onConfirmation,
     required this.label,
-    this.color = Colors.green,
+    this.color = Colors.indigo,
     this.enabled = true,
   }) : super(key: key);
 
@@ -7734,96 +9786,144 @@ class _SlideToConfirm extends StatefulWidget {
 class __SlideToConfirmState extends State<_SlideToConfirm> {
   double _position = 0.0;
   bool _confirmed = false;
-  final double _height = 55.0;
-  final double _handleWidth = 55.0;
+  bool _isDragging = false;
+  final double _height = 56.0;
+  final double _handleWidth = 48.0;
+
+  /// true ตั้งแต่ลากผ่าน threshold ครั้งแรกจน widget ถูก dispose
+  ///
+  /// กัน "ลากซ้ำ" ระหว่างที่ onConfirmation รอบแรกยังทำงานอยู่ (dialog ยัง
+  /// ไม่ปิด) — เดิม _confirmed เป็น true แล้วแต่ handler ยังเรียก
+  /// widget.onConfirmation() ได้อีกถ้าลากใหม่ ⇒ ยืนยันชำระซ้ำ ⇒ สร้าง
+  /// payment intent ซ้ำ
+  bool _confirmationSent = false;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final maxDrag = maxWidth - _handleWidth;
+        const double pad = 4.0;
+        final double maxDrag = constraints.maxWidth - _handleWidth - pad * 2;
+        final double pct = (_position / maxDrag).clamp(0.0, 1.0);
 
         return Container(
           height: _height,
-          width: maxWidth,
           decoration: BoxDecoration(
-            color: widget.enabled
-                ? widget.color.withOpacity(0.2)
-                : Colors.grey.shade300,
-            borderRadius: BorderRadius.circular(30),
+            gradient: LinearGradient(
+              colors: widget.enabled
+                  ? [
+                      Color.lerp(Colors.indigo, Colors.indigo.shade800, pct)!,
+                      Colors.indigo.shade800,
+                    ]
+                  : [Colors.grey.shade500, Colors.grey.shade700],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(_height / 2),
+            boxShadow: [
+              BoxShadow(
+                color: (widget.enabled ? Colors.indigo : Colors.grey.shade600)
+                    .withValues(alpha: 0.35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Stack(
             children: [
               Center(
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    color: widget.enabled ? widget.color : Colors.grey,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: Font_.Fonts_T,
-                    fontSize: 16,
+                child: Opacity(
+                  opacity: (1.0 - pct * 2).clamp(0.0, 1.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
               if (!_confirmed)
-                Positioned(
-                  left: _position,
+                AnimatedPositioned(
+                  duration: _isDragging
+                      ? Duration.zero
+                      : const Duration(milliseconds: 300),
+                  curve: Curves.elasticOut,
+                  left: pad + _position,
+                  top: (_height - _handleWidth) / 2,
                   child: GestureDetector(
                     onHorizontalDragUpdate: (details) {
                       if (!widget.enabled) return;
+                      // ส่ง confirmation ไปแล้ว — หยุดรับ gesture ทั้งหมด
+                      if (_confirmationSent) return;
                       setState(() {
-                        _position += details.delta.dx;
-                        _position = _position.clamp(0.0, maxDrag);
+                        _isDragging = true;
+                        _position =
+                            (_position + details.delta.dx).clamp(0.0, maxDrag);
                       });
                     },
-                    onHorizontalDragEnd: (details) {
+                    onHorizontalDragEnd: (_) {
                       if (!widget.enabled) return;
-                      if (_position >= maxDrag * 0.85) {
+                      // กันลากซ้ำ: ส่งได้ครั้งเดียวจนกว่า widget จะถูก dispose
+                      // (dialog ปัจจุบันปิดแบบ not-dismissible จึง dispose
+                      //  ตอนผู้ใช้ปิดเองหรือ navigate ออก)
+                      if (_confirmationSent) return;
+                      if (_position >= maxDrag * 0.72) {
                         setState(() {
+                          _isDragging = false;
                           _position = maxDrag;
                           _confirmed = true;
+                          _confirmationSent = true;
                         });
                         widget.onConfirmation();
                       } else {
                         setState(() {
+                          _isDragging = false;
                           _position = 0.0;
                         });
                       }
                     },
                     child: Container(
-                      height: _height,
                       width: _handleWidth,
-                      decoration: BoxDecoration(
-                        color: widget.enabled ? widget.color : Colors.grey,
+                      height: _handleWidth,
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 4,
-                            offset: Offset(2, 2),
-                          )
+                              color: Colors.black26,
+                              blurRadius: 6,
+                              offset: Offset(2, 2))
                         ],
                       ),
                       child: Icon(
-                        Icons.chevron_right,
-                        color: Colors.white,
-                        size: 30,
+                        Icons.arrow_forward_rounded,
+                        color: widget.enabled ? Colors.indigo : Colors.grey,
+                        size: 24,
                       ),
                     ),
                   ),
                 ),
               if (_confirmed)
                 Positioned(
-                  right: 0,
+                  right: pad,
+                  top: (_height - _handleWidth) / 2,
                   child: Container(
-                    height: _height,
-                    width: _height,
-                    decoration: BoxDecoration(
-                      color: widget.color,
+                    width: _handleWidth,
+                    height: _handleWidth,
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.check, color: Colors.white),
+                    child: const Icon(Icons.check_rounded,
+                        color: Colors.indigo, size: 26),
                   ),
                 )
             ],
@@ -7831,6 +9931,52 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
         );
       },
     );
+  }
+}
+
+class SlipMergeParams {
+  final List<Uint8List> images;
+
+  const SlipMergeParams({required this.images});
+}
+
+Future<Uint8List?> _processSlipMergeImages(SlipMergeParams params) async {
+  try {
+    const int maxWidth = 450;
+    final decodedImages = <img.Image>[];
+    var totalHeight = 0;
+
+    for (final bytes in params.images) {
+      var decoded = img.decodeImage(bytes);
+      if (decoded == null) continue;
+
+      if (decoded.width > maxWidth) {
+        decoded = img.copyResize(
+          decoded,
+          width: maxWidth,
+          interpolation: img.Interpolation.nearest,
+        );
+      }
+
+      decodedImages.add(decoded);
+      totalHeight += decoded.height;
+    }
+
+    if (decodedImages.isEmpty) return null;
+
+    final mergedDisplay = img.Image(width: maxWidth, height: totalHeight);
+    img.fill(mergedDisplay, color: img.ColorRgb8(255, 255, 255));
+
+    var currentY = 0;
+    for (final image in decodedImages) {
+      img.compositeImage(mergedDisplay, image, dstX: 0, dstY: currentY);
+      currentY += image.height;
+    }
+
+    return Uint8List.fromList(img.encodeJpg(mergedDisplay, quality: 35));
+  } catch (e) {
+    debugPrint("Error merging images in isolate: $e");
+    return null;
   }
 }
 

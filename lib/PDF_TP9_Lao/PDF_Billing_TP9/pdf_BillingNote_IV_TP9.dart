@@ -1,5 +1,6 @@
-import 'dart:convert';
-
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -9,22 +10,15 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
+
 import '../../CRC_16_Prompay/generate_qrcode.dart';
+
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Bills_INV.dart';
-import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
 import '../../Model/GetInvoice_history_Model.dart';
-import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 
 class Pdfgen_BillingNoteInvlice_TP9_Lao {
-  //////////---------------------------------------------------->(ใบวางบิล แจ้งหนี้)  ใช้  ++
+  //////////---------------------------------------------------->(ใบวางบิล แจ้งหนี้)  ใช้  ++,
   static void exportPDF_BillingNoteInvlice_TP9_Lao(
       List<InvoiceHistoryModel> _InvoiceHistoryModels,
       foder,
@@ -119,11 +113,11 @@ class Pdfgen_BillingNoteInvlice_TP9_Lao {
     // }
     if (img1 == null || img1.toString() == '') {
       netImage_QR.add(await networkImage(
-          '${MyConstant().domain_chao}/Awaitdownload/imagenot.png'));
+          '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png'));
       // netImage_QR.add(iconImage);
     } else {
       netImage_QR.add(await networkImage(
-          '${MyConstant().domain_chao}/files/$foder/payment/${img1}'));
+          '${MyConstant().domain_chao_img}/files/$foder/payment/${img1}'));
     }
     final tableHeaders = [
       'ลำดับ',
@@ -162,8 +156,10 @@ class Pdfgen_BillingNoteInvlice_TP9_Lao {
             0.00
         : 0.00;
 
-    final totalBill =
+    final totalprice =
         getTotalByField(_InvoiceHistoryModels, (item) => item.total);
+
+    final totalBill = totalprice - totalDis;
     String totalBill_QR =
         totalBill.toString().replaceAll(RegExp(r'[^0-9]'), '');
 // _InvoiceHistoryModels.
@@ -1399,8 +1395,9 @@ class Pdfgen_BillingNoteInvlice_TP9_Lao {
                   ),
                   buildCell(
                     text: (invoices.unitser.toString() == '6')
-                        ? '${invoices.descr} [ ຫນ່ວຍງານທີ່ໃຊ້ ${invoices.ovalue}-${invoices.nvalue} ]'
-                        : '${invoices.descr} ${invoices.date}',
+                        ? '${invoices.expname} [ ຫນ່ວຍງານທີ່ໃຊ້ ${invoices.ovalue}-${invoices.nvalue} ]'
+                        // : '${invoices.expname} ${invoices.date}',
+                        : '${invoices.expname}',
                     flex: 4,
                     alignment: pw.Alignment.centerLeft,
                     textAlign: pw.TextAlign.left,
@@ -2803,19 +2800,10 @@ class Pdfgen_BillingNoteInvlice_TP9_Lao {
     } else if (Preview_ser.toString() == 'File') {
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
-      // await FlutterFileDialog.saveFile(
-      //   params: SaveFileDialogParams(
-      //     data: data,
-      //     fileName: 'ใบวางบิล/ใบแจ้งหนี้-ໃບເກັບເງິນ${cFinn}',
-      //   ),
-      // );
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      final dir = await FileSaver.instance.saveFile(
-          name: 'ใบวางบิล/ใบแจ้งหนี้-ໃບເກັບເງິນ${cFinn}',
-          bytes: data,
-          ext: "pdf",
-          mimeType: MimeType.other);
+      // MimeType type = MimeType.PDF;
+      // final dir = await FileSaver.instance.saveFile(
+      //     'ใบวางบิล/ใบแจ้งหนี้-ໃບເກັບເງິນ${cFinn}', data, "pdf",
+      //     mimeType: type);
     } else {
       Navigator.push(
           context,

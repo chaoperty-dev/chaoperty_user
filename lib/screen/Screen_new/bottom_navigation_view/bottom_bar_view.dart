@@ -45,6 +45,13 @@ class _BottomBarViewState extends State<BottomBarView>
     });
   }
 
+  // Added 2026-07-08: dispose the controller to release the Ticker.
+  @override
+  void dispose() {
+    animationController?.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -305,6 +312,13 @@ class _TabIconsState extends State<TabIcons> with TickerProviderStateMixin {
 
   void setAnimation() {
     widget.tabIconData?.animationController?.forward();
+  }
+
+  // Added 2026-07-08: dispose the per-tab AnimationController.
+  @override
+  void dispose() {
+    widget.tabIconData?.animationController?.dispose();
+    super.dispose();
   }
 
   @override

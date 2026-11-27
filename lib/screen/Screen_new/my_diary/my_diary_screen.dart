@@ -2,7 +2,12 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:auto_size_text/auto_size_text.dart';
-import 'package:chaoperty_user/screen/Screen_new/my_diary/water_view.dart';
+import 'package:chaoperty_user/Model/GetPayMent_Model.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk-slip.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4_InvAll.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
@@ -10,6 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../Constant/Myconstant.dart';
+import '../../../Constant/api_session.dart';
 import '../../../Model/GetInvoice_Model.dart';
 import '../../../Model/GetTeNant_Model.dart';
 import '../../../Model/GetTranBill_model.dart';
@@ -18,17 +24,19 @@ import '../../../Model/Get_Image_text_model.dart';
 import '../../../color.dart';
 
 import '../../../Constant/app_markets.dart';
+import '../../../screen_Intents/bankCodeMap.dart';
 import '../../loginscreen.dart';
 import '../../market_select_screen.dart';
 import '../../market_service.dart';
+import '../../model/contractInvoice.dart';
 import '../fitness_app_home_screen.dart';
 import '../fitness_app_theme.dart';
 import '../ui_view/body_measurement.dart';
-import '../ui_view/glass_view.dart';
-import '../ui_view/mediterranean_diet_view.dart';
 import '../ui_view/title_view.dart';
 import 'meals_list_view.dart';
 import 'package:http/http.dart' as http;
+
+import '../../../screen_Intents_V4/payment_subV4/payment_subv4_page.dart';
 
 class MyDiaryScreen extends StatefulWidget {
   const MyDiaryScreen({Key? key, this.animationController}) : super(key: key);
@@ -46,6 +54,20 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   List<TransBillModel> _TransBillModels = [];
   List<InvoiceModel> _InvoiceModels = [];
   int open_set_date = 30;
+
+  // Transection (payment intents history) - read-only list
+  List<TransectionIntent> _transectionIntents = [];
+  bool _loadingTransection = false;
+  // Filters
+  String _transectionStatusFilter =
+      'all'; // all | pending | verification | paid | failed
+  DateTime? _transectionDateFrom;
+  DateTime? _transectionDateTo;
+
+  /// Index ของ slot ที่เก็บ Transection list ใน listViews
+  /// ใช้เพื่อให้ itemBuilder เรียก _buildTransectionList() ใหม่ทุก build
+  /// เพื่อให้ข้อมูลที่โหลดเสร็จแล้วถูกแสดง (ไม่ snapshot ค้างตอน addAllListData)
+  int _transectionSlotIndex = -1;
 
   List<ImageTextModel> imgList = [];
   List<String> textList = [];
@@ -74,6 +96,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       cus_password,
       cus_lintid,
       cus_lang;
+  bool? _hasIntentsAuth;
+  List<PayMentModel> PayMentModels = [];
   @override
   void initState() {
     super.initState();
@@ -85,7 +109,16 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                   CurvedAnimation(
                       parent: widget.animationController!,
                       curve: Interval(0, 0.5, curve: Curves.fastOutSlowIn)));
+              loadTransectionIntents();
               addAllListData();
+              // forward animation ครั้งเดียว ไม่ใช่ทุก itemBuilder
+              if (widget.animationController?.status ==
+                  AnimationStatus.dismissed) {
+                widget.animationController?.forward();
+              }
+
+              // ✅ แสดง popup แจ้งปัญหาระบบแนบหลักฐาน (ช่วง 25-28 พ.ค. 2569)
+              // _showSlipIssuePopup();
 
               scrollController.addListener(() {
                 if (scrollController.offset >= 24) {
@@ -110,13 +143,50 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                 }
               });
             }));
-
+    red_payMent();
+    _loadIntentsAuth();
     // red_Trans_bill();
+  }
+
+  Future<void> red_payMent() async {
+    SharedPreferences preferences = await SharedPreferences.getInstance();
+    final ren = preferences.getString('renTalSer');
+
+    if (ren == null || ren.isEmpty) return;
+
+    final url =
+        '${MyConstant().domain_chao}/GC_payMent.php?isAdd=true&ren=$ren';
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 500) return;
+
+      final result = json.decode(response.body);
+      if (result == null || result.toString() == 'null') return;
+
+      // แปลง json -> model
+      final all = <PayMentModel>[];
+      for (final map in result) {
+        all.add(PayMentModel.fromJson(map));
+      }
+      // ✅ FIX: populate PayMentModels จริง (เดิมล้างเป็น [] ทำให้ lookup ไม่เจอ)
+      setState(() => PayMentModels = List<PayMentModel>.from(all));
+      debugPrint('✅ red_payMent: loaded ${PayMentModels.length} banks');
+    } catch (e) {
+      // อย่างน้อย log ไว้ตอน dev
+      debugPrint('red_payMent error: $e');
+    }
+  }
+
+  Future<void> _loadIntentsAuth() async {
+    final ok = await MyHeadersIntents.checkauthpaymentintents();
+    if (!mounted) return;
+    setState(() => _hasIntentsAuth = ok);
   }
 
   Future<Null> checkPreferance() async {
     DateTime currentDate = DateTime.now();
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
 
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
 
@@ -174,7 +244,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                         }
                       },
                       child: Image.network(imgList[i].image.toString(),
-                          fit: BoxFit.cover, width: 1500.0),
+                          fit: BoxFit.cover, width: 1500.0, cacheWidth: 480),
                     ),
                   ],
                 )),
@@ -287,66 +357,1330 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   }
 
   /////////////////////////////////////////////////////////////////////
-  List<String> total_list = [];
+  List<String> total_list = []; // ยอดค้าง (ยังไม่มี payment intent)
+  List<String> total_list_paid =
+      []; // ยอดที่มี payment intent อยู่แล้ว/ชำระไปแล้ว
   double All_total = 0.00, totaltoday = 0.00;
 
-  Future<Null> red_Trans_bill() async {
-    if (_InvoiceModels.length != 0) {
-      setState(() {
-        _InvoiceModels.clear();
-        totaltoday = 0;
-      });
+  final Map<String, double> _invoiceFineByDocNo = <String, double>{};
+
+  // ยอดที่ผู้ใช้ต้องชำระจริง: ยอดบิล + VAT + ค่าปรับของบิลนั้น
+  double _billAmount(InvoiceModel inv) =>
+      (double.tryParse(inv.amtall ?? '') ?? 0) +
+      (double.tryParse(inv.vatall ?? '') ?? 0) +
+      (_invoiceFineByDocNo[inv.docno?.trim() ?? ''] ?? 0);
+
+  Future<void> _loadInvoiceFines({
+    required String rentalId,
+    required String? customerNumber,
+  }) async {
+    _invoiceFineByDocNo.clear();
+    if (customerNumber == null || customerNumber.isEmpty) return;
+
+    try {
+      final response = await http.get(Uri.parse(
+        '${MyConstant().domain}/GC_billGropInv_UserPaytypeV2.php'
+        '?isAdd=true&ren=$rentalId&custno_inv=${Uri.encodeQueryComponent(customerNumber)}',
+      ));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint('_loadInvoiceFines HTTP ${response.statusCode}');
+        return;
+      }
+
+      final decoded = jsonDecode(response.body);
+      final contracts = decoded is Map<String, dynamic>
+          ? <ContractInvoice>[ContractInvoice.fromJson(decoded)]
+          : decoded is List
+              ? decoded
+                  .whereType<Map<String, dynamic>>()
+                  .map(ContractInvoice.fromJson)
+                  .toList(growable: false)
+              : const <ContractInvoice>[];
+      for (final contract in contracts) {
+        for (final data in contract.data ?? const []) {
+          for (final bill in data.bill ?? const []) {
+            final docNo = bill.docno?.trim() ?? '';
+            if (docNo.isNotEmpty) {
+              _invoiceFineByDocNo[docNo] = bill.fineTotal ?? 0;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      debugPrint('_loadInvoiceFines error: $error');
     }
-    ////////////////------------------------------------------------------>
-    SharedPreferences preferences = await SharedPreferences.getInstance();
-    var ren = preferences.getString('renTalSer');
-    // var ciddoc_ = preferences.getString('usercid');
-    var qutser_ = preferences.getString('qutser');
-    ////////////////------------------------------------------------------>
-    double total = 0.00;
+  }
+
+  /// ตรวจสอบสถานะ "ชำระได้" ของบิลแบบกลุ่ม (1 ครั้งต่อสัญญา)
+  /// คืนค่า Map<billReference, bool> (true = ชำระได้)
+  Future<Map<String, bool>> _fetchBillAvailability({
+    required String? custNo,
+    required String? ren,
+    required List<String> docnos,
+  }) async {
+    final result = <String, bool>{};
+    if (docnos.isEmpty || custNo == null || custNo.isEmpty || ren == null) {
+      return result;
+    }
+
+    try {
+      final response = await postPaymentIntentsBillReferenceAvailableBulkSlip(
+        cusno: custNo,
+        propertyno: ren,
+        billreference: docnos,
+      );
+      if (response == null ||
+          response.statusCode < 200 ||
+          response.statusCode >= 300) {
+        debugPrint(
+            '_fetchBillAvailability failed: HTTP ${response?.statusCode} ${response?.body}');
+        return result;
+      }
+
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map && decoded['data'] is Map) {
+        final data = decoded['data'] as Map;
+        data.forEach((key, value) {
+          if (value is bool) result[key.toString()] = value;
+        });
+      }
+    } catch (e) {
+      debugPrint('_fetchBillAvailability error: $e');
+    }
+    return result;
+  }
+
+  Future<Null> red_Trans_bill() async {
+    // รีเซ็ตก่อนโหลดข้อมูลใหม่ (ทำนอก setState เพื่อลดการ rebuild ซ้ำซ้อน)
+    _InvoiceModels.clear();
+    totaltoday = 0;
+    total_list.clear();
+    total_list_paid.clear();
+
+    final preferences = await SharedPreferences.getInstance();
+    final ren = preferences.getString('renTalSer');
+    final custNo = preferences.getString('custno');
+    final qutser_ = preferences.getString('qutser');
+
+    if (ren == null) {
+      if (mounted) setState(() {});
+      return;
+    }
+
+    await _loadInvoiceFines(rentalId: ren, customerNumber: custNo);
+    final todayStr = DateFormat('yyyy-MM-dd').format(_DateTimeNew);
+
     for (int index = 0; index < teNantModels.length; index++) {
-      var ciddoc_ = teNantModels[index].cid;
-      String url =
+      final ciddoc_ = teNantModels[index].cid;
+      if (ciddoc_ == null || ciddoc_.isEmpty) {
+        total_list.add('0.00');
+        continue;
+      }
+
+      final url =
           '${MyConstant().domain_chao}/GC_bill_invoice.php?isAdd=true&ren=$ren&ciddoc=$ciddoc_&qutser=$qutser_';
+
       try {
-        var response = await http.get(Uri.parse(url));
+        final response = await http.get(Uri.parse(url));
+        if (response.statusCode != 200) {
+          debugPrint('red_Trans_bill HTTP ${response.statusCode} ($ciddoc_)');
+          total_list.add('0.00');
+          continue;
+        }
 
-        var result = json.decode(response.body);
+        final decoded = json.decode(response.body);
+        final invoices = (decoded is List) ? decoded : const <dynamic>[];
 
-        if (result.toString() != 'null') {
-          for (var map in result) {
-            InvoiceModel _InvoiceModel = InvoiceModel.fromJson(map);
-            var in_amtx = double.parse(_InvoiceModel.amtall!) +
-                double.parse(_InvoiceModel.vatall!);
-            var in_docnox = _InvoiceModel.docno;
-            var in_ser = _InvoiceModel.ser;
-            var in_amtall = _InvoiceModel.amtall;
-            var disendbill = double.parse(_InvoiceModel.disendbill!);
+        // แปลงเป็นโมเดล + รวมยอด (คำนวณนอก setState ก่อน)
+        final parsed = <InvoiceModel>[];
+        for (final map in invoices) {
+          if (map is! Map<String, dynamic>) continue;
+          final inv = InvoiceModel.fromJson(map);
+          if (inv.billdate == todayStr) {
+            totaltoday += _billAmount(inv);
+          }
+          parsed.add(inv);
+        }
 
-            setState(() {
-              if (_InvoiceModel.billdate ==
-                  DateFormat('yyy-MM-dd').format(_DateTimeNew)) {
-                totaltoday = totaltoday + in_amtx;
-              }
-              // sum_disamt_in = sum_disamt_in + disendbill;
-              total = total + in_amtx;
-              // invoicePayModels.add(invoicePayModel);
-              _InvoiceModels.add(_InvoiceModel);
-            });
+        // เช็ค availability ทีเดียวเป็นกลุ่ม ลดการเรียก network ต่อบิล
+        final docnos = parsed
+            .map((e) => (e.docno ?? '').toString())
+            .where((d) => d.isNotEmpty)
+            .toList();
+        final availability = await _fetchBillAvailability(
+            custNo: custNo, ren: ren, docnos: docnos);
+
+        // แยกยอดเป็น 2 กลุ่ม:
+        // - outstandingTotal : บิลที่ "ยังไม่มี payment intent" (ชำระได้/ค้างชำระ)
+        // - paidOrPendingTotal : บิลที่ "มี payment intent อยู่แล้ว/ชำระไปแล้ว"
+        // ตาม API response: { docno: true } = มี intent แล้ว (paid/pending),
+        //                   { docno: false } = ยังไม่มี intent (outstanding)
+        // หากเช็คไม่ได้ (ไม่มีใน map) ถือว่าเป็นบิลปกติ → นับเข้า outstanding
+        double outstandingTotal = 0.00;
+        double paidOrPendingTotal = 0.00;
+        for (final inv in parsed) {
+          final hasIntent = availability[inv.docno?.toString()] ?? false;
+          if (hasIntent) {
+            // ✅ มี payment intent อยู่แล้ว → บิลที่รอตรวจ/ชำระแล้ว
+            paidOrPendingTotal += _billAmount(inv);
+          } else {
+            // ✅ ยังไม่มี intent → ค้างชำระ
+            outstandingTotal += _billAmount(inv);
           }
         }
 
-        setState(() {
-          total_list.add(total.toString());
-          total = 0.00;
-        });
-      } catch (e) {}
+        _InvoiceModels.addAll(parsed);
+        total_list.add(outstandingTotal.toStringAsFixed(2));
+        total_list_paid.add(paidOrPendingTotal.toStringAsFixed(2));
+      } catch (e, stack) {
+        debugPrint('red_Trans_bill error (tenant $ciddoc_): $e');
+        debugPrint('$stack');
+        total_list.add('0.00');
+      }
     }
+
+    if (mounted) setState(() {});
+  }
+
+  /// Load payment intent history from /api/v1/payment/intents/state.
+  /// Read-only list; failures are silent so they don't block the diary UI.
+  Future<void> loadTransectionIntents() async {
+    // กันเรียกซ้อน (เช่น rebuild จาก filter/refresh ติด ๆ กัน)
+    if (_loadingTransection) return;
+
+    // ต้องมี customer_no จึงจะ query ได้ — ถ้ายังโหลด profile ไม่เสร็จให้ข้ามไป
+    final customerNo = custno_ ?? '';
+    if (customerNo.isEmpty) {
+      debugPrint('loadTransectionIntents: customerNo is empty, skipping');
+      return;
+    }
+    final propertyNo = renTal_user ?? '';
+
+    _loadingTransection = true;
+    // แสดง spinner ทันที กรณี reload (เช่น pull-to-refresh / เปลี่ยน filter)
+    if (mounted) setState(() {});
+
+    try {
+      final response = await postPaymentIntentsState(
+        cusno: customerNo,
+        propertyno: propertyNo,
+      ).timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          debugPrint('loadTransectionIntents: request timed out');
+          return null;
+        },
+      );
+
+      // กรณี network error / DNS fail / TLS error จาก helper → response == null
+      if (response == null) {
+        debugPrint('loadTransectionIntents: response is null (network error)');
+        return;
+      }
+      // กรณี HTTP 4xx/5xx → log + ออก ไม่พยายาม parse
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint(
+          'loadTransectionIntents: HTTP ${response.statusCode} ${response.body}',
+        );
+        return;
+      }
+
+      // กัน body ไม่ใช่ JSON (เช่น HTML error page) ไม่ให้ throw ปนกับ network error
+      final dynamic decoded;
+      try {
+        decoded = json.decode(response.body);
+      } catch (e) {
+        debugPrint('loadTransectionIntents: invalid JSON body: $e');
+        return;
+      }
+
+      final data = decoded is Map && decoded['data'] is List
+          ? decoded['data'] as List
+          : const <dynamic>[];
+      final list = data
+          .whereType<Map<String, dynamic>>()
+          .map(TransectionIntent.fromJson)
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _transectionIntents = list;
+        });
+        // ✅ Debug: log first 2 intents to inspect bank fields
+        for (var i = 0; i < list.length && i < 2; i++) {
+          debugPrint('🔍 intent[$i] bankmerchantid=${list[i].bankmerchantid} '
+              'accountName="${list[i].accountName}" '
+              'accountNumber="${list[i].accountNumber}"');
+        }
+      }
+    } catch (e, stack) {
+      debugPrint('loadTransectionIntents error: $e');
+      debugPrint('$stack');
+    } finally {
+      _loadingTransection = false;
+      // ปิด spinner เสมอเมื่อโหลดจบ (ทั้งสำเร็จ/ล้มเหลว) กันวง spinner ค้าง
+      if (mounted) setState(() {});
+    }
+  }
+
+  /// ✅ UI แบบเดียวกับ _buildContractStatusTable():
+  /// การ์ดขาวมี shadow + header + filter + table rows alternating + total row
+  Widget _buildTransectionList() {
+    final filtered = _applyTransectionFilters(_transectionIntents);
+    final isEN = cus_lang == 'EN';
+    final nFormat = NumberFormat("#,##0.00", "en_US");
+
+    // คำนวณยอดรวมจากรายการที่ผ่าน filter (แสดง max 50 รายการ)
+    // หมายเหตุ: ใช้ spread ใน Column แทน ListView.builder เพื่อหลีกเลี่ยง
+    // "Assertion failed: window.dart:99:12" จาก nested scrollable
+    // (ListView.builder ซ้อน ListView.builder)
+    const int maxVisible = 50;
+    final visible = filtered.take(maxVisible).toList();
+    double totalAmount = 0.0;
+    for (final t in visible) {
+      totalAmount += double.tryParse(t.total) ?? 0.0;
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: FitnessAppTheme.grey.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          // ✅ FIX: mainAxisSize.min ป้องกัน Column ขยายเต็ม unbounded height
+          // จาก ListView.builder item ที่ทำให้เกิด window.dart:99:12 assertion
+          // ใน Flutter Web (item มี bounded width แต่ unbounded height)
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ===== Header =====
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+              decoration: BoxDecoration(
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+                border: Border(
+                  bottom: BorderSide(
+                    color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.receipt_long_outlined,
+                      size: 18, color: FitnessAppTheme.nearlyDarkBlue),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isEN
+                              ? 'Payment Verification/Confirmation History'
+                              : 'ประวัติรอยืนยัน/ตรวจสอบการชำระ',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: FitnessAppTheme.nearlyDarkBlue,
+                          ),
+                        ),
+                        Text(
+                          isEN
+                              ? '#note: The displayed amount may include fines.'
+                              : '#หมายเหตุ:ยอดที่แสดงอาจเป็นยอดที่รวมค่าปรับแล้ว',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 10,
+                            // fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (!_loadingTransection && _transectionIntents.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: FitnessAppTheme.nearlyDarkBlue,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${_transectionIntents.length}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: Font_.Fonts_T,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // ===== Filter section =====
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+                ),
+              ),
+              child: _buildTransectionFilters(),
+            ),
+
+            // ===== Body (loading / empty / table) =====
+            if (_loadingTransection)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (filtered.isEmpty)
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.inbox_outlined,
+                          size: 42, color: Colors.grey.shade400),
+                      const SizedBox(height: 8),
+                      Text(
+                        _transectionIntents.isEmpty
+                            ? (isEN
+                                ? 'No payment history'
+                                : 'ไม่มีประวัติการชำระเงิน')
+                            : (isEN
+                                ? 'No results for the selected filter'
+                                : 'ไม่พบรายการที่ตรงกับตัวกรอง'),
+                        style: TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                // ✅ FIX: mainAxisSize.min เพื่อให้ Column ขนาดเท่าลูกๆ พอดี
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ===== Table Header =====
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      border: Border(
+                        bottom:
+                            BorderSide(color: Colors.grey.shade200, width: 1),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: Text(
+                            isEN ? 'Payment No.' : 'เลขที่',
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            isEN ? 'Date' : 'วันที่',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            isEN ? 'Amount' : 'ยอดรวม',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 1,
+                          child: Text(
+                            isEN ? 'Bank' : 'ธนาคาร',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            isEN ? 'Status' : 'สถานะ',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // ===== Table Rows (max 50 rows - ใช้ Column + spread เพื่อหลีกเลี่ยง nested scrollable) =====
+                  ...visible.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final t = entry.value;
+                    final dateText = _formatDateDdMmYyyy(t.createdAt);
+                    final hasMeta = t.accountName.isNotEmpty ||
+                        t.accountNumber.isNotEmpty ||
+                        (t.attacheExists && t.attacheSlipNo != null);
+
+                    // ✅ map status → label/icon/color (แบบ V3)
+                    // - isWaitingReview && !isPaid → "แนบหลักฐานแล้ว" (เขียว)
+                    // - else → "กดเพื่อแนบหลักฐาน" (ม่วง)
+                    final statusStr = (t.status ?? '').toLowerCase();
+                    final isWaitingReview = statusStr.contains('ตรวจ') ||
+                        (statusStr.contains('รอ') &&
+                            !statusStr.contains('ชำระ')) ||
+                        statusStr.contains('review') ||
+                        statusStr.contains('pending');
+                    final isPaid = statusStr.contains('รอชำระเงิน') ||
+                        statusStr.contains('ชำระเงิน') ||
+                        statusStr.contains('awaiting') ||
+                        statusStr.contains('pay');
+
+                    String statusBadgeLabel;
+                    Color statusBadgeColor;
+                    IconData statusBadgeIcon;
+                    if (isWaitingReview && !isPaid) {
+                      statusBadgeLabel =
+                          isEN ? 'Slip attached' : 'แนบหลักฐานแล้ว';
+                      statusBadgeColor = Colors.green.shade600;
+                      statusBadgeIcon = Icons.check_circle;
+                    } else {
+                      statusBadgeLabel =
+                          isEN ? 'Tap to attach slip' : 'กดเพื่อแนบหลักฐาน';
+                      statusBadgeColor = Colors.indigo.shade600;
+                      statusBadgeIcon = Icons.upload_file_rounded;
+                    }
+                    final statusColor = statusBadgeColor;
+
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: i.isEven ? Colors.white : Colors.grey.shade50,
+                        border: Border(
+                          bottom:
+                              BorderSide(color: Colors.grey.shade100, width: 1),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Text(
+                              t.paymentIntentNo,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              dateText,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontFamily: Font_.Fonts_T,
+                                fontSize: 10,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              nFormat.format(double.tryParse(t.total) ?? 0),
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontFamily: Font_.Fonts_T,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: FitnessAppTheme.darkerText,
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 1,
+                            // ✅ Bank code badge (ดึงจาก accountName -> bankCodeMap)
+                            child: Text(
+                              // ✅ Resolve bank code: accountName → PayMentModels (ser→bcode) → fallback map
+                              _resolveBankCode(
+                                accountName: t.accountName,
+                                bankmerchantid: t.bankmerchantid,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.indigo.shade700,
+                                fontFamily: Font_.Fonts_T,
+                              ),
+                            ),
+
+                            // Container(
+                            //   margin: const EdgeInsets.symmetric(horizontal: 2),
+                            //   padding: const EdgeInsets.symmetric(
+                            //       horizontal: 4, vertical: 2),
+                            //   decoration: BoxDecoration(
+                            //     color: Colors.indigo.shade50,
+                            //     borderRadius: BorderRadius.circular(6),
+                            //     border: Border.all(
+                            //         color: Colors.indigo.shade200, width: 0.5),
+                            //   ),
+                            //   child: Text(
+                            //     // ✅ Resolve bank code: accountName → PayMentModels (ser→bcode) → fallback map
+                            //     _resolveBankCode(
+                            //       accountName: t.accountName,
+                            //       bankmerchantid: t.bankmerchantid,
+                            //     ),
+                            //     textAlign: TextAlign.center,
+                            //     maxLines: 1,
+                            //     overflow: TextOverflow.ellipsis,
+                            //     style: TextStyle(
+                            //       fontSize: 9,
+                            //       fontWeight: FontWeight.w800,
+                            //       color: Colors.indigo.shade700,
+                            //       fontFamily: Font_.Fonts_T,
+                            //     ),
+                            //   ),
+                            // ),
+                          ),
+                          Expanded(
+                            flex: 3,
+                            // ✅ FIX: ลบ FittedBox ออก — Text ใช้ maxLines/ellipsis จัดการ overflow ได้
+                            // FittedBox + loose constraints จาก Column (unbounded height)
+                            // ใน ListView.builder item เป็นสาเหตุของ window.dart:99:12 assertion
+                            child: InkWell(
+                              onTap: isWaitingReview
+                                  ? null
+                                  : () => _openAttachSlipFlow(t),
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                margin:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                      color: statusColor.withOpacity(0.4),
+                                      width: 0.5),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(statusBadgeIcon,
+                                        color: statusColor, size: 11),
+                                    const SizedBox(width: 4),
+                                    Flexible(
+                                      child: Text(
+                                        statusBadgeLabel,
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: statusColor,
+                                          fontFamily: Font_.Fonts_T,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  // ===== Total Row =====
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: Text(
+                            isEN ? 'Total' : 'รวม',
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: FitnessAppTheme.nearlyDarkBlue,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            '${visible.length} ${isEN ? 'items' : 'รายการ'}',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            nFormat.format(totalAmount),
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: FitnessAppTheme.nearlyDarkBlue,
+                            ),
+                          ),
+                        ),
+                        const Expanded(flex: 1, child: SizedBox()),
+                        const Expanded(flex: 2, child: SizedBox()),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// สีของ badge ตาม system_status
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'paid':
+        return Colors.green[600]!;
+      case 'verification':
+        return Colors.blue[600]!;
+      case 'pending':
+        return Colors.orange[600]!;
+      case 'expired':
+      case 'failed':
+      case 'cancelled':
+        return Colors.red[600]!;
+      default:
+        return Colors.grey[600]!;
+    }
+  }
+
+  String _statusLabelEN(String status) {
+    switch (status) {
+      case 'paid':
+        return 'Paid';
+      case 'verification':
+        return 'Verifying';
+      case 'pending':
+        return 'Pending';
+      case 'expired':
+        return 'Expired';
+      case 'failed':
+        return 'Failed';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status;
+    }
+  }
+
+  String _statusLabelTH(String status) {
+    switch (status) {
+      case 'paid':
+        return 'ชำระแล้ว';
+      case 'verification':
+        return 'รอตรวจ';
+      case 'pending':
+        return 'รอชำระ';
+      case 'expired':
+        return 'หมดอายุ';
+      case 'failed':
+        return 'ล้มเหลว';
+      case 'cancelled':
+        return 'ยกเลิก';
+      default:
+        return status;
+    }
+  }
+
+  // สำหรับ badge ใน table (ใช้คำสั้นเพื่อไม่ wrap)
+  String _statusShortLabelTH(String status) {
+    switch (status) {
+      case 'paid':
+        return 'จ่ายแล้ว';
+      case 'verification':
+        return 'รอตรวจ';
+      case 'pending':
+        return 'รอจ่าย';
+      case 'expired':
+        return 'หมดอายุ';
+      case 'failed':
+        return 'ล้มเหลว';
+      case 'cancelled':
+        return 'ยกเลิก';
+      default:
+        return status;
+    }
+  }
+
+  // Short labels สำหรับ EN (1 คำ ไม่ wrap ใน badge)
+  String _statusShortLabelEN(String status) {
+    switch (status) {
+      case 'paid':
+        return 'Paid';
+      case 'verification':
+        return 'Verifying';
+      case 'pending':
+        return 'Pending';
+      case 'expired':
+        return 'Expired';
+      case 'failed':
+        return 'Failed';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return status;
+    }
+  }
+
+  /// ✅ Resolve bank short code จากหลายแหล่ง (ตามลำดับ fallback):
+  /// 1) bankCodeMap[accountName]?['code']  (เช่น "ธนาคารกสิกรไทย" → "KBANK")
+  /// 2) PayMentModels: lookup ser (=bank_merchant_id) -> bcode (จาก API GC_payMent.php)
+  /// 3) bankMerchantIdToCode[bankmerchantid] (fallback map ใน bankCodeMap.dart)
+  /// 4) ถ้า bankmerchantid มีค่า → fallback "B{id}"  (placeholder ชั่วคราว)
+  /// 5) ไม่เจอเลย → "-"
+  String _resolveBankCode(
+      {required String? accountName, required int? bankmerchantid}) {
+    // 1) accountName -> bankCodeMap
+    if (accountName != null && accountName.isNotEmpty) {
+      final code = bankCodeMap[accountName]?['code'];
+      if (code != null && code.isNotEmpty) return code;
+    }
+    // 2) bankmerchantid -> PayMentModels (ดึง bcode ตรงจาก API GC_payMent.php)
+    if (bankmerchantid != null && bankmerchantid! > 0) {
+      try {
+        final match = PayMentModels.firstWhere(
+          (m) => m.ser == '$bankmerchantid',
+          orElse: () => PayMentModel(),
+        );
+        final bcode = match.bcode;
+        if (bcode != null && bcode.isNotEmpty) return bcode;
+      } catch (_) {
+        // fallback ถ้า PayMentModels ยังไม่ถูก populate
+      }
+    }
+    // 3) bankmerchantid -> bankMerchantIdToCode (fallback map)
+    if (bankmerchantid != null && bankmerchantid! > 0) {
+      final code = bankMerchantIdToCode[bankmerchantid];
+      if (code != null && code.isNotEmpty) return code;
+    }
+    // 4) fallback "B{id}" เพื่อให้เห็นชัดเจนว่ามีค่า
+    if (bankmerchantid != null && bankmerchantid! > 0) {
+      return 'B$bankmerchantid';
+    }
+    // 5) ไม่มีข้อมูล
+    return '-';
+  }
+
+  /// ✅ Navigate ไป payment_subV4_InvAll เพื่อแนบหลักฐาน (เหมือน flow ใน V4 แท็บ 2)
+  /// ส่ง selectedDocNos = billReferences ของ intent นี้ (เพื่อให้ V4 filter bill ตรง)
+  /// ถ้า API ไม่ได้ส่ง invoices มา → fallback ใช้ [paymentIntentNo]
+  Future<void> _openAttachSlipFlow(TransectionIntent t) async {
+    // 1. resolve docNos ที่จะส่งให้ V4
+    final List<String> docNos = t.billReferences.isNotEmpty
+        ? List<String>.from(t.billReferences)
+        : [t.paymentIntentNo];
+
+    // 2. resolve serPayment (bank id) — ถ้าไม่มีใน model ให้ลอง fallback ว่าง
+    //    (V4 จะไม่ filter intent ถ้าไม่เจอ serPayment — แต่ selectedDocNos จะถูกใช้แทน)
+    final serPayment = (t.bankmerchantid ?? 0).toString();
+
+    debugPrint('🔗 _openAttachSlipFlow → V4');
+    debugPrint('   paymentIntentNo: ${t.paymentIntentNo}');
+    debugPrint('   intentUuid: ${t.intentUuid}');
+    debugPrint('   bankmerchantid: ${t.bankmerchantid}');
+    debugPrint('   selectedDocNos: $docNos');
+
+    if (!mounted) return;
+
+    // 3. navigate — ใช้ MaterialPageRoute ตรงๆ (ไม่ผ่าน V3 wrapper)
+    //    ส่ง fromIntent: true เพื่อให้ V4 รู้ว่ามาจาก card/intent card
+    //    ส่ง targetIntentUuid/targetPaymentIntentNo ด้วย เพราะกรณีที่ API
+    //    ไม่ได้ส่ง billReferences มา selectedDocNos จะไม่ตรงกับ billReference
+    //    ของ intent จริง ทำให้ V4 หา intent ไม่เจอ
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => paymentSubV4InvAll(
+          teNantModel: teNantModels.isEmpty ? null : teNantModels,
+          cuslang: cus_lang,
+          serPayment: serPayment,
+          serptPayment: null,
+          selectedDocNos: docNos,
+          fromIntent: true,
+          // targetIntentUuid: t.intentUuid,
+          // targetPaymentIntentNo: t.paymentIntentNo,
+        ),
+      ),
+    );
+  }
+
+  /// Filter row ใหม่: ใช้ Dropdown สำหรับสถานะ (ลดรก ประหยัดพื้นที่)
+  Widget _buildTransectionFilters() {
+    final isEn = cus_lang == 'EN';
+    final filters = const <(String, String, Color)>[
+      ('all', 'All', Color(0xFF616161)),
+      ('pending', 'Pending', Color(0xFFFB8C00)),
+      ('verification', 'Verification', Color(0xFF1E88E5)),
+      ('paid', 'Paid', Color(0xFF43A047)),
+      ('failed', 'Failed/Expired', Color(0xFFE53935)),
+    ];
+    final fromText = _transectionDateFrom == null
+        ? (isEn ? 'From' : 'จาก')
+        : '${DateFormat('dd-MM').format(_transectionDateFrom!)}-${_transectionDateFrom!.year + 543}';
+    final toText = _transectionDateTo == null
+        ? (isEn ? 'To' : 'ถึง')
+        : '${DateFormat('dd-MM').format(_transectionDateTo!)}-${_transectionDateTo!.year + 543}';
+    final hasDateFilter =
+        _transectionDateFrom != null || _transectionDateTo != null;
+
+    // หาสีของ dropdown ปัจจุบัน
+    Color selectedColor = filters
+        .firstWhere((f) => f.$1 == _transectionStatusFilter,
+            orElse: () => ('all', 'All', const Color(0xFF616161)))
+        .$3;
+
+    // ✅ รวม Status Dropdown + Date pickers ไว้ใน Row เดียวกัน (ประหยัดพื้นที่)
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // ===== Status Dropdown (flex 2) =====
+          Expanded(
+            flex: 2,
+            child: Container(
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: selectedColor.withOpacity(0.4),
+                  width: 0.8,
+                ),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _transectionStatusFilter,
+                  isExpanded: true,
+                  icon: Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 18, color: selectedColor),
+                  style: TextStyle(
+                    fontFamily: Font_.Fonts_T,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: FitnessAppTheme.darkerText,
+                  ),
+                  items: filters.map((f) {
+                    return DropdownMenuItem<String>(
+                      value: f.$1,
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: f.$3,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              f.$2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _transectionStatusFilter = value);
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // ===== Date Range Picker (flex 3) =====
+          Expanded(
+            flex: 3,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                side: BorderSide(
+                  color: hasDateFilter
+                      ? FitnessAppTheme.nearlyDarkBlue.withOpacity(0.4)
+                      : Colors.grey.shade300,
+                  width: 0.8,
+                ),
+                foregroundColor: hasDateFilter
+                    ? FitnessAppTheme.nearlyDarkBlue
+                    : Colors.grey.shade700,
+                backgroundColor: hasDateFilter
+                    ? FitnessAppTheme.nearlyDarkBlue.withOpacity(0.04)
+                    : Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                minimumSize: const Size(0, 34),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.event_outlined,
+                    size: 14,
+                    color: hasDateFilter
+                        ? FitnessAppTheme.nearlyDarkBlue
+                        : Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      hasDateFilter
+                          ? '$fromText → $toText'
+                          : (isEn ? 'Select date range' : 'เลือกช่วงวันที่'),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                ],
+              ),
+              onPressed: _pickTransectionDateRange,
+            ),
+          ),
+          if (hasDateFilter)
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              icon: const Icon(Icons.clear, size: 16),
+              tooltip: isEn ? 'Clear date filter' : 'ล้างตัวกรองวันที่',
+              onPressed: () {
+                setState(() {
+                  _transectionDateFrom = null;
+                  _transectionDateTo = null;
+                });
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String value, String label, bool isEn) {
+    final selected = _transectionStatusFilter == value;
+    final color = switch (value) {
+      'paid' => Colors.green[600]!,
+      'verification' => Colors.blue[600]!,
+      'pending' => Colors.orange[600]!,
+      'failed' => Colors.red[600]!,
+      _ => Colors.grey[700]!,
+    };
+    return ChoiceChip(
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      selected: selected,
+      selectedColor: color.withOpacity(0.18),
+      backgroundColor: Colors.grey[200],
+      side: BorderSide(color: selected ? color : Colors.transparent),
+      labelStyle: TextStyle(
+        color: selected ? color : Colors.grey[800],
+        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+      ),
+      onSelected: (_) {
+        setState(() => _transectionStatusFilter = value);
+      },
+    );
+  }
+
+  /// เปิด date range picker เลือกทั้ง from และ to ในหน้าต่างเดียว (1 ครั้ง)
+  Future<void> _pickTransectionDateRange() async {
+    final today = DateTime.now();
+    final initial = _transectionDateFrom != null && _transectionDateTo != null
+        ? DateTimeRange(start: _transectionDateFrom!, end: _transectionDateTo!)
+        : DateTimeRange(
+            start: today.subtract(const Duration(days: 30)), end: today);
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: today.add(const Duration(days: 365)),
+      initialDateRange: initial,
+    );
+    if (picked == null) return;
+    setState(() {
+      _transectionDateFrom =
+          DateTime(picked.start.year, picked.start.month, picked.start.day);
+      _transectionDateTo = DateTime(
+          picked.end.year, picked.end.month, picked.end.day, 23, 59, 59);
+    });
+  }
+
+  /// Apply the status + date range filters client-side.
+  List<TransectionIntent> _applyTransectionFilters(
+      List<TransectionIntent> source) {
+    Iterable<TransectionIntent> result = source;
+    final status = _transectionStatusFilter;
+    if (status != 'all') {
+      result = result.where((t) {
+        if (status == 'failed') {
+          return t.systemStatus == 'expired' ||
+              t.systemStatus == 'failed' ||
+              t.systemStatus == 'cancelled';
+        }
+        return t.systemStatus == status;
+      });
+    }
+    if (_transectionDateFrom != null) {
+      final from = DateTime(_transectionDateFrom!.year,
+          _transectionDateFrom!.month, _transectionDateFrom!.day);
+      result = result.where((t) {
+        final d = _parseIsoDate(t.createdAt);
+        return d != null && !d.isBefore(from);
+      });
+    }
+    if (_transectionDateTo != null) {
+      // inclusive end-of-day
+      final to = DateTime(_transectionDateTo!.year, _transectionDateTo!.month,
+          _transectionDateTo!.day, 23, 59, 59);
+      result = result.where((t) {
+        final d = _parseIsoDate(t.createdAt);
+        return d != null && !d.isAfter(to);
+      });
+    }
+    final filtered = result.toList();
+    filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return filtered;
+  }
+
+  /// Best-effort ISO-8601 parser; returns null for unparseable strings.
+  DateTime? _parseIsoDate(String s) {
+    if (s.isEmpty) return null;
+    try {
+      return DateTime.parse(s).toLocal();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Format ISO-8601 string as dd-MM-yyyy พ.ศ. (e.g. 04-08-2569).
+  /// Falls back to the raw string if it cannot be parsed.
+  String _formatDateDdMmYyyy(String iso) {
+    final d = _parseIsoDate(iso);
+    if (d == null) return iso;
+    return '${DateFormat('dd-MM').format(d)}-${d.year + 543}';
+  }
+
+  Widget _buildTransectionCard(TransectionIntent t) {
+    Color statusColor;
+    switch (t.systemStatus) {
+      case 'paid':
+        statusColor = Colors.green[600]!;
+        break;
+      case 'verification':
+        statusColor = Colors.blue[600]!;
+        break;
+      case 'pending':
+        statusColor = Colors.orange[600]!;
+        break;
+      case 'expired':
+      case 'failed':
+      case 'cancelled':
+        statusColor = Colors.red[600]!;
+        break;
+      default:
+        statusColor = Colors.grey[600]!;
+    }
+    final dateText = _formatDateDdMmYyyy(t.createdAt);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    t.paymentIntentNo,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 11,
+                      color: Colors.black54,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor, width: 0.5),
+                  ),
+                  child: Text(
+                    t.status,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '${cus_lang == 'EN' ? 'Total' : 'ยอดรวม'} ${t.total} ${cus_lang == 'EN' ? 'THB' : 'บาท'}',
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+                Text(
+                  dateText,
+                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+            if (t.accountName.isNotEmpty || t.accountNumber.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${t.accountName}${t.accountNumber.isNotEmpty ? ' • ${t.accountNumber}' : ''}',
+                style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+            if (t.attacheExists && t.attacheSlipNo != null) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.receipt_outlined,
+                      size: 14, color: Colors.grey[700]),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      t.attacheSlipNo!,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 10,
+                        color: Colors.black54,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 
   void addAllListData() {
     const int count = 9;
-
+    listViews.clear();
+    final bool useV4 = _hasIntentsAuth == true;
     // listViews.add(
     //   TitleView(
     //     titleTxt: cus_lang == 'EN' ? 'Infomation User' : 'ข้อมูลผู้ใช้',
@@ -358,57 +1692,19 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     //     animationController: widget.animationController!,
     //   ),
     // );
-    listViews.add(
-      MediterranesnDietView(
-        animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
-            parent: widget.animationController!,
-            curve:
-                Interval((1 / count) * 1, 1.0, curve: Curves.fastOutSlowIn))),
-        animationController: widget.animationController!,
-        teNantModel: teNantModels,
-        invoiceModels: _InvoiceModels,
-        cuslangs: cus_lang,
-        open_set_date: open_set_date,
-      ),
-    );
-    listViews.add(
-      TitleView(
-        titleTxt: cus_lang == 'EN' ? 'Rental contract' : 'สัญญา',
-        subTxt: cus_lang == 'EN' ? 'Rental contract All' : 'สัญญาทั้งหมด',
-        animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
-            parent: widget.animationController!,
-            curve:
-                Interval((1 / count) * 2, 1.0, curve: Curves.fastOutSlowIn))),
-        animationController: widget.animationController!,
-      ),
-    );
-
-    listViews.add(
-      MealsListView(
-        mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
-            CurvedAnimation(
-                parent: widget.animationController!,
-                curve: Interval((1 / count) * 3, 1.0,
-                    curve: Curves.fastOutSlowIn))),
-        mainScreenAnimationController: widget.animationController,
-        teNantModel: teNantModels,
-        totallist: total_list,
-        cuslangs: cus_lang,
-        open_set_date: open_set_date,
-      ),
-    );
-
-    listViews.add(
-      TitleView(
-        titleTxt: cus_lang == 'EN' ? 'Overdue Today' : 'เกินกำหนดชำระ',
-        subTxt: 'X',
-        animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
-            parent: widget.animationController!,
-            curve:
-                Interval((1 / count) * 4, 1.0, curve: Curves.fastOutSlowIn))),
-        animationController: widget.animationController!,
-      ),
-    );
+    // listViews.add(
+    //   MediterranesnDietView(
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 1, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //     teNantModel: teNantModels,
+    //     invoiceModels: _InvoiceModels,
+    //     cuslangs: cus_lang,
+    //     open_set_date: open_set_date,
+    //   ),
+    // );
 
     listViews.add(
       BodyMeasurementView(
@@ -417,11 +1713,141 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             curve:
                 Interval((1 / count) * 5, 1.0, curve: Curves.fastOutSlowIn))),
         animationController: widget.animationController!,
+        totallist: total_list,
+        totallistPaid: total_list_paid,
         totaltodays: totaltoday,
         invoiceModels: _InvoiceModels,
         cuslangs: cus_lang,
       ),
     );
+
+    // listViews.add(
+    //   DashboardSummaryView(
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 1, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //     teNantModel: teNantModels,
+    //     invoiceModels: _InvoiceModels,
+    //     totaltodays: totaltoday,
+    //     cuslangs: cus_lang,
+    //     open_set_date: open_set_date,
+    //   ),
+    // );
+
+    listViews.add(
+      _buildQuickActionsRow(),
+    );
+    listViews.add(
+      TitleView(
+        titleTxt: cus_lang == 'EN' ? 'Rental contract' : 'สัญญา',
+        subTxt: cus_lang == 'EN' ? 'Rental contract All' : 'ทั้งหมด',
+        badgeCount: teNantModels.length,
+        animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+            parent: widget.animationController!,
+            curve:
+                Interval((1 / count) * 2, 1.0, curve: Curves.fastOutSlowIn))),
+        animationController: widget.animationController!,
+      ),
+    );
+    if (teNantModels.length > 0) {
+      listViews.add(
+        MealsListView(
+          mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0).animate(
+              CurvedAnimation(
+                  parent: widget.animationController!,
+                  curve: Interval((1 / count) * 3, 1.0,
+                      curve: Curves.fastOutSlowIn))),
+          mainScreenAnimationController: widget.animationController,
+          teNantModel: teNantModels,
+          totallist: total_list,
+          totallistPaid: total_list_paid,
+          cuslangs: cus_lang,
+          open_set_date: open_set_date,
+        ),
+      );
+    } else {
+      listViews.add(Center(
+        child: SizedBox(
+          height: 100,
+          child: Center(
+            child: Text(
+              cus_lang == 'EN'
+                  ? 'Sorry, no relevant contract found.'
+                  : 'ขออภัยไม่พบสัญญาที่เกี่ยวข้อง',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: FitnessAppTheme.fontName,
+                fontWeight: FontWeight.w500,
+                fontSize: 14,
+                letterSpacing: 0.0,
+                color: FitnessAppTheme.grey.withOpacity(0.5),
+              ),
+            ),
+          ),
+        ),
+      ));
+    }
+
+    // ✅ ตาราง Transection https://pay-stg-api.chaoperties.com/api/v1/payment/intents/state
+    // ⚠️ ใช้ placeholder + slot index แทนการเรียก _buildTransectionList() ตรงๆ
+    // เพื่อให้ itemBuilder ใน getMainListViewUI() เรียก _buildTransectionList() ใหม่ทุกครั้ง
+    // ไม่อย่างนั้น widget จะถูก snapshot ตอน addAllListData() และไม่แสดงข้อมูลหลัง load เสร็จ
+    if (useV4) {
+      _transectionSlotIndex = listViews.length;
+    }
+
+    listViews.add(const SizedBox.shrink());
+    // ✅ ตารางสรุปยอดต่อสัญญา (เลขสัญญา / ยอดรอตรวจสอบ / ยอดค้างชำระ)
+    listViews.add(
+      _buildContractSummaryTable(),
+    );
+
+    // ✅ ตารางสรุปสถานะสัญญา
+    listViews.add(
+      _buildContractStatusTable(),
+    );
+
+// ✅ การ์ดสรุป Dashboard รวม (ยอดค้าง + สัญญา + วันนี้ + บิล + ชำระ)
+    // listViews.add(
+    //   DashboardSummaryView(
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 1, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //     teNantModel: teNantModels,
+    //     invoiceModels: _InvoiceModels,
+    //     totaltodays: totaltoday,
+    //     cuslangs: cus_lang,
+    //     open_set_date: open_set_date,
+    //   ),
+    // );
+    // listViews.add(
+    //   TitleView(
+    //     titleTxt: cus_lang == 'EN' ? 'Overdue Today' : 'เกินกำหนดชำระ',
+    //     subTxt: 'X',
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 4, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //   ),
+    // );
+
+    // listViews.add(
+    //   BodyMeasurementView(
+    //     animation: Tween<double>(begin: 0.0, end: 1.0).animate(CurvedAnimation(
+    //         parent: widget.animationController!,
+    //         curve:
+    //             Interval((1 / count) * 5, 1.0, curve: Curves.fastOutSlowIn))),
+    //     animationController: widget.animationController!,
+    //     totaltodays: totaltoday,
+    //     invoiceModels: _InvoiceModels,
+    //     cuslangs: cus_lang,
+    //   ),
+    // );
     // listViews.add(
     //   TitleView(
     //     titleTxt: cus_lang == 'EN' ? 'News' : 'ข่าว',
@@ -458,8 +1884,893 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
   }
 
   Future<bool> getData() async {
-    await Future<dynamic>.delayed(const Duration(milliseconds: 50));
     return true;
+  }
+
+  /// ตารางสรุปยอดต่อสัญญา (เลขสัญญา / ยอดรอตรวจสอบ / ยอดค้างชำระ)
+  Widget _buildContractSummaryTable() {
+    final isEN = cus_lang == 'EN';
+    final nFormat = NumberFormat("#,##0.00", "en_US");
+
+    // คำนวณยอดรวม
+    double totalOutstanding = 0.0;
+    double totalPending = 0.0;
+    for (int i = 0; i < teNantModels.length; i++) {
+      totalOutstanding +=
+          double.tryParse(total_list.length > i ? total_list[i] : '0.00') ??
+              0.0;
+      totalPending += double.tryParse(
+              total_list_paid.length > i ? total_list_paid[i] : '0.00') ??
+          0.0;
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: FitnessAppTheme.grey.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+              decoration: BoxDecoration(
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+                border: Border(
+                  bottom: BorderSide(
+                      color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.1),
+                      width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.table_chart_outlined,
+                      size: 18, color: FitnessAppTheme.nearlyDarkBlue),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isEN
+                              ? 'Contract Payment Summary'
+                              : 'สรุปยอดชำระต่อสัญญา',
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: FitnessAppTheme.nearlyDarkBlue,
+                          ),
+                        ),
+                        Text(
+                          isEN
+                              ? '#note: The displayed amount includes late fees.'
+                              : '#หมายเหตุ:ยอดที่แสดงรวมค่าปรับแล้ว',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 10,
+                            // fontWeight: FontWeight.bold,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Table Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      isEN ? 'Contract No.' : 'เลขสัญญา',
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      isEN ? 'Pending Review' : 'ยอดรอตรวจสอบ',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      isEN ? 'Outstanding' : 'ยอดค้างชำระ',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Table Rows
+            ...List.generate(teNantModels.length, (index) {
+              final tenant = teNantModels[index];
+              final outstanding = double.tryParse(
+                      total_list.length > index ? total_list[index] : '0.00') ??
+                  0.0;
+              final pending = double.tryParse(total_list_paid.length > index
+                      ? total_list_paid[index]
+                      : '0.00') ??
+                  0.0;
+              final hasAny = outstanding > 0 || pending > 0;
+
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                  color: index.isEven ? Colors.white : Colors.grey.shade50,
+                  border: Border(
+                    bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        tenant.cid ?? '-',
+                        style: TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: hasAny
+                              ? FitnessAppTheme.darkerText
+                              : Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        nFormat.format(pending),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: pending > 0
+                              ? FitnessAppTheme.orange
+                              : Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        nFormat.format(outstanding),
+                        textAlign: TextAlign.right,
+                        style: TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: outstanding > 0
+                              ? FitnessAppTheme.nearlyDarkRed
+                              : Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            // Total Row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      isEN ? 'Total' : 'รวม',
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: FitnessAppTheme.nearlyDarkBlue,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      nFormat.format(totalPending),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: totalPending > 0
+                            ? FitnessAppTheme.orange
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      nFormat.format(totalOutstanding),
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: totalOutstanding > 0
+                            ? FitnessAppTheme.nearlyDarkRed
+                            : Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// แถวเมนูลัด 4 ปุ่ม (ชำระ, บิล, สแกน, อื่นๆ)
+  Widget _buildQuickActionsRow() {
+    final isEN = cus_lang == 'EN';
+    final actions = [
+      _QuickAction(
+        icon: Icons.wallet_outlined,
+        label: isEN ? 'Pay' : 'ชำระ',
+        onTap: () async {
+          final preferences = await SharedPreferences.getInstance();
+          await preferences.setString('payby', 'PAY');
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FitnessAppHomeScreen(pageroot: 'PAY'),
+            ),
+          );
+        },
+      ),
+      _QuickAction(
+        icon: Icons.receipt_long_outlined,
+        label: isEN ? 'Payment History' : 'ประวัติชำระ',
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FitnessAppHomeScreen(pageroot: 'PAYMENT'),
+            ),
+          );
+        },
+      ),
+      _QuickAction(
+        icon: Icons.monitor_weight_rounded,
+        label: isEN ? 'Meter' : 'มิเตอร์',
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FitnessAppHomeScreen(pageroot: 'MITER'),
+            ),
+          );
+        },
+      ),
+      _QuickAction(
+        icon: Icons.grid_view_outlined,
+        label: isEN ? 'More' : 'อื่นๆ',
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => FitnessAppHomeScreen(pageroot: 'INFO'),
+            ),
+          );
+          // // TODO: เปิดหน้าเมนูเพิ่มเติม
+          // ScaffoldMessenger.of(context).showSnackBar(
+          //   SnackBar(
+          //     content: Text(isEN ? 'Coming soon' : 'เร็วๆ นี้'),
+          //     duration: const Duration(seconds: 1),
+          //   ),
+          // );
+        },
+      ),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+      child: Row(
+        children: actions.map((action) {
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Material(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: action.onTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: FitnessAppTheme.grey.withOpacity(0.1),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: FitnessAppTheme.grey.withOpacity(0.06),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: FitnessAppTheme.nearlyDarkBlue
+                                .withOpacity(0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            action.icon,
+                            size: 22,
+                            color: FitnessAppTheme.nearlyDarkBlue,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          action.label,
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: FitnessAppTheme.darkerText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// ตารางสรุปสถานะสัญญา (ปัจจุบัน / หมดสัญญา / ใกล้หมด)
+  Widget _buildContractStatusTable() {
+    final isEN = cus_lang == 'EN';
+
+    int activeCount = 0;
+    int expiredCount = 0;
+    int almostCount = 0;
+
+    for (final tenant in teNantModels) {
+      if (tenant.quantity == '2' || tenant.quantity == '3') {
+        activeCount++;
+        continue;
+      }
+      if (tenant.quantity != '1') continue;
+
+      final lDate = tenant.ldate == null
+          ? DateTime(_DateTimeNew.year, _DateTimeNew.month, _DateTimeNew.day)
+          : DateTime.tryParse(tenant.ldate.toString()) ?? _DateTimeNew;
+      final isExpired = _DateTimeNew.isAfter(lDate);
+      final isAlmost =
+          _DateTimeNew.isAfter(lDate.subtract(Duration(days: open_set_date)));
+
+      if (isExpired) {
+        expiredCount++;
+      } else if (isAlmost) {
+        almostCount++;
+      } else {
+        activeCount++;
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: FitnessAppTheme.grey.withOpacity(0.12),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+              decoration: BoxDecoration(
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+                border: Border(
+                  bottom: BorderSide(
+                      color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.1),
+                      width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.pie_chart_outline,
+                      size: 18, color: FitnessAppTheme.nearlyDarkBlue),
+                  const SizedBox(width: 10),
+                  Text(
+                    isEN ? 'Contract Status Summary' : 'สรุปสถานะสัญญา',
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: FitnessAppTheme.nearlyDarkBlue,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Table Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                border: Border(
+                  bottom: BorderSide(color: Colors.grey.shade200, width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      isEN ? 'Status' : 'สถานะ',
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Text(
+                      isEN ? 'Count' : 'จำนวน',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Active row
+            _statusRow(
+              isEN ? 'Active' : 'ปัจจุบัน',
+              activeCount,
+              FitnessAppTheme.nearlyDarkBlue,
+              true,
+            ),
+            // Expired row
+            _statusRow(
+              isEN ? 'Expired' : 'หมดสัญญา',
+              expiredCount,
+              FitnessAppTheme.nearlyDarkRed,
+              false,
+            ),
+            // Almost expired row
+            _statusRow(
+              isEN ? 'Almost Expired' : 'ใกล้หมดสัญญา',
+              almostCount,
+              FitnessAppTheme.orange,
+              true,
+            ),
+            // Total row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.06),
+                border: Border(
+                  top: BorderSide(
+                      color: FitnessAppTheme.nearlyDarkBlue.withOpacity(0.15),
+                      width: 1),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      isEN ? 'Total Contracts' : 'สัญญาทั้งหมด',
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: FitnessAppTheme.nearlyDarkBlue,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Text(
+                      '${teNantModels.length}',
+                      textAlign: TextAlign.right,
+                      style: TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: FitnessAppTheme.nearlyDarkBlue,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusRow(String label, int count, Color color, bool isEven) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: isEven ? Colors.white : Colors.grey.shade50,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade100, width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.3),
+                  blurRadius: 4,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontFamily: Font_.Fonts_T,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: FitnessAppTheme.darkerText,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              '$count',
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontFamily: Font_.Fonts_T,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: count > 0 ? color : Colors.grey.shade500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// ✅ แสดง popup แจ้งปัญหาระบบแนบหลักฐานการชำระ (ช่วง 25-28 พ.ค. 2569)
+  void _showSlipIssuePopup() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final isEN = cus_lang == 'EN';
+
+      showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => Dialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              elevation: 0,
+              backgroundColor: Colors.transparent,
+              child: Container(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black26,
+                        blurRadius: 10,
+                        offset: Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.85,
+                      ),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Header สีส้ม
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 20, horizontal: 20),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: const BorderRadius.only(
+                                  topLeft: Radius.circular(20),
+                                  topRight: Radius.circular(20),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade100,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(Icons.warning_amber_rounded,
+                                        size: 32,
+                                        color: Colors.orange.shade700),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(
+                                      isEN
+                                          ? 'Notice: Payment Evidence System Issue'
+                                          : 'ขออภัย ระบบการแนบหลักฐานการชำระมีปัญหา',
+                                      style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w700,
+                                        fontFamily: Font_.Fonts_T,
+                                        color: Colors.orange.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Body
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    isEN
+                                        ? 'Users who attached payment evidence between May 25-28, 2026, please verify your submitted evidence.'
+                                        : 'ผู้ใช้ที่แนบหลักฐานการชำระตั้งแต่ช่วงวันที่ 25 ถึง 28 พฤษภาคม 2569 กรุณาเข้าไปตรวจสอบหลักฐานที่ท่านแนบ',
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontFamily: Font_.Fonts_T,
+                                      color: Colors.black87,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                          color: Colors.red.shade100),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.info_outline,
+                                            size: 20,
+                                            color: Colors.red.shade400),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            isEN
+                                                ? 'If your evidence is not showing, please re-upload it so staff can verify correctly.'
+                                                : 'หากพบว่าหลักฐานไม่แสดง ขอความกรุณาอัพหลักฐานใหม่อีกครั้ง เพื่อให้เจ้าหน้าที่ตรวจสอบได้ถูกต้อง',
+                                            style: TextStyle(
+                                              fontSize: 13.5,
+                                              fontFamily: Font_.Fonts_T,
+                                              color: Colors.red.shade700,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Buttons
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                              child: Row(
+                                children: [
+                                  // ปุ่มปิด
+                                  Expanded(
+                                    child: TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 12),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          side: BorderSide(
+                                              color: Colors.grey.shade300),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        isEN ? 'Close' : 'ปิด',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade600,
+                                          fontFamily: Font_.Fonts_T,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // ปุ่มไปตรวจสอบหลักฐาน
+                                  Expanded(
+                                    flex: 2,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            Colors.orange.shade600,
+                                            Colors.orange.shade400,
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.orange.withOpacity(0.3),
+                                            blurRadius: 5,
+                                            offset: const Offset(0, 3),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: () {
+                                            Navigator.pop(
+                                                ctx); // ปิด popup ก่อน
+                                            // นำไปยังหน้า Payment receipt (home_status_screen)
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    FitnessAppHomeScreen(
+                                                  pageroot: 'PAYMENT',
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 12),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                const Icon(Icons.receipt_long,
+                                                    size: 18,
+                                                    color: Colors.white),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  isEN
+                                                      ? 'Check Evidence'
+                                                      : 'ตรวจสอบหลักฐาน',
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.white,
+                                                    fontFamily: Font_.Fonts_T,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )))));
+    });
   }
 
   @override
@@ -483,7 +2794,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                      color: Colors.green,
+                      color: Colors.indigo,
                       size: 70,
                     ),
                   ],
@@ -527,7 +2838,12 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
             itemCount: listViews.length,
             scrollDirection: Axis.vertical,
             itemBuilder: (BuildContext context, int index) {
-              widget.animationController?.forward();
+              // ✅ Slot พิเศษ: เรียก _buildTransectionList() ใหม่ทุกครั้ง
+              // เพื่อให้ข้อมูลที่ load เสร็จแล้วมาแสดงทันที (ไม่ snapshot)
+              // เพราะ _transectionIntents ถูกอัปเดตผ่าน setState ใน loadTransectionIntents()
+              if (index == _transectionSlotIndex) {
+                return _buildTransectionList();
+              }
               return listViews[index];
             },
           );
@@ -578,6 +2894,36 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                             Expanded(
                               child: Row(
                                 children: [
+                                  // ✅ FIX: ปุ่มย้อนกลับ — แสดงเฉพาะเมื่อ
+                                  // Navigator สามารถ pop กลับได้ (ใช้เมื่อ screen นี้ถูก push
+                                  // เป็น sub-page ไม่ใช่ root)
+                                  // if (Navigator.canPop(context))
+                                  //   Padding(
+                                  //     padding: const EdgeInsets.only(right: 4),
+                                  //     child: InkWell(
+                                  //       borderRadius: BorderRadius.circular(20),
+                                  //       onTap: () => Navigator.pop(context),
+                                  //       child: Container(
+                                  //         padding: const EdgeInsets.all(8),
+                                  //         decoration: BoxDecoration(
+                                  //           color: FitnessAppTheme.nearlyWhite,
+                                  //           shape: BoxShape.circle,
+                                  //           boxShadow: <BoxShadow>[
+                                  //             BoxShadow(
+                                  //               color: FitnessAppTheme.grey
+                                  //                   .withOpacity(0.4),
+                                  //               offset: const Offset(2.0, 2.0),
+                                  //               blurRadius: 8.0,
+                                  //             ),
+                                  //           ],
+                                  //         ),
+                                  //         child: Icon(Icons.arrow_back_ios_new,
+                                  //             size: 18,
+                                  //             color:
+                                  //                 FitnessAppTheme.darkerText),
+                                  //       ),
+                                  //     ),
+                                  //   ),
                                   Padding(
                                     padding: const EdgeInsets.all(8.0),
                                     child: Container(
@@ -609,17 +2955,32 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
                                       children: [
-                                        Text(
-                                          'Hello,',
+                                        // Text(
+                                        //   '$renTal_name ยินดีต้อนรับ',
+                                        //   style: TextStyle(
+                                        //     fontFamily: Font_.Fonts_T,
+                                        //     fontSize: 10,
+                                        //     color: FitnessAppTheme.grey,
+                                        //   ),
+                                        // ),
+
+                                        AutoSizeText(
+                                          minFontSize: 8,
+                                          maxFontSize: 12,
+                                          maxLines: 1,
+                                          '$renTal_name ยินดีต้อนรับ',
+                                          textAlign: TextAlign.left,
+                                          overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             fontFamily: Font_.Fonts_T,
                                             fontSize: 12,
+                                            letterSpacing: 1.0,
                                             color: FitnessAppTheme.grey,
                                           ),
                                         ),
                                         AutoSizeText(
-                                          minFontSize: 14,
-                                          maxFontSize: 18,
+                                          minFontSize: 10,
+                                          maxFontSize: 16,
                                           maxLines: 1,
                                           '$cus_cname',
                                           textAlign: TextAlign.left,
@@ -627,9 +2988,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                                           style: TextStyle(
                                             fontFamily: Font_.Fonts_T,
                                             fontWeight: FontWeight.w700,
-                                            fontSize:
-                                                18 + 6 - 6 * topBarOpacity,
-                                            letterSpacing: 1.2,
+                                            fontSize: 16,
+                                            letterSpacing: 0.4,
                                             color: FitnessAppTheme.darkerText,
                                           ),
                                         ),
@@ -710,9 +3070,11 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                                         MaterialPageRoute(
                                           builder: (_) => MarketSelectScreen(
                                             markets: AppMarkets.markets,
-                                            onSelect: (selected) =>
+                                            // callback รับ context ของหน้าเลือกตลาดเอง
+                                            onSelect: (marketContext,
+                                                    selected) =>
                                                 MarketService.applyMarket(
-                                                    context, selected),
+                                                    marketContext, selected),
                                           ),
                                         ),
                                       );
@@ -722,8 +3084,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                                           horizontal: 12, vertical: 8),
                                       decoration: BoxDecoration(
                                         color: FitnessAppTheme.nearlyWhite,
-                                        borderRadius:
-                                            BorderRadius.circular(18),
+                                        borderRadius: BorderRadius.circular(18),
                                         boxShadow: <BoxShadow>[
                                           BoxShadow(
                                               color: FitnessAppTheme.grey
@@ -1017,4 +3378,102 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       ],
     );
   }
+}
+
+/// Transection (payment intent) read-only model for /payment/intents/state.
+class TransectionIntent {
+  final String uuid;
+  final String paymentIntentNo;
+  final String payedType;
+  final String customerNo;
+  final String propertyNo;
+  final String status;
+  final String systemStatus;
+  final String amount;
+  final String lateFee;
+  final String total;
+  final String channel;
+  final String softExpireAt;
+  final String createdAt;
+  final String? attacheSlipNo;
+  final bool attacheExists;
+  final String accountName;
+  final String accountNumber;
+  // ✅ เพิ่มเพื่อใช้ navigate ไป payment_subV4_InvAll
+  final int? bankmerchantid;
+  final String? intentUuid;
+  final List<String> billReferences;
+
+  TransectionIntent({
+    required this.uuid,
+    required this.paymentIntentNo,
+    required this.payedType,
+    required this.customerNo,
+    required this.propertyNo,
+    required this.status,
+    required this.systemStatus,
+    required this.amount,
+    required this.lateFee,
+    required this.total,
+    required this.channel,
+    required this.softExpireAt,
+    required this.createdAt,
+    required this.attacheSlipNo,
+    required this.attacheExists,
+    required this.accountName,
+    required this.accountNumber,
+    this.bankmerchantid,
+    this.intentUuid,
+    this.billReferences = const [],
+  });
+
+  factory TransectionIntent.fromJson(Map<String, dynamic> json) {
+    final recv = json['receiving_account'] as Map<String, dynamic>?;
+    // ✅ parse invoices[].bill_reference สำหรับ navigate ไป V4
+    final invoicesRaw = json['invoices'];
+    final billRefs = <String>[];
+    if (invoicesRaw is List) {
+      for (final inv in invoicesRaw) {
+        if (inv is Map) {
+          final ref = inv['bill_reference']?.toString();
+          if (ref != null && ref.isNotEmpty) billRefs.add(ref);
+        }
+      }
+    }
+    final bm = json['bank_merchant_id'];
+    return TransectionIntent(
+      uuid: json['uuid']?.toString() ?? '',
+      paymentIntentNo: json['payment_intent_no']?.toString() ?? '',
+      payedType: json['payed_type']?.toString() ?? '',
+      customerNo: json['customer_no']?.toString() ?? '',
+      propertyNo: json['property_no']?.toString() ?? '',
+      status: json['status']?.toString() ?? '',
+      systemStatus: json['system_status']?.toString() ?? '',
+      amount: json['amount']?.toString() ?? '0',
+      lateFee: json['late_fee']?.toString() ?? '0',
+      total: json['total']?.toString() ?? '0',
+      channel: json['channel']?.toString() ?? '',
+      softExpireAt: json['soft_expire_at']?.toString() ?? '',
+      createdAt: json['created_at']?.toString() ?? '',
+      attacheSlipNo: json['attache_slip_no']?.toString(),
+      attacheExists: json['attache_exists'] == true,
+      accountName: recv?['account_name_th']?.toString() ?? '',
+      accountNumber: recv?['account_number']?.toString() ?? '',
+      bankmerchantid: bm is int ? bm : int.tryParse('$bm'),
+      intentUuid: (json['intent_uuid'] ?? json['uuid'])?.toString(),
+      billReferences: billRefs,
+    );
+  }
+}
+
+class _QuickAction {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 }

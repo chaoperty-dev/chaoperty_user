@@ -1,29 +1,25 @@
-// ignore_for_file: avoid_web_libraries_in_flutter
-import 'dart:html' if (dart.library.io) 'package:chaoperty_user/fake_html.dart'
-    as html;
+import 'dart:html' as html; // ใช้ได้เฉพาะเว็บ
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:chaoperty_user/color.dart';
 import 'package:flutter/material.dart';
-import 'package:panara_dialogs/panara_dialogs.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:path/path.dart' as path;
 
-import '../../Responsive/responsive.dart';
-import '../../color.dart';
-import '../../screen/Screen_new/fitness_app_theme.dart';
-import '../Man_Pay_Receipt_PDF.dart'; // Added import for ManPay_Receipt_PDF
 import 'WatermarkPainter.dart';
+import 'web_download_helper.dart';
 
 class PreviewPdfgen_Billsplay extends StatefulWidget {
   final pw.Document doc;
   final String? renTal_name;
   final String? title;
   final String? netImageUrl;
-  static String?
-      overrideTabPaid; // Kept for legacy/safety, but unused now preferably
+  final String? selectedMode;
+  // ✅ optional
+  final PdfPageFormat? pageFormat;
 
   const PreviewPdfgen_Billsplay({
     Key? key,
@@ -31,6 +27,8 @@ class PreviewPdfgen_Billsplay extends StatefulWidget {
     this.renTal_name,
     this.title,
     this.netImageUrl,
+    this.selectedMode,
+    this.pageFormat, // ✅ ไม่บังคับส่งมา
   }) : super(key: key);
 
   @override
@@ -39,139 +37,106 @@ class PreviewPdfgen_Billsplay extends StatefulWidget {
 }
 
 class _PreviewPdfgen_BillsplayState extends State<PreviewPdfgen_Billsplay> {
-  bool _busy = false;
-  bool _allowed = true;
-  Uint8List? _cachedPdfBytes;
-  String _tabpaid = 'false';
+  bool _busy = false; // ✅ กันกดรัว + แสดง overlay ในขณะประมวลผล
+  bool _hideBottomPdfActions = false;
+
   @override
   void initState() {
     super.initState();
-    // Synchronously check centralized override for immediate UI update
-    if (ManPay_Receipt_PDF.overrideTabPaid != null) {
-      _tabpaid = ManPay_Receipt_PDF.overrideTabPaid!;
-      print(
-          'DEBUG: Used ManPay_Receipt_PDF.overrideTabPaid in initState = $_tabpaid');
-    } else if (PreviewPdfgen_Billsplay.overrideTabPaid != null) {
-      // Fallback
-      _tabpaid = PreviewPdfgen_Billsplay.overrideTabPaid!;
-      print(
-          'DEBUG: Used PreviewPdfgen_Billsplay.overrideTabPaid in initState = $_tabpaid');
-    }
-    _loadPermission();
+    _loadPdfActionAccess();
   }
 
-  Future<void> _loadPermission() async {
-    final prefs = await SharedPreferences.getInstance();
-    final allowed = prefs.getBool('allowedBill');
-
-    // Only load from Prefs if we didn't already get it from override
-    if (ManPay_Receipt_PDF.overrideTabPaid != null) {
-      ManPay_Receipt_PDF.overrideTabPaid = null;
-    } else if (PreviewPdfgen_Billsplay.overrideTabPaid != null) {
-      PreviewPdfgen_Billsplay.overrideTabPaid = null;
-    } else {
-      final SharedPreferences preferences =
-          await SharedPreferences.getInstance();
-      String tabpaid = preferences.getString('Tabpaid') ?? "false";
-      print(
-          'DEBUG: PreviewPdfgen_Billsplay read Tabpaid from Prefs = $tabpaid');
-
-      if (mounted) {
-        setState(() {
-          _tabpaid = tabpaid;
-        });
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _allowed = (allowed == null) ? true : allowed;
-      });
-    }
-    Future.delayed(const Duration(seconds: 1), () {
-      _showWarningialog();
-    });
+  Future<void> _loadPdfActionAccess() async {
+    final preferences = await SharedPreferences.getInstance();
+    final rentalId = preferences.getString('renTalSer')?.trim();
+    if (!mounted) return;
+    setState(() => _hideBottomPdfActions = rentalId == '106');
   }
 
-  Future<void> _showWarningialog() async {
-    await PanaraInfoDialog.showAnimatedGrow(
-      context,
-      title: "คำเตือน",
-      message: "หากพบข้อมูลผิดปกติ โปรดติดต่อผู้ดูแลระบบ",
-      buttonText: "รับทราบ",
-      onTapDismiss: () => Navigator.pop(context),
-      panaraDialogType: PanaraDialogType.warning,
-      barrierDismissible: false,
-    );
-  }
-
+  // ✅ sanitize ชื่อไฟล์กันอักขระต้องห้าม (Windows/macOS)
   String _safeFileName(String name, {String fallback = 'document'}) {
-    final base = (name.isEmpty ? fallback : name).trim();
-    final noPdf = base.toLowerCase().endsWith('.pdf')
-        ? base.substring(0, base.length - 4)
-        : base;
-    final safe = noPdf.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
-    return (safe.isEmpty ? fallback : safe) + '.pdf';
+    final trimmed = (name.isEmpty ? fallback : name).trim();
+    final safe = trimmed.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    return safe.isEmpty ? '$fallback.pdf' : '$safe.pdf';
   }
 
+  // ✅ ชื่อไฟล์ PDF หลัก ที่จะใช้ทั้ง preview และ download
   String _pdfName() => _safeFileName('${widget.title ?? 'เอกสาร'}');
 
-  Future<Uint8List> _pdfBytes() async {
-    if (_cachedPdfBytes != null) return _cachedPdfBytes!;
-    _cachedPdfBytes = await widget.doc.save();
-    return _cachedPdfBytes!;
-  }
+  // ✅ สำหรับตั้งชื่อไฟล์ PNG (ตัดนามสกุล .pdf ออกก่อน)
+  String _pngBaseName(String pdfName) => pdfName.toLowerCase().endsWith('.pdf')
+      ? pdfName.substring(0, pdfName.length - 4)
+      : pdfName;
 
-  Future<bool> _checkAllowed() async {
-    if (!_allowed || !kIsWeb) {
-      await _showBlockedDialog();
-      return false;
-    }
-    return true;
-  }
-
-  Future<void> _showBlockedDialog() async {
-    await PanaraInfoDialog.showAnimatedGrow(
-      context,
-      title: "ขออภัย Apologize",
-      message: "ไม่สามารถพิมพ์หรือดาวน์โหลดได้ (Unable to print or download)",
-      buttonText: "รับทราบ",
-      onTapDismiss: () => Navigator.pop(context),
-      panaraDialogType: PanaraDialogType.error,
-      barrierDismissible: false,
-    );
-  }
-
-  Future<T?> _withBusy<T>(Future<T> Function() job) async {
-    if (_busy) return null;
+  // ✅ สะดวกและปลอดภัย: กันกดซ้ำ + แจ้งผลสำเร็จ/ผิดพลาด + เคลียร์ busy เสมอ
+  Future<void> _withBusy(Future<void> Function() job) async {
+    if (_busy) return;
     setState(() => _busy = true);
     try {
-      final result = await job();
+      await job();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('เสร็จแล้ว')),
         );
       }
-      return result;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
         );
       }
-      rethrow;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
+  // ✅ เปิด dialog พิมพ์ (cross-platform; บนเว็บจะเปิด print dialog)
+  Future<void> _printPdf() async => _withBusy(() async {
+        final bytes = await widget.doc.save();
+        await Printing.layoutPdf(
+            onLayout: (_) async => bytes, name: _pdfName());
+      });
+
+  // ✅ ดาวน์โหลด PDF (web-only ผ่าน WebDownloadHelper)
+  // Desktop/Android → anchor download; iOS Safari → เปิด blob ในแท็บใหม่ (ไม่ trigger external app prompt)
   Future<void> _downloadPdf() async => _withBusy(() async {
-        if (!await _checkAllowed()) return;
-        final bytes = await _pdfBytes();
-        final blob = html.Blob([bytes], 'application/pdf');
+        final bytes = await widget.doc.save();
+        WebDownloadHelper.downloadOrOpen(bytes, 'application/pdf', _pdfName());
+      });
+
+  // ✅ รองรับ 2 วิธี: ลิงก์ตรง (เร็ว) และ blob (กัน CORS)
+  Future<void> downloadImage(String imageUrl) async => _withBusy(() async {
+        final cleanUrl = Uri.parse(imageUrl);
+        final fileNameFromUrl = path.basename(cleanUrl.path);
+        final extWithDot = path.extension(fileNameFromUrl);
+        final ext =
+            extWithDot.startsWith('.') ? extWithDot.substring(1) : extWithDot;
+
+        final fileName = fileNameFromUrl.isNotEmpty
+            ? fileNameFromUrl
+            : 'image.${ext.isEmpty ? 'jpg' : ext}';
+
+        // วิธี 1: ลิงก์ตรง
+        try {
+          final a = html.AnchorElement(href: imageUrl)
+            ..download = fileName
+            ..style.display = 'none';
+          html.document.body?.append(a);
+          a.click();
+          a.remove();
+          return;
+        } catch (_) {}
+
+        // วิธี 2: blob (กรณี CORS)
+        final req = html.HttpRequest();
+        req.open('GET', imageUrl);
+        req.responseType = 'blob';
+        req.send();
+        final blob =
+            await req.onLoad.first.then((_) => req.response as html.Blob);
         final url = html.Url.createObjectUrlFromBlob(blob);
         final a = html.AnchorElement(href: url)
-          ..download = _pdfName()
+          ..download = fileName
           ..style.display = 'none';
         html.document.body?.append(a);
         a.click();
@@ -179,50 +144,74 @@ class _PreviewPdfgen_BillsplayState extends State<PreviewPdfgen_Billsplay> {
         html.Url.revokeObjectUrl(url);
       });
 
+  // ✅ แปลงหน้าเดียวเป็น PNG ด้วย Printing.raster
   Future<void> downloadPdfPageAsPng({int page = 1, double dpi = 144}) async =>
       _withBusy(() async {
-        if (!await _checkAllowed()) return;
-        final bytes = await _pdfBytes();
+        final bytes = await widget.doc.save();
         final stream = Printing.raster(bytes, dpi: dpi);
         int i = 0;
         await for (final pageRaster in stream) {
           i++;
           if (i != page) continue;
           final png = await pageRaster.toPng();
-          final blob = html.Blob([png], 'image/png');
-          final url = html.Url.createObjectUrlFromBlob(blob);
-          final a = html.AnchorElement(href: url)
-            ..download = '${_pdfName().replaceAll(".pdf", "_p$page.png")}'
-            ..style.display = 'none';
-          html.document.body?.append(a);
-          a.click();
-          a.remove();
-          html.Url.revokeObjectUrl(url);
-          break;
+          WebDownloadHelper.downloadOrOpen(Uint8List.fromList(png), 'image/png',
+              '${_pngBaseName(_pdfName())}_p$page.png');
+          break; // แค่หน้าเดียว
         }
       });
 
+  // ✅ แปลงทุกหน้าเป็น PNG แยกไฟล์ (ดาวน์โหลดทีละไฟล์)
   Future<void> downloadPdfAllPagesAsPng({double dpi = 144}) async =>
       _withBusy(() async {
-        if (!await _checkAllowed()) return;
-        final bytes = await _pdfBytes();
+        final bytes = await widget.doc.save();
         final stream = Printing.raster(bytes, dpi: dpi);
         int index = 0;
         await for (final pageRaster in stream) {
           index++;
           final png = await pageRaster.toPng();
-          final blob = html.Blob([png], 'image/png');
-          final url = html.Url.createObjectUrlFromBlob(blob);
-          final a = html.AnchorElement(href: url)
-            ..download = '${_pdfName().replaceAll(".pdf", "_p$index.png")}'
-            ..style.display = 'none';
-          html.document.body?.append(a);
-          a.click();
-          a.remove();
-          html.Url.revokeObjectUrl(url);
-          await Future.delayed(const Duration(milliseconds: 30));
+          WebDownloadHelper.downloadOrOpen(Uint8List.fromList(png), 'image/png',
+              '${_pngBaseName(_pdfName())}_p$index.png');
+
+          // 💡 ถ้าไฟล์ใหญ่/หลายหน้า: อาจพักเบา ๆ ให้เบราเซอร์หายใจ
+          // await Future.delayed(const Duration(milliseconds: 40));
         }
       });
+
+  // ✅ RTF เร็วและแก้ไขได้ (ข้อความล้วน + \par แทนบรรทัดใหม่)
+  Future<void> downloadRtf(
+      {required String fileName, required String body}) async {
+    final rtf = r'{\rtf1\ansi ' + body.replaceAll('\n', r'\par ') + '}';
+    final blob = html.Blob([rtf], 'application/rtf');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    final a = html.AnchorElement(href: url)
+      ..download = fileName
+      ..style.display = 'none';
+    html.document.body?.append(a);
+    a.click();
+    a.remove();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  // ✅ “HTML แปะเป็น .doc” — Word เปิดได้/แก้ไขได้ เดินทางลัด
+  Future<void> downloadDocFromHtml({
+    required String fileName,
+    required String htmlBody,
+  }) async {
+    final htmlString = '''
+  <html>
+    <head><meta charset="utf-8"></head>
+    <body>$htmlBody</body>
+  </html>''';
+    final blob = html.Blob([htmlString], 'application/msword');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    final a = html.AnchorElement(href: url)
+      ..download = fileName
+      ..style.display = 'none';
+    html.document.body?.append(a);
+    a.click();
+    a.remove();
+    html.Url.revokeObjectUrl(url);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +228,35 @@ class _PreviewPdfgen_BillsplayState extends State<PreviewPdfgen_Billsplay> {
           ),
           centerTitle: true,
           title: Text(appTitle, style: const TextStyle(color: Colors.white)),
+          actions: [
+            // ✅ ปุ่ม export PNG (หน้าแรก/ทุกหน้า)
+            IconButton(
+              tooltip: _busy ? 'กำลังทำงาน...' : 'ดาวน์โหลด PNG หน้าแรก',
+              icon: const Icon(Icons.image),
+              onPressed:
+                  _busy ? null : () => downloadPdfPageAsPng(page: 1, dpi: 144),
+            ),
+            IconButton(
+              tooltip: _busy ? 'กำลังทำงาน...' : 'ดาวน์โหลด PNG ทุกหน้า',
+              icon: const Icon(Icons.collections),
+              onPressed:
+                  _busy ? null : () => downloadPdfAllPagesAsPng(dpi: 144),
+            ),
+            // IconButton(
+            //   tooltip: _busy ? 'กำลังทำงาน...' : 'ดาวน์โหลด Word',
+            //   icon: const Icon(Icons.document_scanner),
+            //   onPressed: _busy
+            //       ? null
+            //       : () => downloadDocFromHtml(
+            //             fileName: '${_pdfName().replaceAll(".pdf", "")}.doc',
+            //             htmlBody: '''
+            //   <h2>ใบเสร็จ Chaoperty</h2>
+            //   <p>ผู้เช่า: ${widget.renTal_name ?? ''}</p>
+            //   <p>วันที่: ${DateTime.now()}</p>
+            // ''',
+            //           ),
+            // ),
+          ],
         ),
         body: Stack(
           children: [
@@ -246,88 +264,56 @@ class _PreviewPdfgen_BillsplayState extends State<PreviewPdfgen_Billsplay> {
               children: [
                 Expanded(
                   child: PdfPreview(
-                    build: (format) async => await _pdfBytes(),
+                    build: (format) => widget.doc.save(),
                     allowSharing: false,
-                    allowPrinting: false,
+                    allowPrinting:
+                        false, // 🔒 ปิดปุ่ม default ของ PdfPreview (เรามีปุ่มของเราเอง)
                     canDebug: false,
                     canChangeOrientation: false,
                     canChangePageFormat: false,
-                    maxPageWidth: (Responsive.isDesktop(context))
-                        ? MediaQuery.of(context).size.width * 0.6
-                        : MediaQuery.of(context).size.width * 0.95,
-                    initialPageFormat: PdfPageFormat.a4,
+                    // ✅ 2026-07-27: 60mm PDF เล็กกว่า A4 มาก (60mm vs 210mm)
+                    //    ใช้ 60% screen ก็ยังดูเล็กเกินไป — ให้ scale ใหญ่ขึ้นเฉพาะ POS paper
+                    maxPageWidth: MediaQuery.of(context).size.width *
+                        ((widget.selectedMode == 'pos60' ||
+                                widget.selectedMode == 'pos58')
+                            ? 1.0 // 60mm/58mm: ใช้เต็มจอ
+                            : 0.6), // A4/A3/A5: default 60%
+                    // ✅ ใช้ค่าที่ส่งมา ถ้าไม่ส่งมาให้เป็น A4
+                    initialPageFormat: widget.pageFormat ?? PdfPageFormat.a4,
+                    // initialPageFormat: PdfPageFormat.a4,
                     pdfFileName: _pdfName(),
                   ),
                 ),
-
-                // ✅ แถบปุ่มล่างจะแสดงเฉพาะเมื่อมีสิทธิ์
-                if (_allowed)
+                if (!_hideBottomPdfActions)
                   Material(
                     color: AppBarColors.hexColor.withOpacity(0.8),
-                    child: (_tabpaid == 'true')
-                        ? Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    'รายการรอตรวจสอบ ยังไม่สามารถดาวน์โหลดได้',
-                                    style: TextStyle(
-                                      fontFamily: FitnessAppTheme.fontName,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 14,
-                                      letterSpacing: 1.2,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ),
-                              ])
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              IconButton(
-                                tooltip: _busy
-                                    ? 'กำลังทำงาน...'
-                                    : 'ดาวน์โหลด PNG ทุกหน้า',
-                                icon: const Icon(Icons.collections,
-                                    color: Colors.white),
-                                onPressed: _busy
-                                    ? null
-                                    : () => downloadPdfAllPagesAsPng(dpi: 144),
-                              ),
-                              IconButton(
-                                tooltip: _busy
-                                    ? 'กำลังทำงาน...'
-                                    : 'ดาวน์โหลด PNG หน้าแรก',
-                                icon: const Icon(Icons.image,
-                                    color: Colors.white),
-                                onPressed: _busy
-                                    ? null
-                                    : () =>
-                                        downloadPdfPageAsPng(page: 1, dpi: 144),
-                              ),
-                              IconButton(
-                                tooltip:
-                                    _busy ? 'กำลังทำงาน...' : 'ดาวน์โหลด PDF',
-                                icon: const Icon(Icons.download,
-                                    color: Colors.white),
-                                onPressed: _busy ? null : _downloadPdf,
-                              ),
-                            ],
-                          ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          tooltip: 'พิมพ์ PDF',
+                          icon: const Icon(Icons.print, color: Colors.white),
+                          onPressed: _busy ? null : _printPdf,
+                        ),
+                        IconButton(
+                          tooltip: 'ดาวน์โหลด PDF',
+                          icon: const Icon(Icons.download, color: Colors.white),
+                          onPressed: _busy ? null : _downloadPdf,
+                        ),
+                      ],
+                    ),
                   ),
               ],
             ),
-
-            // ✅ ลายน้ำทับจอ
-            const IgnorePointer(
+            // ✅ ลายน้ำทับทั้งจอ (ไม่รับการคลิก)
+            IgnorePointer(
               child: CustomPaint(
                 size: Size.infinite,
-                painter: WatermarkPainter('Chaoperty'),
+                painter:
+                    WatermarkPainter('Chaoperty ${widget.selectedMode ?? ""}'),
               ),
             ),
-
-            // ✅ overlay ขณะ busy
+            // ✅ Overlay กำลังทำงาน
             if (_busy)
               const Positioned.fill(
                 child: ColoredBox(

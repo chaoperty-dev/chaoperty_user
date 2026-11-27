@@ -53,6 +53,8 @@ Future<http.Response?> postPaymentIntentsState({
   required String cusno,
   required String propertyno,
 }) async {
+  final ok = await MyHeadersIntents.checkauthpaymentintents();
+  if (!ok) return null;
   final headers = await MyHeadersIntents.build();
 
   final url = Uri.parse(
@@ -82,6 +84,7 @@ Future<http.Response?> postPaymentIntentsState({
     );
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      print('✅ postPaymentIntentsState Success: ${response.body}');
       return response;
     } else {
       try {
@@ -253,12 +256,7 @@ Future<http.Response?> DeletePaymentIntents_UuidCanceled({
 // ----------------------
 // Helpers (ไม่แยกไฟล์)
 // ----------------------
-int _toU16(dynamic v) {
-  final n = int.tryParse('$v') ?? 0;
-  return n & 0xFFFF; // unsigned 16-bit
-}
-
-String _toU16Str(dynamic v) => _toU16(v).toString();
+String _toU16Str(dynamic v) => '$v'.trim();
 Future<http.Response?> postPaymentIntents(
     {required String cusNo,
     required String propertyNo,
@@ -270,14 +268,19 @@ Future<http.Response?> postPaymentIntents(
     required double depositAmount,
     required double insuranceAmount,
     required double withholdingAmount,
+    required double requestedTotal,
     // required String createdById,
     required bool isAdminCreated,
     required int bankMerchantId,
     required int bankMerchantType,
     required String descripTion,
     required List<Map<String, dynamic>> inVoices, // จะถูกส่งเป็น "invoices"
-
-    required List<Map<String, dynamic>> transSelect}) async {
+    required String accountType,
+    required String accountNumber,
+    required String accountNameTh,
+    required String accountNameEn,
+    required List<Map<String, dynamic>> transSelect,
+    required List<Map<String, dynamic>> customerData}) async {
   try {
     SharedPreferences preferences = await SharedPreferences.getInstance();
     String? ren = preferences.getString('renTalSer');
@@ -297,15 +300,16 @@ Future<http.Response?> postPaymentIntents(
     final body = {
       "payloads": {
         "customer_no": customerNo16,
+        "customer_data": customerData ?? [],
         "property_no": propertyNo16,
         "payed_type": payedType,
         "channel": chanNel,
         "amount": requestedAmount,
         "receiving_account": {
-          "account_type": "123123",
-          "account_number": "123",
-          "account_name_th": "123",
-          "account_name_en": "123"
+          "account_type": accountType,
+          "account_number": accountNumber,
+          "account_name_th": accountNameTh,
+          "account_name_en": accountNameEn
         },
 
         "late_fee": lateFee,
@@ -313,7 +317,7 @@ Future<http.Response?> postPaymentIntents(
         "deposit_amount": depositAmount,
         "insurance_amount": insuranceAmount,
         "withholding_amount": withholdingAmount,
-        "total": requestedAmount,
+        "total": requestedTotal,
         "bank_merchant_id": bankMerchantId,
         // "currency": "",
         "description": descripTion ?? "",
@@ -321,7 +325,7 @@ Future<http.Response?> postPaymentIntents(
         "is_admin_created": isAdminCreated,
         "bank_merchant_type": bankMerchantType,
         "invoices": inVoices, // ✅ key ให้ตรง API
-        "trans": transSelect
+        "trans": transSelect,
       }
     };
 
@@ -356,7 +360,9 @@ Future<http.Response?> postPaymentIntents(
   } catch (e, st) {
     debugPrint('❌ Exception in postPaymentIntents: $e');
     debugPrint('🧭 StackTrace:\n$st');
-    return null;
+    // ✅ rethrow เพื่อให้ caller (PostPaymentIntent) เห็น exception จริง
+    // และแสดง popup พร้อม endpoint URL + status + error detail
+    rethrow;
   }
 }
 
@@ -425,7 +431,9 @@ Future<http.Response?> postGeneratePaymentIntents({
   } catch (e, st) {
     debugPrint('❌ Exception in post Generate PaymentIntents: $e');
     debugPrint('🧭 StackTrace:\n$st');
-    return null;
+    // ✅ rethrow เพื่อให้ caller (_renewQrAndReload) เห็น exception จริง
+    // และแสดง popup พร้อม endpoint URL + status + error detail
+    rethrow;
   }
 }
 
@@ -517,6 +525,14 @@ Future<String?> getCustomerToken({
   required String customerNo,
   required String propertyNo,
 }) async {
+  // ✅ ห้ามยิง API เส้นนี้ถ้า _hasIntentsAuth ไม่เท่ากับ true
+  // เพื่อป้องกัน browser เด้ง popup Basic Auth (Sign in)
+  if (MyHeadersIntents.hasIntentsAuth != true) {
+    debugPrint(
+        '🚫 getCustomerToken: _hasIntentsAuth != true → skip API to pay-api.chaoperties.com');
+    return null;
+  }
+
   try {
     final url = Uri.parse(
       '${MyconfigIntents().domainIntents}/v1/payment/customer-token',
@@ -524,10 +540,14 @@ Future<String?> getCustomerToken({
 
     // Use pay_encoded64 as Basic Auth (from ApiSession or SharedPreferences)
     final prefs = await SharedPreferences.getInstance();
-    final payEncoded64 = prefs.getString('pay_encoded64') ?? '';
+    final raw = prefs.getString('pay_encoded64') ?? '';
+    // Treat literal "null" string as empty (from legacy null.toString() saves)
+    final payEncoded64 = (raw == 'null') ? '' : raw;
 
     if (payEncoded64.isEmpty) {
-      debugPrint('❌ pay_encoded64 not found in SharedPreferences');
+      debugPrint(
+          '❌ pay_encoded64 not found / null in SharedPreferences — user may not have payment credentials set in DB');
+      MyHeadersIntents.hasIntentsAuth = false;
       return null;
     }
 

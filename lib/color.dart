@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:pdf/pdf.dart';
+// package:pdf removed 2026-07-08: PDFConstants moved to lib/PDF/pdf_constants.dart
 
 Color bgcolor = const Color.fromARGB(255, 242, 243, 237);
 Color browncolor = const Color(0xFFD9D9B7);
@@ -138,27 +138,6 @@ class SettingScreen_Color {
 ///////////////----------------------------------------------------------->
 
 ///////////////----------------------------------------------------------->
-
-/// PDF Constants - ค่าคงที่สำหรับการสร้าง PDF
-/// ใช้สำหรับกำหนดสี ขนาด และค่าต่างๆ ที่ใช้ในเอกสาร PDF ทั้งหมด
-class PDFConstants {
-  // ==================== สีสำหรับ Border ====================
-  /// สีดำสำหรับ border ทั้งหมดในเอกสาร PDF
-  static const PdfColor borderColor = PdfColors.black;
-  static const PdfColor borderColorGrey = PdfColors.grey600;
-
-  // ==================== สีสำหรับข้อความ ====================
-  /// สีดำสำหรับข้อความทั่วไป
-  static const PdfColor textColorBlack = PdfColors.black;
-  static const PdfColor textColorGrey = PdfColors.grey800;
-
-  // ==================== ขนาดฟอนต์ ====================
-  /// ขนาดฟอนต์มาตรฐาน
-  static const double fontSizeNormal = 10.0;
-
-  /// ขนาดฟอนต์เล็ก
-  static const double fontSizeSmall = 8.0;
-
-  /// ขนาดฟอนต์ใหญ่
-  static const double fontSizeLarge = 14.0;
-}
+// PDFConstants moved to lib/PDF/pdf_constants.dart on 2026-07-08.
+// PDF generators should import 'package:chaoperty_user/PDF/pdf_constants.dart'
+// instead of relying on lib/color.dart for PdfColor constants.

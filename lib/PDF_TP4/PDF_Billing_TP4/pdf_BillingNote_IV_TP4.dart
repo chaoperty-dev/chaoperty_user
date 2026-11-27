@@ -1,5 +1,9 @@
 import 'package:auto_size_text/auto_size_text.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/PDF/pdf_constants.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -8,15 +12,13 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
+import 'package:http/http.dart' as http;
 
 import '../../CRC_16_Prompay/generate_qrcode.dart';
 
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Bills_INV.dart';
 import '../../Model/GetInvoice_history_Model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
 
 class Pdfgen_BillingNoteInvlice_TP4 {
   //////////---------------------------------------------------->(ใบวางบิล แจ้งหนี้)  ใช้  ++
@@ -67,7 +69,10 @@ class Pdfgen_BillingNoteInvlice_TP4 {
       TitleType_Default_Receipt_Name,
       fonts_pdf,
       Con_remark,
-      customer_name) async {
+      customer_name,
+      signature,
+      fullname,
+      billingFormat) async {
     ///---------------------> พ.ศ. สำหรับ QR Code (Thai Year for QR)
     int YearQRthai = int.parse(
           DateFormat('yyyy').format(DateTime.parse(End_Bill_Paydate)),
@@ -85,6 +90,8 @@ class Pdfgen_BillingNoteInvlice_TP4 {
     var Colors_pd = PdfColors.black;
     var nFormat = NumberFormat("#,##0.00", "en_US");
     double font_Size = 10.0;
+    // ใช้สีจาก PDFConstants แทน
+    const PdfColor PDF_Border_Color = PDFConstants.borderColor;
 
     ///---------------------> วันที่ปัจจุบัน (Current Date for Billing)
     DateTime date = DateTime.now();
@@ -108,15 +115,35 @@ class Pdfgen_BillingNoteInvlice_TP4 {
     if (img1 == null || img1.toString().isEmpty) {
       netImage_QR.add(
         await networkImage(
-          '${MyConstant().domain_chao}/Awaitdownload/imagenot.png',
+          '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png',
         ),
       );
     } else {
       netImage_QR.add(
         await networkImage(
-          '${MyConstant().domain_chao}/files/$foder/payment/$img1',
+          '${MyConstant().domain_chao_img}/files/$foder/payment/$img1',
         ),
       );
+    }
+
+    ///---------------------> โหลด signature image
+    print('billingFormat: $billingFormat');
+    Uint8List? signatureBytes;
+    if (billingFormat == 'มี') {
+      if (signature != null &&
+          signature.toString().isNotEmpty &&
+          signature.toString() != 'null') {
+        try {
+          final sigUrl = '${MyConstant().domain_chao}/${signature}';
+          print('signature URL: $sigUrl');
+          final sigRes = await http.get(Uri.parse(sigUrl));
+          if (sigRes.statusCode == 200) {
+            signatureBytes = sigRes.bodyBytes;
+          }
+        } catch (_) {
+          signatureBytes = null;
+        }
+      }
     }
 
     ///---------------------> Table header columns (หัวคอลัมน์ของตาราง)
@@ -171,20 +198,29 @@ class Pdfgen_BillingNoteInvlice_TP4 {
     }
 
     ///////----------------->
+    // ฟังก์ชันปัดเศษทศนิยม 2 ตำแหน่ง
+    double roundMoney(double value) {
+      return (value * 100).round() / 100;
+    }
 
-    final totalAmt = getTotalByField(_InvoiceHistoryModels, (item) => item.amt);
+    final totalAmt =
+        roundMoney(getTotalByField(_InvoiceHistoryModels, (item) => item.amt));
     final totalPvat =
-        getTotalByField(_InvoiceHistoryModels, (item) => item.pvat);
-    final totalVat = getTotalByField(_InvoiceHistoryModels, (item) => item.vat);
-    final totalWht = getTotalByField(_InvoiceHistoryModels, (item) => item.wht);
-
+        roundMoney(getTotalByField(_InvoiceHistoryModels, (item) => item.pvat));
+    final totalVat =
+        roundMoney(getTotalByField(_InvoiceHistoryModels, (item) => item.vat));
+    final totalWht =
+        roundMoney(getTotalByField(_InvoiceHistoryModels, (item) => item.wht));
     final totalDis = _InvoiceHistoryModels.isNotEmpty
-        ? double.tryParse(_InvoiceHistoryModels.first.disendbill ?? '0.00') ??
-            0.00
+        ? roundMoney(
+            double.tryParse(_InvoiceHistoryModels.first.disendbill ?? '0.00') ??
+                0.00)
         : 0.00;
 
-    final totalBill =
-        getTotalByField(_InvoiceHistoryModels, (item) => item.total);
+    final totalprice = roundMoney(
+        getTotalByField(_InvoiceHistoryModels, (item) => item.total));
+    final totalBill = roundMoney(totalprice - totalDis);
+
     String totalBill_QR =
         totalBill.toString().replaceAll(RegExp(r'[^0-9]'), '');
 
@@ -213,8 +249,10 @@ class Pdfgen_BillingNoteInvlice_TP4 {
           decoration: const pw.BoxDecoration(
             color: PdfColors.white,
             border: pw.Border(
-              left: pw.BorderSide(color: PdfColors.grey600),
-              right: pw.BorderSide(color: PdfColors.grey600),
+              left: pw.BorderSide(color: PDF_Border_Color),
+              right: pw.BorderSide(color: PDF_Border_Color),
+              top: pw.BorderSide(color: PDF_Border_Color),
+              bottom: pw.BorderSide(color: PDF_Border_Color),
             ),
           ),
           padding: pw.EdgeInsets.all(padding),
@@ -239,10 +277,10 @@ class Pdfgen_BillingNoteInvlice_TP4 {
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4.copyWith(
-          marginBottom: 4.00,
-          marginLeft: 8.00,
-          marginRight: 8.00,
-          marginTop: 8.00,
+          marginBottom: 12.00,
+          marginLeft: 10.00,
+          marginRight: 10.00,
+          marginTop: 12.00,
         ),
         header: (context) {
           return pw.Column(children: [
@@ -273,7 +311,7 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                           ),
                         ),
                 ),
-                pw.SizedBox(width: 1 * PdfPageFormat.mm),
+                pw.SizedBox(width: 6 * PdfPageFormat.mm),
                 pw.Container(
                   width: 200,
                   child: pw.Column(
@@ -326,6 +364,20 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                     mainAxisSize: pw.MainAxisSize.min,
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
+                      if (TitleType_Default_Receipt_Name != null &&
+                          TitleType_Default_Receipt_Name.toString().trim() !=
+                              '' &&
+                          TitleType_Default_Receipt_Name.toString() !=
+                              'ไม่ระบุ')
+                        pw.Text(
+                          '[ $TitleType_Default_Receipt_Name ]',
+                          maxLines: 1,
+                          style: pw.TextStyle(
+                            fontSize: font_Size + 2,
+                            font: ttf,
+                            color: Colors_pd,
+                          ),
+                        ),
                       pw.Text(
                         'หน้าที่ ${context.pageNumber} / ${context.pagesCount} ',
                         textAlign: pw.TextAlign.right,
@@ -377,13 +429,14 @@ class Pdfgen_BillingNoteInvlice_TP4 {
               mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
                 pw.Text(
-                  (TitleType_Default_Receipt_Name != null &&
-                          TitleType_Default_Receipt_Name.toString().trim() !=
-                              '' &&
-                          TitleType_Default_Receipt_Name.toString() !=
-                              'ไม่ระบุ')
-                      ? 'ใบวางบิล/ใบแจ้งหนี้ [ $TitleType_Default_Receipt_Name ]'
-                      : 'ใบวางบิล/ใบแจ้งหนี้',
+                  // (TitleType_Default_Receipt_Name != null &&
+                  //         TitleType_Default_Receipt_Name.toString().trim() !=
+                  //             '' &&
+                  //         TitleType_Default_Receipt_Name.toString() !=
+                  //             'ไม่ระบุ')
+                  //     ? 'ใบวางบิล/ใบแจ้งหนี้ [ $TitleType_Default_Receipt_Name ]'
+                  //     : 'ใบวางบิล/ใบแจ้งหนี้',
+                  'ใบวางบิล/ใบแจ้งหนี้',
                   textAlign: pw.TextAlign.center,
                   style: pw.TextStyle(
                     fontSize: font_Size + 2,
@@ -404,16 +457,17 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text(
-                        'ลูกค้า',
-                        style: pw.TextStyle(
-                          fontSize: font_Size,
-                          fontWeight: pw.FontWeight.bold,
-                          font: ttf,
-                          color: Colors_pd,
-                        ),
-                      ),
-                      pw.Text(
-                        '$customer_name',
+                        (customer_name.isNotEmpty ||
+                                customer_name.toString() != 'null')
+                            ? 'นามลูกค้า/Name : $customer_name'
+                            : 'นามลูกค้า/Name : -',
+                        // '$customer_name',
+                        // '${(sname_.toString() == '' || sname_ == null || sname_.toString() == 'null') ? '-' : sname_} (${(cname_.toString() == '' || cname_ == null || cname_.toString() == 'null') ? '-' : cname_})',
+                        // (sname_.toString() == '' ||
+                        //         sname_ == null ||
+                        //         sname_.toString() == 'null')
+                        //     ? ' '
+                        //     : '${sname_}',
                         textAlign: pw.TextAlign.justify,
                         style: pw.TextStyle(
                           fontSize: font_Size,
@@ -425,8 +479,8 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                         (addr_.toString() == '' ||
                                 addr_ == null ||
                                 addr_.toString() == 'null')
-                            ? 'ที่อยู่ : -'
-                            : 'ที่อยู่ : ${addr_}',
+                            ? 'ที่อยู่/Address : -'
+                            : 'ที่อยู่/Address : ${addr_}',
                         textAlign: pw.TextAlign.justify,
                         style: pw.TextStyle(
                           fontSize: font_Size,
@@ -447,8 +501,8 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                         (email_.toString() == '' ||
                                 email_ == null ||
                                 email_.toString() == 'null')
-                            ? 'อีเมล : -'
-                            : 'อีเมล : ${email_}',
+                            ? 'อีเมล/Email : -'
+                            : 'อีเมล/Email : ${email_}',
                         textAlign: pw.TextAlign.justify,
                         style: pw.TextStyle(
                           fontSize: font_Size,
@@ -460,8 +514,8 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                         (tax_.toString() == '' ||
                                 tax_ == null ||
                                 tax_.toString() == 'null')
-                            ? 'เลขประจำตัวผู้เสียภาษี : 0'
-                            : 'เลขประจำตัวผู้เสียภาษี : ${tax_}',
+                            ? 'เลขประจำตัวผู้เสียภาษี/Tax : 0'
+                            : 'เลขประจำตัวผู้เสียภาษี/Tax : ${tax_}',
                         textAlign: pw.TextAlign.justify,
                         style: pw.TextStyle(
                           fontSize: font_Size,
@@ -470,7 +524,7 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                         ),
                       ),
                       pw.Text(
-                        'โซน(Zone) : $Zone_s / ห้อง( Room) : $Ln_s',
+                        'โซน/Zone : $Zone_s / ห้อง/Room : $Ln_s',
                         textAlign: pw.TextAlign.justify,
                         style: pw.TextStyle(
                           fontSize: font_Size,
@@ -489,7 +543,7 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
                       pw.Text(
-                        'เลขที่อ้างอิง(Reference ID)',
+                        'เลขที่อ้างอิง/Ref No.',
                         style: pw.TextStyle(
                           fontSize: font_Size,
                           font: ttf,
@@ -509,7 +563,7 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                         ),
                       ),
                       pw.Text(
-                        'วันที่ทำรายการ(Transation Date)',
+                        'วันที่ทำรายการ/Date',
                         style: pw.TextStyle(
                           fontSize: font_Size,
                           font: ttf,
@@ -528,7 +582,7 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                         ),
                       ),
                       pw.Text(
-                        'วันที่ครบกำหนดชำระ(Due Date)',
+                        'วันที่ครบกำหนดชำระ/Due Date',
                         style: pw.TextStyle(
                           fontSize: font_Size,
                           font: ttf,
@@ -570,8 +624,8 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                 decoration: const pw.BoxDecoration(
                   // color: PdfColors.green100,
                   border: pw.Border(
-                    top: pw.BorderSide(color: PdfColors.grey600),
-                    bottom: pw.BorderSide(color: PdfColors.grey600),
+                    top: pw.BorderSide(color: PDF_Border_Color),
+                    bottom: pw.BorderSide(color: PDF_Border_Color),
                   ),
                 ),
                 child: pw.Row(
@@ -586,8 +640,8 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                         border: pw.Border(
                           left: (label == 'ยอดสุทธิ')
                               ? pw.BorderSide.none
-                              : const pw.BorderSide(color: PdfColors.grey600),
-                          right: const pw.BorderSide(color: PdfColors.grey600),
+                              : const pw.BorderSide(color: PDF_Border_Color),
+                          right: const pw.BorderSide(color: PDF_Border_Color),
                         ),
                       ),
                       height: 20,
@@ -616,7 +670,7 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                         height: 20,
                         decoration: const pw.BoxDecoration(
                           border: pw.Border(
-                            left: pw.BorderSide(color: PdfColors.grey600),
+                            left: pw.BorderSide(color: PDF_Border_Color),
                           ),
                         ),
                         padding: const pw.EdgeInsets.all(2.0),
@@ -627,118 +681,227 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                     return pw.Expanded(flex: flex, child: container);
                   }).toList(),
                 )),
-
-            pw.Column(
+            pw.SizedBox(height: 0.5 * PdfPageFormat.mm),
+            pw.Table(
+              border: pw.TableBorder(
+                left: pw.BorderSide(color: PDF_Border_Color),
+                right: pw.BorderSide(color: PDF_Border_Color),
+                verticalInside: pw.BorderSide(color: PDF_Border_Color),
+                horizontalInside: pw.BorderSide(color: PDF_Border_Color),
+              ),
+              columnWidths: {
+                0: pw.FixedColumnWidth(25),
+                1: pw.FlexColumnWidth(1),
+                2: pw.FlexColumnWidth(4),
+                3: pw.FlexColumnWidth(1),
+                4: pw.FlexColumnWidth(1),
+                5: pw.FlexColumnWidth(1),
+                6: pw.FlexColumnWidth(1),
+                7: pw.FlexColumnWidth(1),
+                8: pw.FlexColumnWidth(1),
+                9: pw.FlexColumnWidth(2),
+              },
               children: List.generate(_InvoiceHistoryModels.length, (index) {
                 final invoices = _InvoiceHistoryModels[index];
 
-                return pw.Container(
-                  decoration: const pw.BoxDecoration(
-                    // color: PdfColors.green100,
+                return pw.TableRow(
+                  decoration: pw.BoxDecoration(
                     border: pw.Border(
-                      // top: pw.BorderSide(color: PdfColors.grey600),
-                      bottom: pw.BorderSide(color: PdfColors.grey600),
+                      bottom: pw.BorderSide(color: PDF_Border_Color),
                     ),
                   ),
-                  child: pw.Row(
-                    children: [
-                      pw.Container(
-                        decoration: const pw.BoxDecoration(
-                          color: PdfColors.white,
-                          border: pw.Border(
-                            left: pw.BorderSide(color: PdfColors.grey600),
-                          ),
-                        ),
-                        width: 25,
-                        padding: const pw.EdgeInsets.all(2.0),
-                        child: pw.Align(
-                          alignment: pw.Alignment.center,
-                          child: pw.Text(
-                            '${index + 1}',
-                            maxLines: 2,
-                            textAlign: pw.TextAlign.center,
-                            style: pw.TextStyle(
-                                fontSize: font_Size,
-                                font: ttf,
-                                color: PdfColors.grey800),
-                          ),
+                  children: [
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
+                        alignment: pw.Alignment.center,
+                        child: pw.Text(
+                          '${index + 1}',
+                          maxLines: 2,
+                          textAlign: pw.TextAlign.center,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
                         ),
                       ),
-                      buildCell(
-                        text: (invoices.date == null ||
-                                invoices.date.toString() == '')
-                            ? '-'
-                            : '${DateFormat('dd-MM').format(DateTime.parse(invoices.date.toString()))}-${DateTime.parse(invoices.date.toString()).year + 543}',
-                        flex: 1,
+                    ),
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
                         alignment: pw.Alignment.centerLeft,
-                        textAlign: pw.TextAlign.center,
+                        child: pw.Text(
+                          (invoices.date == null ||
+                                  invoices.date.toString() == '')
+                              ? '-'
+                              : '${DateFormat('dd-MM').format(DateTime.parse(invoices.date.toString()))}-${DateTime.parse(invoices.date.toString()).year + 543}',
+                          maxLines: 2,
+                          textAlign: pw.TextAlign.center,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
+                        ),
                       ),
-                      buildCell(
-                        text: (invoices.unitser.toString() == '6')
-                            ? '${invoices.descr} [ หน่วยที่ใช้ไป ${invoices.ovalue}-${invoices.nvalue} ]' //descr
-                            : '${invoices.descr} ${DateFormat('MMM', 'th').format(DateTime.parse(invoices.date!))} ${DateTime.parse('${invoices.date}').year + 543}',
-                        flex: 4,
+                    ),
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
                         alignment: pw.Alignment.centerLeft,
-                        textAlign: pw.TextAlign.left,
+                        child: pw.Text(
+                          (invoices.unitser.toString() == '6')
+                              ? '${invoices.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(invoices.date!))} ${DateTime.parse('${invoices.date}').year + 543} [ หน่วยที่ใช้ไป ${invoices.ovalue}-${invoices.nvalue} ]'
+                              : '${invoices.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(invoices.date!))} ${DateTime.parse('${invoices.date}').year + 543}',
+                          maxLines: 3,
+                          textAlign: pw.TextAlign.left,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
+                        ),
                       ),
-                      buildCell(
-                        text: getFormattedText(invoices.qty),
-                        flex: 1,
+                    ),
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
                         alignment: pw.Alignment.centerRight,
-                        textAlign: pw.TextAlign.right,
+                        child: pw.Text(
+                          getFormattedText(invoices.qty),
+                          maxLines: 2,
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
+                        ),
                       ),
-                      buildCell(
-                        text: (invoices.ele_ty.toString() != '0' &&
-                                invoices.ele_ty != null)
-                            ? 'อัตราพิเศษ'
-                            : (invoices.dtype.toString() == 'KU')
-                                ? getFormattedText('${invoices.pri}')
-                                : '-',
-                        flex: 1,
+                    ),
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
                         alignment: pw.Alignment.centerRight,
-                        textAlign: pw.TextAlign.right,
+                        child: pw.Text(
+                          (invoices.ele_ty.toString() != '0' &&
+                                  invoices.ele_ty != null)
+                              ? 'อัตราพิเศษ'
+                              : (invoices.dtype.toString() == 'KU')
+                                  ? getFormattedText('${invoices.pri}')
+                                  : '-',
+                          maxLines: 2,
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
+                        ),
                       ),
-                      // buildCell(
-                      //   text: (invoices.dis_list.toString() == '0.00')
-                      //       ? getFormattedText(invoices.pri)
-                      //       : getFormattedText(invoices.pvat_original),
-                      //   flex: 1,
-                      //   alignment: pw.Alignment.centerRight,
-                      //   textAlign: pw.TextAlign.right,
-                      // ),
-
-                      buildCell(
-                        text: getFormattedText('${invoices.pvat}'),
-                        flex: 1,
+                    ),
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
                         alignment: pw.Alignment.centerRight,
-                        textAlign: pw.TextAlign.right,
+                        child: pw.Text(
+                          getFormattedText('${invoices.pvat}'),
+                          maxLines: 2,
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
+                        ),
                       ),
-                      buildCell(
-                        text: getFormattedText(invoices.vat),
-                        flex: 1,
+                    ),
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
                         alignment: pw.Alignment.centerRight,
-                        textAlign: pw.TextAlign.right,
+                        child: pw.Text(
+                          getFormattedText(invoices.vat),
+                          maxLines: 2,
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
+                        ),
                       ),
-                      buildCell(
-                        text: getFormattedText(invoices.wht),
-                        flex: 1,
+                    ),
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
                         alignment: pw.Alignment.centerRight,
-                        textAlign: pw.TextAlign.right,
+                        child: pw.Text(
+                          getFormattedText(invoices.wht),
+                          maxLines: 2,
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
+                        ),
                       ),
-                      buildCell(
-                        text: getFormattedText('${invoices.dis_list}'),
-                        flex: 1,
+                    ),
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
                         alignment: pw.Alignment.centerRight,
-                        textAlign: pw.TextAlign.right,
+                        child: pw.Text(
+                          getFormattedText('${invoices.dis_list}'),
+                          maxLines: 2,
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
+                        ),
                       ),
-                      buildCell(
-                        text: getFormattedText('${invoices.total}'),
-                        flex: 2,
+                    ),
+                    pw.Container(
+                      decoration: const pw.BoxDecoration(
+                        color: PdfColors.white,
+                      ),
+                      padding: const pw.EdgeInsets.all(2.0),
+                      child: pw.Align(
                         alignment: pw.Alignment.centerRight,
-                        textAlign: pw.TextAlign.right,
+                        child: pw.Text(
+                          getFormattedText('${invoices.total}'),
+                          maxLines: 2,
+                          textAlign: pw.TextAlign.right,
+                          style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              color: PdfColors.grey800),
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 );
               }),
             ),
@@ -887,7 +1050,7 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                             ),
                           ],
                         ),
-                        pw.Divider(color: PdfColors.grey600),
+                        pw.Divider(color: PDF_Border_Color),
                         pw.Row(
                           children: [
                             pw.Expanded(
@@ -922,8 +1085,8 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                 decoration: const pw.BoxDecoration(
                   // color: PdfColors.green100,
                   border: pw.Border(
-                    top: pw.BorderSide(color: PdfColors.grey600),
-                    bottom: pw.BorderSide(color: PdfColors.grey600),
+                    top: pw.BorderSide(color: PDF_Border_Color),
+                    bottom: pw.BorderSide(color: PDF_Border_Color),
                   ),
                 ),
                 alignment: pw.Alignment.centerRight,
@@ -1003,7 +1166,7 @@ class Pdfgen_BillingNoteInvlice_TP4 {
             children: [
               pw.Container(
                   decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey, width: 1),
+                    border: pw.Border.all(color: PDF_Border_Color, width: 1),
                   ),
                   padding: pw.EdgeInsets.fromLTRB(2, 4, 2, 4),
                   child: pw.Row(
@@ -1093,78 +1256,119 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                                 )
                               ])),
                       pw.Expanded(
-                          flex: 1,
-                          child: pw.Column(
-                              mainAxisAlignment: pw.MainAxisAlignment.start,
-                              // crossAxisAlignment: pw.CrossAxisAlignment.center,
-                              children: [
-                                pw.Text(
-                                  'ลงชื่อ :',
-                                  textAlign: pw.TextAlign.left,
-                                  style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    fontWeight: pw.FontWeight.bold,
-                                    color: Colors_pd,
+                        flex: 1,
+                        child: pw.Column(
+                          mainAxisAlignment: pw.MainAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              'ลงชื่อ : ผู้รับวางบิล',
+                              textAlign: pw.TextAlign.left,
+                              style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                fontWeight: pw.FontWeight.bold,
+                                color: Colors_pd,
+                              ),
+                            ),
+                            pw.Container(
+                              height: 35,
+                              child: pw.Stack(
+                                children: [
+                                  pw.Positioned(
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    child: pw.Text(
+                                      '........................................................',
+                                      textAlign: pw.TextAlign.center,
+                                      style: pw.TextStyle(
+                                        fontSize: font_Size,
+                                        font: ttf,
+                                        fontWeight: pw.FontWeight.bold,
+                                        color: Colors_pd,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                pw.Text(
-                                  '........................................................',
-                                  textAlign: pw.TextAlign.center,
-                                  style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    fontWeight: pw.FontWeight.bold,
-                                    color: Colors_pd,
-                                  ),
-                                ),
-                                pw.Text(
-                                  '(......................................................)',
-                                  textAlign: pw.TextAlign.center,
-                                  style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    fontWeight: pw.FontWeight.bold,
-                                    color: Colors_pd,
-                                  ),
-                                ),
-                                pw.Text(
-                                  'วันที่/Date...........................................',
-                                  textAlign: pw.TextAlign.center,
-                                  style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    fontWeight: pw.FontWeight.bold,
-                                    color: Colors_pd,
-                                  ),
-                                ),
-                              ])),
+                                ],
+                              ),
+                            ),
+                            pw.Text(
+                              '(......................................................)',
+                              textAlign: pw.TextAlign.center,
+                              style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                fontWeight: pw.FontWeight.bold,
+                                color: Colors_pd,
+                              ),
+                            ),
+                            pw.Text(
+                              'วันที่/Date...........................................',
+                              textAlign: pw.TextAlign.center,
+                              style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                fontWeight: pw.FontWeight.bold,
+                                color: Colors_pd,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       pw.Expanded(
-                          flex: 1,
-                          child: pw.Column(
-                              mainAxisAlignment: pw.MainAxisAlignment.start,
-                              // crossAxisAlignment: pw.CrossAxisAlignment.center,
+                        flex: 1,
+                        child: pw.Column(
+                          mainAxisAlignment: pw.MainAxisAlignment.start,
+                          children: [
+                            pw.Text(
+                              'ลงชื่อ : ผู้วางบิล',
+                              textAlign: pw.TextAlign.left,
+                              style: pw.TextStyle(
+                                fontSize: font_Size,
+                                font: ttf,
+                                fontWeight: pw.FontWeight.bold,
+                                color: Colors_pd,
+                              ),
+                            ),
+                            pw.Container(
+                              height: 35,
+                              child: pw.Stack(
+                                children: [
+                                  pw.Positioned(
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    child: pw.Text(
+                                      '........................................................',
+                                      textAlign: pw.TextAlign.center,
+                                      style: pw.TextStyle(
+                                        fontSize: font_Size,
+                                        font: ttf,
+                                        fontWeight: pw.FontWeight.bold,
+                                        color: Colors_pd,
+                                      ),
+                                    ),
+                                  ),
+                                  if (signatureBytes != null &&
+                                      signatureBytes.isNotEmpty)
+                                    pw.Positioned(
+                                      bottom: 4,
+                                      left: 0,
+                                      right: 0,
+                                      child: pw.Center(
+                                        child: pw.Image(
+                                          pw.MemoryImage(signatureBytes),
+                                          width: 100,
+                                          height: 40,
+                                          fit: pw.BoxFit.contain,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            pw.Stack(
                               children: [
-                                pw.Text(
-                                  'ลงชื่อ : ',
-                                  textAlign: pw.TextAlign.left,
-                                  style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    fontWeight: pw.FontWeight.bold,
-                                    color: Colors_pd,
-                                  ),
-                                ),
-                                pw.Text(
-                                  '........................................................',
-                                  textAlign: pw.TextAlign.center,
-                                  style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    fontWeight: pw.FontWeight.bold,
-                                    color: Colors_pd,
-                                  ),
-                                ),
                                 pw.Text(
                                   '(......................................................)',
                                   textAlign: pw.TextAlign.center,
@@ -1175,8 +1379,29 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                                     color: Colors_pd,
                                   ),
                                 ),
+                                if (fullname != null && signatureBytes != null)
+                                  pw.Positioned(
+                                    left: 0,
+                                    right: 0,
+                                    top: -4,
+                                    bottom: 10,
+                                    child: pw.Text(
+                                      fullname,
+                                      textAlign: pw.TextAlign.center,
+                                      style: pw.TextStyle(
+                                        fontSize: font_Size + 2,
+                                        font: ttf,
+                                        fontWeight: pw.FontWeight.bold,
+                                        color: Colors_pd,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            pw.Stack(
+                              children: [
                                 pw.Text(
-                                  'วันที่/Date...........................................',
+                                  'วันที่/Date...............................................',
                                   textAlign: pw.TextAlign.center,
                                   style: pw.TextStyle(
                                     fontSize: font_Size,
@@ -1185,7 +1410,29 @@ class Pdfgen_BillingNoteInvlice_TP4 {
                                     color: Colors_pd,
                                   ),
                                 ),
-                              ])),
+                                if (date_Transaction != null &&
+                                    signatureBytes != null)
+                                  pw.Positioned(
+                                    left: 15,
+                                    right: 0,
+                                    top: -4,
+                                    bottom: 10,
+                                    child: pw.Text(
+                                      '${DateFormat('dd/MM').format(DateTime.parse(date_Transaction!))}/${DateTime.parse('$date_Transaction').year + 543}',
+                                      textAlign: pw.TextAlign.center,
+                                      style: pw.TextStyle(
+                                        fontSize: font_Size + 2,
+                                        font: ttf,
+                                        fontWeight: pw.FontWeight.bold,
+                                        color: Colors_pd,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                       pw.Expanded(
                           flex: 1,
                           child: pw.Column(
@@ -1298,14 +1545,11 @@ class Pdfgen_BillingNoteInvlice_TP4 {
       // Upload the file
       await uploadFile(data, name_1);
     } else if (Preview_ser.toString() == 'File') {
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      await FlutterFileDialog.saveFile(
-        params: SaveFileDialogParams(
-          data: data,
-          fileName: 'ใบวางบิล_ใบแจ้งหนี้${cFinn}.pdf',
-        ),
-      );
+      // final List<int> bytes = await pdf.save();
+      // final Uint8List data = Uint8List.fromList(bytes);
+      // MimeType type = MimeType.PDF;
+      // final dir = await FileSaver.instance
+      //     .saveFile('ใบวางบิล/ใบแจ้งหนี้${cFinn}', data, "pdf", mimeType: type);
     } else {
       Navigator.push(
           context,

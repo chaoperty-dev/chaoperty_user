@@ -1,5 +1,9 @@
-import 'dart:convert';
-
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
+import 'package:file_saver/file_saver.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -7,18 +11,10 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
+
 import '../../CRC_16_Prompay/generate_qrcode.dart';
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../Model/GetInvoice_history_Model.dart';
-import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 
 class Pdfgen_credit_note_TP10 {
 //////////---------------------------------------------------->(ใบลดหนี้)   ใช้  //
@@ -131,7 +127,7 @@ class Pdfgen_credit_note_TP10 {
         netImage_QR.add(iconImage);
       } else {
         netImage_QR.add(await networkImage(
-            '${MyConstant().domain_chao}/files/$foder/payment/${finnancetransModels[i].img}'));
+            '${MyConstant().domain_chao_img}/files/$foder/payment/${finnancetransModels[i].img}'));
       }
     }
 
@@ -2291,16 +2287,6 @@ class Pdfgen_credit_note_TP10 {
       // Upload the file
       await uploadFile(data, name_1);
     } else if (Preview_ser.toString() == 'File') {
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      await FlutterFileDialog.saveFile(
-        params: SaveFileDialogParams(
-          data: data,
-          fileName: (numdoctax.toString() == '')
-              ? 'ใบลดหนี้ $numinvoice'
-              : 'ใบลดหนี้/ใบกำกับภาษี $numdoctax',
-        ),
-      );
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
       // MimeType type = MimeType.PDF;

@@ -212,7 +212,7 @@ class _InvioceScreenState extends State<InvioceScreen>
         cusPhoto!.toLowerCase() != 'null' &&
         cusFoder != null &&
         cusFoder!.isNotEmpty) {
-      final newUrl = MyConstant().domain_chao;
+      final newUrl = MyConstant().domain_chao_img;
       cusImgLogo = '$newUrl/files/$cusFoder/contract/$cusPhoto';
     }
   }
@@ -355,7 +355,7 @@ class _InvioceScreenState extends State<InvioceScreen>
                       ),
                     ),
                     LoadingAnimationWidget.inkDrop(
-                        color: Colors.green, size: 70),
+                        color: Colors.indigo, size: 70),
                   ],
                 ),
               )
@@ -409,7 +409,7 @@ class _InvioceScreenState extends State<InvioceScreen>
                                 if (rentals.isNotEmpty &&
                                     rentals[0].imglogo!.trim().isNotEmpty) {
                                   final urlimg =
-                                      '${MyConstant().domain_chao}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
+                                      '${MyConstant().domain_chao_img}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
                                   newValuePDFimg.add(urlimg);
                                   preferences.setString('renTal_logo', urlimg);
                                 }
@@ -426,22 +426,22 @@ class _InvioceScreenState extends State<InvioceScreen>
                                 try {
                                   Man_BillingNoteInvlice_PDF
                                       .ManBillingNoteInvlice_PDF(
-                                    null,
-                                    folder,
-                                    '1',
-                                    temPageSer,
-                                    context,
-                                    inv.cid ?? '',
-                                    '', // ชื่อผู้เช่า
-                                    billAddr,
-                                    billEmail,
-                                    billTel,
-                                    billTax,
-                                    billName,
-                                    newValuePDFimg,
-                                    inv.docno,
-                                    '1',
-                                  );
+                                          null,
+                                          folder,
+                                          '1',
+                                          temPageSer,
+                                          context,
+                                          inv.cid ?? '',
+                                          '', // ชื่อผู้เช่า
+                                          billAddr,
+                                          billEmail,
+                                          billTel,
+                                          billTax,
+                                          billName,
+                                          newValuePDFimg,
+                                          inv.docno,
+                                          '1',
+                                          'แบบเต็ม');
                                 } catch (e) {
                                   debugPrint('PDF Error: $e');
                                 } finally {
@@ -520,7 +520,7 @@ class _InvioceScreenState extends State<InvioceScreen>
                         if (rentals.isNotEmpty &&
                             rentals[0].imglogo!.trim().isNotEmpty) {
                           final urlimg =
-                              '${MyConstant().domain_chao}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
+                              '${MyConstant().domain_chao_img}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
                           newValuePDFimg.add(urlimg);
                           preferences.setString('renTal_logo', urlimg);
                         }
@@ -538,22 +538,22 @@ class _InvioceScreenState extends State<InvioceScreen>
                         try {
                           // ✅ รอให้สร้าง PDF เสร็จจริง ๆ (ถ้าเป็น Future)
                           Man_BillingNoteInvlice_PDF.ManBillingNoteInvlice_PDF(
-                            null,
-                            folder,
-                            '1',
-                            temPageSer,
-                            context,
-                            inv.cid ?? '',
-                            '', // ชื่อผู้เช่า
-                            billAddr,
-                            billEmail,
-                            billTel,
-                            billTax,
-                            billName,
-                            newValuePDFimg,
-                            inv.docno,
-                            '1',
-                          );
+                              null,
+                              folder,
+                              '1',
+                              temPageSer,
+                              context,
+                              inv.cid ?? '',
+                              '', // ชื่อผู้เช่า
+                              billAddr,
+                              billEmail,
+                              billTel,
+                              billTax,
+                              billName,
+                              newValuePDFimg,
+                              inv.docno,
+                              '1',
+                              'แบบเต็ม');
 
                           // ✅ reload list หลังทำเสร็จ (ถ้ามี)
                         } catch (e) {
@@ -729,9 +729,9 @@ class _InvioceScreenState extends State<InvioceScreen>
                                     : 'ใบแจ้งหนี้/ใบวางบิล',
                                 style: TextStyle(
                                   fontFamily: FitnessAppTheme.fontName,
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 22 + 6 - 6 * topBarOpacity,
-                                  letterSpacing: 1.2,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 22,
+                                  letterSpacing: 0.4,
                                   color: FitnessAppTheme.darkerText,
                                 ),
                               ),
@@ -771,9 +771,9 @@ class _SectionTitle extends StatelessWidget {
       child: Text(
         title,
         style: const TextStyle(
-          fontFamily: FitnessAppTheme.fontName,
-          fontWeight: FontWeight.w700,
-          fontSize: 18,
+          fontFamily: Font_.Fonts_T,
+          fontWeight: FontWeight.bold,
+          fontSize: 15,
           color: Colors.black87,
         ),
       ),
@@ -838,9 +838,11 @@ class InvoiceCard extends StatelessWidget {
             ? 'Payment due: Please contact staff.'
             : 'กำหนดชำระ: กรุณาติดต่อเจ้าหน้าที่';
       } else {
-        final f = DateFormat('dd-MM-yyyy');
-        dueStr =
-            isEN ? 'Payment due ${f.format(d)}' : 'กำหนดชำระ ${f.format(d)}';
+        final f = DateFormat('dd-MM');
+        final thaiYear = d.year + 543;
+        dueStr = isEN
+            ? 'Payment due ${f.format(d)}-$thaiYear'
+            : 'กำหนดชำระ ${f.format(d)}-$thaiYear';
       }
     }
 

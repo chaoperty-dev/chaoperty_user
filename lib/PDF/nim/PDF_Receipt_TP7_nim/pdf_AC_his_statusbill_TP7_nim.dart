@@ -1,7 +1,7 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:chaoperty_user/File_s.dart';
 import 'package:chaoperty_user/PDF/ThaiBaht.dart';
-import 'package:chaoperty_user/color.dart';
+import 'package:chaoperty_user/PDF/pdf_constants.dart';
 import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
@@ -129,7 +129,7 @@ class Pdfgen_his_statusbill_TP7_nim {
         netImage_QR.add(iconImage);
       } else {
         netImage_QR.add(await networkImage(
-            '${MyConstant().domain}/files/$foder/payment/${finnancetransModels[i].img}'));
+            '${MyConstant().domain_chao_img}/files/$foder/payment/${finnancetransModels[i].img}'));
       }
     }
 //////////---------------------------->

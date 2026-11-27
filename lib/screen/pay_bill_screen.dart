@@ -1223,7 +1223,7 @@ class _PayBillscreenState extends State<PayBillscreen> {
             bill_default = bill_defaultx;
             bill_tser = bill_tserx;
             imglogo_ =
-                '${MyConstant().domain}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
+                '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
             renTalModels.add(renTalModel);
             if (bill_defaultx == 'P') {
               bills_name_ = 'บิลธรรมดา';
@@ -3530,8 +3530,9 @@ class _PayBillscreenState extends State<PayBillscreen> {
                                                                                 MainAxisAlignment.center,
                                                                             children: [
                                                                               Image.network(
-                                                                                '${MyConstant().domain_chao}/files/$foder/payment/$payment_img',
+                                                                                '${MyConstant().domain_chao_img}/files/$foder/payment/$payment_img',
                                                                                 height: MediaQuery.of(context).size.height * 0.3,
+                                                                                cacheWidth: 500,
                                                                               )
                                                                             ])
                                                                       ]))),
@@ -3828,7 +3829,7 @@ class _PayBillscreenState extends State<PayBillscreen> {
                                                               child: InkWell(
                                                                 onTap: () {
                                                                   print(
-                                                                      '${MyConstant().domain_chao}/files/$foder/payment/$payment_img');
+                                                                      '${MyConstant().domain_chao_img}/files/$foder/payment/$payment_img');
                                                                 },
                                                                 child: Text(
                                                                   "กรุณาอัพโหลดหลักฐานการโอนเงินและกดยืนยันการชำระ ขอบคุณครับ/ค่ะ",
@@ -5161,7 +5162,7 @@ class _PayBillscreenState extends State<PayBillscreen> {
                                                                   } else {
                                                                     newValuePDFimg
                                                                         .add(
-                                                                            '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+                                                                            '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
                                                                   }
                                                                 }
 
@@ -5712,7 +5713,7 @@ class _PayBillscreenState extends State<PayBillscreen> {
         //     'https://png.pngtree.com/png-vector/20190820/ourmid/pngtree-no-image-vector-illustration-isolated-png-image_1694547.jpg');
       } else {
         newValuePDFimg.add(
-            '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+            '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
       }
     }
     DateTime now = DateTime.now();

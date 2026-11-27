@@ -1,5 +1,6 @@
 import 'package:auto_size_text/auto_size_text.dart';
-
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -11,7 +12,6 @@ import 'package:printing/printing.dart';
 
 import '../../Constant/Myconstant.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Bills_INV.dart';
-import '../../PDF/ThaiBaht.dart';
 
 class Pdfgen_BillingNoteInvlice_TP2 {
   //////////---------------------------------------------------->(ใบวางบิล แจ้งหนี้)  ใช้  ++

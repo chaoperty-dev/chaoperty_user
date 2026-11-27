@@ -1,9 +1,14 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
-import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
-import 'package:chaoperty_user/screen_Intents/payment_subV2_InvAll.dart';
+import 'package:chaoperty_user/Model/Model_V2/payment_IntentsModel.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
+import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:chaoperty_user/screen_Intents_V3/payment_subV3_InvAll.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4_InvAll.dart';
+import 'package:chaoperty_user/video_player_helper.dart';
+import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/payment_subv4_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -23,7 +28,6 @@ import '../screen/Screen_new/fitness_app_home_screen.dart';
 import '../screen/Screen_new/fitness_app_theme.dart';
 import '../screen/Screen_new/ui_view/running_view_pay.dart';
 import '../screen/model/contractInvoice.dart';
-import '../screen/pay_bill_screen.dart';
 
 class paymentMainV3InvAll extends StatefulWidget {
   final AnimationController? mainScreenAnimationController;
@@ -31,6 +35,7 @@ class paymentMainV3InvAll extends StatefulWidget {
   final List<TeNantModel>? teNantModel;
   final List<CustomerModel>? customerModel;
   final String? cuslang;
+  final String? initialCid;
   final bool isMainScreen; // [NEW] Control scroll behavior
   const paymentMainV3InvAll(
       {super.key,
@@ -39,6 +44,7 @@ class paymentMainV3InvAll extends StatefulWidget {
       this.teNantModel,
       this.customerModel,
       this.cuslang,
+      this.initialCid,
       this.isMainScreen = true}); // [NEW] Default to true
 
   @override
@@ -62,12 +68,119 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     return _dateFormat.format(d);
   }
 
+  List<Bill> _sortedBills(Iterable<Bill> bills) {
+    final sorted = bills.toList(growable: false);
+    sorted.sort((a, b) {
+      final dateA = DateTime.tryParse(a.date ?? '') ?? DateTime(9999);
+      final dateB = DateTime.tryParse(b.date ?? '') ?? DateTime(9999);
+      final dateCompare = dateA.compareTo(dateB);
+      if (dateCompare != 0) return dateCompare;
+      return (a.docno ?? '').compareTo(b.docno ?? '');
+    });
+    return sorted;
+  }
+
+  List<_CidBankMatch> _findBanksByCid(String input) {
+    final query = input.trim().toLowerCase();
+    if (query.isEmpty || coninv.isEmpty) return const <_CidBankMatch>[];
+
+    final matches = <_CidBankMatch>[];
+    for (final group in coninv.first.data ?? const <Data>[]) {
+      final bills = _sortedBills(group.bill ?? const <Bill>[]).where((bill) {
+        final cid = (bill.cid ?? '').trim().toLowerCase();
+        return cid == query;
+      }).toList();
+      if (bills.isEmpty) continue;
+      final pvat =
+          bills.fold<double>(0, (sum, bill) => sum + (bill.pvatBill ?? 0));
+      final vat =
+          bills.fold<double>(0, (sum, bill) => sum + (bill.vatBill ?? 0));
+      final wht =
+          bills.fold<double>(0, (sum, bill) => sum + (bill.whtBill ?? 0));
+      final total =
+          bills.fold<double>(0, (sum, bill) => sum + (bill.totalBill ?? 0));
+      final discount = bills.fold<double>(
+          0, (sum, bill) => sum + (bill.totalDisendbill ?? 0));
+      final filteredGroup = Data(
+        payser: group.payser,
+        ptser: group.ptser,
+        bank: group.bank,
+        bno: group.bno,
+        bname: group.bname,
+        ptname: group.ptname,
+        img: group.img,
+        serPayweb: group.serPayweb,
+        pvatBill: pvat,
+        vatBill: vat,
+        whtBill: wht,
+        totalBill: total,
+        totalDisendbill: discount,
+        bill: bills,
+      );
+
+      matches.add(_CidBankMatch(
+        bank: group.bank ?? '-',
+        bankCode: bankCodeMap[group.bank]?['code'] ?? '',
+        accountNo: group.bno ?? '',
+        accountName: group.bname ?? '',
+        bills: bills,
+        total: total,
+        discount: discount,
+        group: filteredGroup,
+      ));
+    }
+
+    matches.sort((a, b) => a.bank.compareTo(b.bank));
+    return matches;
+  }
+
+  List<_ContractSuggestion> _findContractSuggestions(String input) {
+    final query = input.trim().toLowerCase();
+    if (coninv.isEmpty) return const <_ContractSuggestion>[];
+
+    final suggestionsByCid = <String, _ContractSuggestion>{};
+    for (final group in coninv.first.data ?? const <Data>[]) {
+      for (final bill in group.bill ?? const <Bill>[]) {
+        final cid = (bill.cid ?? '').trim();
+        if (cid.isEmpty) continue;
+
+        final normalizedCid = cid.toLowerCase();
+        if (query.isNotEmpty &&
+            (normalizedCid == query || !normalizedCid.contains(query))) {
+          continue;
+        }
+
+        final bankLabel =
+            '${group.bank ?? '-'}${(bankCodeMap[group.bank]?['code'] ?? '').isEmpty ? '' : ' (${bankCodeMap[group.bank]?['code']})'}';
+        final current = suggestionsByCid[cid];
+        if (current == null) {
+          suggestionsByCid[cid] = _ContractSuggestion(
+            cid: cid,
+            billCount: 1,
+            bankNames: <String>{bankLabel},
+            total: (bill.totalBill ?? 0).toDouble(),
+          );
+        } else {
+          current.billCount += 1;
+          current.bankNames.add(bankLabel);
+          current.total += (bill.totalBill ?? 0).toDouble();
+        }
+      }
+    }
+
+    final suggestions = suggestionsByCid.values.toList();
+    suggestions.sort((a, b) {
+      final lengthCompare = a.cid.length.compareTo(b.cid.length);
+      if (lengthCompare != 0) return lengthCompare;
+      return a.cid.compareTo(b.cid);
+    });
+    return suggestions.take(8).toList(growable: false);
+  }
+
   DateTime datex = DateTime.now();
   int tap_pay = 0;
-  int? _serPayment, _serptPayment;
   ////--------------------->
   List<InvoicePayModel> invoicePayModels = [];
-  List<InvoiceModel> _InvoiceModels = [];
   List<InvoiceModel> invoicePayModels2 = [];
   List<dynamic> InvoicePay = [];
   ////--------------------->
@@ -75,13 +188,24 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
   int ref_new = 0;
   String? return_qr_img, invoiceAll, return_qr_refapi, return_img;
   bool _isLoading = true;
+  bool _showGuideCard = false;
+  bool _showCidSearch = false;
+  bool _cidSearchTouched = false;
+  final TextEditingController _cidSearchController = TextEditingController();
   Timer? _timer;
   String countdownText = '';
+  Offset _fabPos = Offset.zero;
+  Offset _cardPos = Offset.zero;
+
+  static const String _guideCardLastShownKey = 'guideCardLastShownV3';
+  static const Duration _guideCardCooldown = Duration(minutes: 5);
 
   // ✅ Cached totals (computed once per data load)
   double _cachedTotalAll = 0;
   double _cachedTotalDiscount = 0;
   String? renTal_user, renTal_name, Value_cid, custno_, cus_ser;
+  bool? _hasIntentsAuth;
+  List<PaymentIntent> paymentIntents = [];
   ////--------------------->
   ////----------- แท็บสีตามสถานะสัญญา (ถ้าต้องการ)
   Color tagColor(String? st) {
@@ -98,17 +222,144 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
   ////--------------------->
   @override
   void initState() {
+    super.initState();
+    final initialCid = widget.initialCid?.trim();
+    if (initialCid != null && initialCid.isNotEmpty) {
+      _cidSearchController.text = initialCid;
+      _showCidSearch = true;
+      _cidSearchTouched = true;
+    }
+    _loadIntentsAuth();
     red_Invoice();
     // red_Invoice().then((value) => Check_genref_pay());
     Check_time();
-    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      // ✅ ตรวจสอบว่าเคยแสดง Guide Card ภายใน 5 นาทีที่ผ่านมาหรือยัง
+      final prefs = await SharedPreferences.getInstance();
+      final lastShown = prefs.getInt(_guideCardLastShownKey) ?? 0;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final canShow = (now - lastShown) >= _guideCardCooldown.inMilliseconds;
+      if (canShow) {
+        // รอให้ข้อมูลโหลดเสร็จก่อน แล้วค่อยแสดง (เช็คซ้ำจนกว่าจะ ready)
+        void tryShow() {
+          if (!mounted) return;
+          if (_isLoading) {
+            Future.delayed(const Duration(milliseconds: 500), tryShow);
+            return;
+          }
+          setState(() => _showGuideCard = true);
+          prefs.setInt(
+              _guideCardLastShownKey, DateTime.now().millisecondsSinceEpoch);
+        }
+
+        Future.delayed(const Duration(milliseconds: 800), tryShow);
+      }
+    });
   }
 
   ////--------------------->
   @override
   void dispose() {
-    _timer?.cancel(); // Make sure to cancel the timer when widget is disposed
+    _timer?.cancel();
+    _cidSearchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadIntentsAuth() async {
+    final ok = await MyHeadersIntents.checkauthpaymentintents();
+    if (!mounted) return;
+    setState(() => _hasIntentsAuth = ok);
+  }
+
+  // Future<void> _initData() async {
+  //   final preferences = await SharedPreferences.getInstance();
+  //   final custNo = preferences.getString('custno');
+  //   final ren = preferences.getString('renTalSer');
+  //   await redPaymentIntents(
+  //       cusno: custNo.toString() ?? '', propertyno: ren.toString() ?? '');
+  // }
+
+  Future<void> redPaymentIntents(
+      {required String cusno,
+      required String propertyno,
+      required String serPayment}) async {
+    if (mounted) {
+      setState(() {
+        paymentIntents.clear();
+      });
+    }
+
+    debugPrint('Step: redPaymentIntents: START');
+    debugPrint('Step: redPaymentIntents: cusno=$cusno, propertyno=$propertyno');
+
+    try {
+      final response =
+          await postPaymentIntentsState(cusno: cusno, propertyno: propertyno);
+
+      if (response == null) {
+        debugPrint('Step: redPaymentIntents: ❌ Response is Null');
+        return;
+      }
+
+      // debugPrint('Step: redPaymentIntents: Body: ${response.body}');
+
+      if (response.body.isEmpty) {
+        debugPrint('Step: redPaymentIntents: ❌ response.body ว่าง');
+        return;
+      }
+
+      final root = json.decode(response.body);
+
+      if (root is! Map<String, dynamic>) {
+        debugPrint(
+            'Step: redPaymentIntents: ❌ รูปแบบ JSON ไม่ใช่ Map<String, dynamic>');
+        return;
+      }
+
+      final intentsListRaw = root['data'];
+
+      final intents = (intentsListRaw is List
+              ? intentsListRaw.whereType<Map<String, dynamic>>()
+              : const <Map<String, dynamic>>[])
+          .map((m) => PaymentIntent.fromJson(m))
+          .where((p) => p.bankmerchantid.toString() == '${serPayment}')
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          paymentIntents = intents;
+        });
+      }
+
+      debugPrint(
+          'Step: redPaymentIntents: ✅ intents loaded: ${intents.length}');
+      if (intents.isNotEmpty) {
+        for (var i = 0; i < intents.length; i++) {
+          debugPrint(
+              '   [$i] intentUuid: ${intents[i].intentUuid}, Status: ${intents[i].status}');
+          if (intents[i].invoices.isNotEmpty) {
+            for (var inv in intents[i].invoices) {
+              debugPrint('       -> Invoice: ${inv.billReference}');
+            }
+          } else {
+            debugPrint('       -> No Invoices');
+          }
+        }
+      } else {
+        debugPrint('   No intents in the list.');
+      }
+    } catch (e, stack) {
+      debugPrint(
+          'Step: redPaymentIntents: ❌ Exception parsing payment intents: $e');
+      debugPrint('🧭 StackTrace:\n$stack');
+    } finally {
+      if (mounted) {
+        // setState(() {
+        //   isLoading = false;
+        // });
+      }
+    }
   }
 
   ////--------------------->
@@ -218,15 +469,14 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     final preferences = await SharedPreferences.getInstance();
     final custNo = preferences.getString('custno');
     final ren = preferences.getString('renTalSer');
-    // ✅ 2 กรณี:
-    // - ถ้ามีผู้เช่ามากกว่า 1 -> userCid = null (เอาทุกบิล)
-    // - ถ้ามีผู้เช่าเดียว -> userCid = cid (เอาเฉพาะบิล cid ตรง)
+    // initialCid is only for prefilling/searching the UI. Do not filter the
+    // loaded invoice dataset with it, otherwise the contract picker loses the
+    // other contracts after navigating from the home card.
     final String? userCid = (widget.teNantModel == null ||
             widget.teNantModel!.isEmpty ||
             widget.teNantModel!.length > 1)
         ? null
-        : null;
-    //widget.teNantModel!.first.cid;
+        : widget.teNantModel!.first.cid;
 
     if (custNo == null || custNo.isEmpty) {
       if (!mounted) return;
@@ -327,96 +577,512 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     final inv = coninv.first;
     final groups = inv.data ?? const <Data>[];
     if (groups.isEmpty) return _buildEmptyState();
+    final hasActiveContractSearch = _showCidSearch;
 
-    return AnimatedBuilder(
-      animation: widget.mainScreenAnimationController!,
-      builder: (_, __) => FadeTransition(
-        opacity: widget.mainScreenAnimation!,
-        child: Transform.translate(
-          offset: Offset(0, 30 * (1 - widget.mainScreenAnimation!.value)),
-          child: RefreshIndicator(
-            onRefresh: red_Invoice,
-            child: CustomScrollView(
-              shrinkWrap: !widget.isMainScreen, // [NEW] Shrink wrap if nested
-              physics: widget.isMainScreen
-                  ? const AlwaysScrollableScrollPhysics()
-                  : const NeverScrollableScrollPhysics(), // [NEW] Disable scroll if nested
-              slivers: [
-                if (widget.isMainScreen) getAppBarUI(),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (widget.teNantModel!.length > 1) ...[
-                          RunningViewPay(
-                            animation: Tween<double>(begin: 0.0, end: 1.0)
-                                .animate(CurvedAnimation(
-                                    parent:
-                                        widget.mainScreenAnimationController!,
-                                    curve: Interval((1 / 5) * 3, 1.0,
-                                        curve: Curves.fastOutSlowIn))),
-                            animationController:
-                                widget.mainScreenAnimationController!,
-                            cuslang: widget.cuslang,
-                            customerModel: widget.customerModel,
-                          ),
-                        ],
-                        _summaryCard(inv),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 2, vertical: 2),
-                              decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.8),
-                                  borderRadius: BorderRadius.circular(8)),
-                              child: Row(
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          AnimatedBuilder(
+            animation: widget.mainScreenAnimationController!,
+            builder: (_, __) => FadeTransition(
+              opacity: widget.mainScreenAnimation!,
+              child: Transform.translate(
+                offset: Offset(0, 30 * (1 - widget.mainScreenAnimation!.value)),
+                child: RefreshIndicator(
+                  onRefresh: red_Invoice,
+                  child: CustomScrollView(
+                    shrinkWrap: !widget.isMainScreen,
+                    physics: widget.isMainScreen
+                        ? const AlwaysScrollableScrollPhysics()
+                        : const NeverScrollableScrollPhysics(),
+                    slivers: [
+                      if (widget.isMainScreen) getAppBarUI(),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              if (widget.teNantModel!.length > 1) ...[
+                                RunningViewPay(
+                                  animation: Tween<double>(begin: 0.0, end: 1.0)
+                                      .animate(CurvedAnimation(
+                                          parent: widget
+                                              .mainScreenAnimationController!,
+                                          curve: Interval((1 / 5) * 3, 1.0,
+                                              curve: Curves.fastOutSlowIn))),
+                                  animationController:
+                                      widget.mainScreenAnimationController!,
+                                  cuslang: widget.cuslang,
+                                  customerModel: widget.customerModel,
+                                ),
+                              ],
+                              _summaryCard(inv),
+                              const SizedBox(height: 8),
+                              Row(
                                 children: [
-                                  Icon(
-                                    Icons.list_sharp,
-                                    color: Colors.orange.shade700,
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8),
-                                    child: Text(
-                                      widget.cuslang == 'EN'
-                                          ? 'Outstanding/Pending Payments'
-                                          : 'รายการค้าง/รอชำระ',
-                                      maxLines: 2,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold,
+                                  Container(
+                                    padding: EdgeInsets.symmetric(
+                                        horizontal: 2, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.8),
+                                        borderRadius: BorderRadius.circular(8)),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.list_sharp,
                                           color: Colors.orange.shade700,
-                                          fontFamily: Font_.Fonts_T),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8),
+                                          child: Text(
+                                            widget.cuslang == 'EN'
+                                                ? 'All Items'
+                                                : 'รายการทั้งหมด',
+                                            maxLines: 2,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.orange.shade700,
+                                                fontFamily: Font_.Fonts_T),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _showCidSearch = !_showCidSearch;
+                                        if (!_showCidSearch) {
+                                          _cidSearchTouched = false;
+                                          _cidSearchController.clear();
+                                        }
+                                      });
+                                    },
+                                    icon: const Icon(Icons.search, size: 18),
+                                    label: Text(
+                                      widget.cuslang == 'EN'
+                                          ? 'Search'
+                                          : 'ค้นหา',
+                                      // widget.cuslang == 'EN'
+                                      //     ? 'Search Contract'
+                                      //     : 'ค้นหาเลขสัญญา',
+                                      style: const TextStyle(
+                                        fontFamily: Font_.Fonts_T,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.indigo.shade700,
+                                      backgroundColor:
+                                          Colors.indigo.withOpacity(0.08),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 6),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_showCidSearch) ...[
+                                const SizedBox(height: 8),
+                                _buildInlineCidSearch(),
+                                if (hasActiveContractSearch)
+                                  const SizedBox(height: 100),
+                              ],
+                              const SizedBox(height: 4),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (!hasActiveContractSearch)
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
+                          sliver: SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (BuildContext context, int index) {
+                                return _groupTile(
+                                    (inv.data ?? const <Data>[])[index]);
+                              },
+                              childCount: (inv.data ?? const <Data>[]).length,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Guide Card — ลากขยับได้
+          LayoutBuilder(builder: (ctx, constraints) {
+            final sw = constraints.maxWidth;
+            final sh = constraints.maxHeight;
+            // ตั้งค่าเริ่มต้นครั้งแรก
+            if (_fabPos == Offset.zero) {
+              _fabPos = Offset(sw - 76, sh - 160);
+            }
+            if (_cardPos == Offset.zero) {
+              // ให้ popup คู่มือเด้งขึ้นมาอยู่เหนือปุ่ม FAB พอดี
+              _cardPos = Offset(
+                (_fabPos.dx - 200).clamp(0.0, sw - 260.0),
+                (_fabPos.dy - (sh * 0.55) - 10).clamp(0.0, sh - sh * 0.55),
+              );
+            }
+            return Stack(
+              children: [
+                // 1. FAB คู่มือ (อยู่ข้างหลังสุด)
+                Positioned(
+                  left: _fabPos.dx.clamp(0.0, sw - 70.0),
+                  top: _fabPos.dy.clamp(0.0, sh - 90.0),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanUpdate: (d) {
+                      setState(() {
+                        _fabPos = Offset(
+                          (_fabPos.dx + d.delta.dx).clamp(0.0, sw - 70.0),
+                          (_fabPos.dy + d.delta.dy).clamp(0.0, sh - 90.0),
+                        );
+                      });
+                    },
+                    onTap: () {
+                      setState(() {
+                        _showGuideCard = !_showGuideCard;
+                        if (_showGuideCard) {
+                          // ดึง card มาอยู่ตรง FAB เสมอเวลาถูกเปิด
+                          _cardPos = Offset(
+                            (_fabPos.dx - 200).clamp(0.0, sw - 260.0),
+                            (_fabPos.dy - (sh * 0.55) - 10)
+                                .clamp(0.0, sh - sh * 0.55),
+                          );
+                        }
+                      });
+                      if (_showGuideCard) {
+                        SharedPreferences.getInstance().then((prefs) {
+                          prefs.setInt(_guideCardLastShownKey,
+                              DateTime.now().millisecondsSinceEpoch);
+                        });
+                      }
+                    },
+                    child: _buildGuideFABWithLabel(),
+                  ),
+                ),
+                // 2. Guide Card (อยู่ข้างหน้า บัง FAB ได้)
+                if (_showGuideCard)
+                  Positioned(
+                    left: _cardPos.dx.clamp(0.0, sw - 260.0),
+                    top: _cardPos.dy.clamp(0.0, sh - sh * 0.55),
+                    width: 260,
+                    child: GestureDetector(
+                      onPanUpdate: (d) {
+                        setState(() {
+                          _cardPos = Offset(
+                            (_cardPos.dx + d.delta.dx).clamp(0.0, sw - 260.0),
+                            (_cardPos.dy + d.delta.dy)
+                                .clamp(0.0, sh - sh * 0.55),
+                          );
+                        });
+                      },
+                      child: AnimatedOpacity(
+                        opacity: 1.0,
+                        duration: const Duration(milliseconds: 220),
+                        child: AnimatedScale(
+                          scale: 1.0,
+                          duration: const Duration(milliseconds: 220),
+                          alignment: Alignment.bottomRight,
+                          child: _buildGuideCard(),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuideFAB() {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.indigo.withValues(alpha: 0.7),
+            const Color(0xFF283593).withValues(alpha: 0.7),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.indigo.withValues(alpha: 0.25),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child:
+          const Icon(Icons.live_help_rounded, color: Colors.white70, size: 20),
+    );
+  }
+
+  // label ใต้ FAB
+  Widget _buildGuideFABWithLabel() {
+    final isEN = widget.cuslang == 'EN';
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildGuideFAB(),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Colors.indigo.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            isEN ? 'Guide' : 'คู่มือ',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGuideCard() {
+    final isEN = widget.cuslang == 'EN';
+    return Material(
+      color: Colors.transparent,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.65,
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 6, 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 3,
+                      height: 16,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        isEN ? 'Payment Guide' : 'วิธีการชำระเงิน',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.indigo,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => setState(() => _showGuideCard = false),
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.close_rounded,
+                            size: 15, color: Colors.grey.shade600),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => showDialog(
+                          context: context,
+                          barrierColor: Colors.black87,
+                          builder: (_) => Dialog(
+                            backgroundColor: Colors.transparent,
+                            insetPadding: const EdgeInsets.all(12),
+                            child: Stack(
+                              alignment: Alignment.topRight,
+                              children: [
+                                InteractiveViewer(
+                                  minScale: 0.8,
+                                  maxScale: 5.0,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Image.network(
+                                      '${MyConstant().domain_chao_img}/guide_user/img/img_payment.jpg',
+                                      fit: BoxFit.contain,
+                                      cacheWidth: 480,
+                                    ),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () =>
+                                      Navigator.of(context, rootNavigator: true)
+                                          .pop(),
+                                  child: Container(
+                                    margin: const EdgeInsets.all(8),
+                                    width: 32,
+                                    height: 32,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close_rounded,
+                                        color: Colors.white, size: 18),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Stack(
+                            alignment: Alignment.bottomRight,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  '${MyConstant().domain_chao_img}/guide_user/img/img_payment.jpg',
+                                  fit: BoxFit.contain,
+                                  loadingBuilder: (_, child, progress) =>
+                                      progress == null
+                                          ? child
+                                          : Container(
+                                              height: 140,
+                                              alignment: Alignment.center,
+                                              child:
+                                                  const CircularProgressIndicator(
+                                                      color: Colors.indigo),
+                                            ),
+                                  errorBuilder: (_, __, ___) => Container(
+                                    height: 140,
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Center(
+                                        child: Icon(Icons.broken_image,
+                                            color: Colors.grey, size: 40)),
+                                  ),
+                                ),
+                              ),
+                              Container(
+                                margin: const EdgeInsets.all(8),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black45,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.zoom_in_rounded,
+                                        color: Colors.white, size: 14),
+                                    SizedBox(width: 4),
+                                    Text('ขยาย',
+                                        style: TextStyle(
+                                            color: Colors.white, fontSize: 11)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                        child: Container(
+                          width: double.infinity,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Colors.indigo, Color(0xFF283593)],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.indigo.withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => showInlineVideoDialog(
+                                context,
+                                '${MyConstant().domain_chao_img}/guide_user/vdo/vdo_payment.mp4',
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.play_circle_rounded,
+                                      color: Colors.white, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isEN
+                                        ? 'Watch Tutorial Video'
+                                        : 'ดูวิดีโอสอนการชำระเงิน',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                        const SizedBox(height: 4),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (BuildContext context, int index) {
-                        return _groupTile((inv.data ?? const <Data>[])[index]);
-                      },
-                      childCount: (inv.data ?? const <Data>[]).length,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -440,7 +1106,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                 backgroundImage: AssetImage('assets/images/Icon-chao.png'),
               ),
             ),
-            LoadingAnimationWidget.inkDrop(color: Colors.green, size: 70),
+            LoadingAnimationWidget.inkDrop(color: Colors.indigo, size: 70),
           ],
         ),
       ),
@@ -653,8 +1319,8 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                   isEN ? 'Summary' : 'สรุปภาพรวม',
                   style: const TextStyle(
                     fontFamily: Font_.Fonts_T,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
                   ),
                 ),
                 const Spacer(),
@@ -666,82 +1332,82 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
               ],
             ),
             const SizedBox(height: 5),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Icon(Icons.warning, color: Colors.red.shade600, size: 14),
-                const SizedBox(width: 8),
-                Text(
-                  isEN
-                      ? 'Note: The amount shown does not include any penalties/overdue payments that may occur.'
-                      : 'หมายเหตุ:ยอดที่แสดงยังไม่รวมค่าปรับ/ชำระเกินกำหนดที่อาจเกิดขึ้น',
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontFamily: Font_.Fonts_T,
-                    // fontWeight: FontWeight.w800,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // กริด 2–4 คอลัมน์ตามความกว้าง
-            LayoutBuilder(builder: (_, c) {
-              final w = c.maxWidth;
-              final cols = w >= 1100 ? 5 : (w >= 740 ? 3 : 2);
-              final itemW = (w - ((cols - 1) * 10)) / cols;
+            // Row(
+            //   crossAxisAlignment: CrossAxisAlignment.center,
+            //   children: [
+            //     Icon(Icons.warning, color: Colors.red.shade600, size: 14),
+            //     const SizedBox(width: 8),
+            //     Text(
+            //       isEN
+            //           ? 'Note: The amount shown does not include any penalties/overdue payments that may occur.'
+            //           : 'หมายเหตุ:ยอดที่แสดงยังไม่รวมค่าปรับ/ชำระเกินกำหนดที่อาจเกิดขึ้น',
+            //       style: const TextStyle(
+            //         color: Colors.red,
+            //         fontFamily: Font_.Fonts_T,
+            //         // fontWeight: FontWeight.w800,
+            //         fontSize: 10,
+            //       ),
+            //     ),
+            //   ],
+            // ),
+            // const SizedBox(height: 12),
+            // // กริด 2–4 คอลัมน์ตามความกว้าง
+            // LayoutBuilder(builder: (_, c) {
+            //   final w = c.maxWidth;
+            //   final cols = w >= 1100 ? 5 : (w >= 740 ? 3 : 2);
+            //   final itemW = (w - ((cols - 1) * 10)) / cols;
 
-              return Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  // _metricTile(
-                  //   width: itemW,
-                  //   icon: Icons.receipt_long,
-                  //   label: isEN ? 'PVAT' : 'ก่อนภาษีมูลค่าเพิ่ม',
-                  //   value: fmtMoney(inv.pvatAll),
-                  //   color: Colors.teal,
-                  //   // สัดส่วน PVAT/Total
-                  //   progress: ratio(inv.pvatAll ?? 0),
-                  // ),
-                  // _metricTile(
-                  //   width: itemW,
-                  //   icon: Icons.percent,
-                  //   label: isEN ? 'VAT' : 'ภาษีมูลค่าเพิ่ม',
-                  //   value: fmtMoney(inv.vatAll ?? 0),
-                  //   color: Colors.orange,
-                  //   progress: ratio(inv.vatAll ?? 0),
-                  // ),
-                  // _metricTile(
-                  //   width: itemW,
-                  //   icon: Icons.money_off_csred_outlined,
-                  //   label: isEN ? 'WHT' : 'ภาษีหัก ณ ที่จ่าย',
-                  //   value: fmtMoney(inv.whtAll),
-                  //   color: Colors.pink,
-                  //   progress: ratio(inv.whtAll ?? 0),
-                  // ),
-                  _metricTile(
-                    width: itemW,
-                    icon: Icons.money_off_csred_outlined,
-                    label: isEN ? 'DISCOUNT' : 'ส่วนลดรวม',
-                    value: fmtMoney(totalDisendbill),
-                    color: Colors.pink,
-                    progress: ratio(totalDisendbill),
-                  ),
-                  _metricTile(
-                    width: itemW,
-                    icon: Icons.payments,
-                    label: isEN ? 'TOTAL' : 'ยอดสุทธิรวม',
-                    value: fmtMoney(totalAll ?? 0),
-                    // fmtMoney(inv.totalAll ?? 0),
-                    color: Colors.blue,
-                    // TOTAL = 100%
-                    progress: totalAll == 0 ? 0 : 1,
-                    emphasize: true,
-                  ),
-                ],
-              );
-            }),
+            //   return Wrap(
+            //     spacing: 10,
+            //     runSpacing: 10,
+            //     children: [
+            //       // _metricTile(
+            //       //   width: itemW,
+            //       //   icon: Icons.receipt_long,
+            //       //   label: isEN ? 'PVAT' : 'ก่อนภาษีมูลค่าเพิ่ม',
+            //       //   value: fmtMoney(inv.pvatAll),
+            //       //   color: Colors.teal,
+            //       //   // สัดส่วน PVAT/Total
+            //       //   progress: ratio(inv.pvatAll ?? 0),
+            //       // ),
+            //       // _metricTile(
+            //       //   width: itemW,
+            //       //   icon: Icons.percent,
+            //       //   label: isEN ? 'VAT' : 'ภาษีมูลค่าเพิ่ม',
+            //       //   value: fmtMoney(inv.vatAll ?? 0),
+            //       //   color: Colors.orange,
+            //       //   progress: ratio(inv.vatAll ?? 0),
+            //       // ),
+            //       // _metricTile(
+            //       //   width: itemW,
+            //       //   icon: Icons.money_off_csred_outlined,
+            //       //   label: isEN ? 'WHT' : 'ภาษีหัก ณ ที่จ่าย',
+            //       //   value: fmtMoney(inv.whtAll),
+            //       //   color: Colors.pink,
+            //       //   progress: ratio(inv.whtAll ?? 0),
+            //       // ),
+            //       _metricTile(
+            //         width: itemW,
+            //         icon: Icons.money_off_csred_outlined,
+            //         label: isEN ? 'DISCOUNT' : 'ส่วนลดรวม',
+            //         value: fmtMoney(totalDisendbill),
+            //         color: Colors.pink,
+            //         progress: ratio(totalDisendbill),
+            //       ),
+            //       _metricTile(
+            //         width: itemW,
+            //         icon: Icons.payments,
+            //         label: isEN ? 'TOTAL' : 'ยอดสุทธิรวม',
+            //         value: fmtMoney(totalAll),
+            //         // fmtMoney(inv.totalAll ?? 0),
+            //         color: Colors.blue,
+            //         // TOTAL = 100%
+            //         progress: totalAll == 0 ? 0 : 1,
+            //         emphasize: true,
+            //       ),
+            //     ],
+            //   );
+            // }),
           ],
         ),
       ),
@@ -777,11 +1443,12 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                           fontSize: 14.5)),
                 ),
                 const SizedBox(width: 8),
-                Text(amount,
-                    style: const TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14.5)),
+                // ✅ คอมเม้นปิดจำนวนเงินไว้ (amount hidden per request)
+                // Text(amount,
+                //     style: const TextStyle(
+                //         fontFamily: Font_.Fonts_T,
+                //         fontWeight: FontWeight.w700,
+                //         fontSize: 14.5)),
               ]),
               const SizedBox(height: 6),
               Wrap(
@@ -793,7 +1460,10 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       const Icon(Icons.badge_outlined,
                           size: 14, color: Colors.black54),
                       const SizedBox(width: 6),
-                      Text(b.cid ?? '-',
+                      Text(
+                          widget.cuslang == 'EN'
+                              ? 'Contract : ' + (b.cid ?? '-')
+                              : 'สัญญา : ' + (b.cid ?? '-'),
                           style: const TextStyle(
                               fontFamily: Font_.Fonts_T, fontSize: 12.5)),
                     ]),
@@ -801,7 +1471,10 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       const Icon(Icons.calendar_today,
                           size: 14, color: Colors.black54),
                       const SizedBox(width: 6),
-                      Text(fmtDate(b.date),
+                      Text(
+                          widget.cuslang == 'EN'
+                              ? 'Due : ' + fmtDate(b.date)
+                              : 'ครบกำหนด : ' + fmtDate(b.date),
                           style: const TextStyle(
                               fontFamily: Font_.Fonts_T, fontSize: 12.5)),
                     ]),
@@ -821,16 +1494,20 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     );
   }
 
-  Widget _groupTile(Data g) {
+  Widget _groupTile(Data g, {bool isSearch = false}) {
     const int count = 5;
     final payser = g.payser ?? null;
     final serPayweb = g.serPayweb ?? null;
     final payptser = g.ptser ?? null;
+    final bills = _sortedBills(g.bill ?? const <Bill>[]);
+    final groupBillCount = bills.length;
+    final groupTotal = bills.fold<double>(
+        0.0, (sum, b) => sum + ((b.totalBill ?? 0).toDouble()));
+    final groupDiscount = bills.fold<double>(
+        0.0, (sum, b) => sum + ((b.totalDisendbill ?? 0).toDouble()));
     final bank = g.bank ?? '';
     final bno = g.bno ?? '';
     final bname = g.bname ?? ''; // Added definition
-    final title =
-        g.bank ?? (widget.cuslang == 'EN' ? 'Payment method' : 'ช่องทางชำระ');
     // หารหัสไฟล์โลโก้
 
     final bankInfo = bankCodeMap[bank];
@@ -839,285 +1516,841 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
     final bankEn = bankInfo?['en'];
 
     return Card(
-      elevation: 0.4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          childrenPadding: const EdgeInsets.only(left: 6, right: 6, bottom: 12),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          title: Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: Colors.white,
-                child: logoFile != null
-                    ? Image.asset(
-                        'assets/images/LogoBank/$logoFile',
-                        height: 26,
-                        errorBuilder: (_, __, ___) => const Icon(
-                            Icons.account_balance,
-                            size: 20,
-                            color: Colors.grey),
-                      )
-                    : const Icon(Icons.account_balance,
-                        size: 20, color: Colors.grey),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                    widget.cuslang == 'EN'
-                        ? bankEn! + ' ($bankCode)'
-                        : bank! + ' ($bankCode)',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15.5)),
-              ),
-              const SizedBox(width: 4),
-              chip(widget.cuslang == 'EN' ? 'Bills' : 'ใบแจ้งหนี้',
-                  Colors.indigo.withOpacity(.08), Colors.indigo.shade700),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
+      color: Colors.white,
+      elevation: isSearch ? 0.8 : 0.4,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: isSearch
+            ? BorderSide(color: Colors.indigo.shade100, width: 0.8)
+            : BorderSide.none,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            childrenPadding:
+                const EdgeInsets.only(left: 6, right: 6, bottom: 12),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            title: Row(
               children: [
-                if (bno.isNotEmpty)
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: Colors.white,
+                  child: logoFile != null
+                      ? Image.asset(
+                          'assets/images/LogoBank/$logoFile',
+                          height: 26,
+                          errorBuilder: (_, __, ___) => const Icon(
+                              Icons.account_balance,
+                              size: 20,
+                              color: Colors.grey),
+                        )
+                      : const Icon(Icons.account_balance,
+                          size: 20, color: Colors.grey),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                      widget.cuslang == 'EN'
+                          ? (bankEn ?? '') + ' ($bankCode)'
+                          : bank + ' ($bankCode)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontFamily: Font_.Fonts_T,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
+                ),
+                const SizedBox(width: 4),
+                // chip(widget.cuslang == 'EN' ? 'Bills' : 'ใบแจ้งหนี้',
+                //     Colors.indigo.shade50, Colors.indigo.shade700),
+              ],
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (bno.isNotEmpty)
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.account_balance,
+                          size: 15, color: Colors.black54),
+                      const SizedBox(width: 6),
+                      Text(bno,
+                          style: const TextStyle(
+                              fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                    ]),
+                  // if (bno.isNotEmpty)
+                  //   Row(mainAxisSize: MainAxisSize.min, children: [
+                  //     const Icon(Icons.confirmation_number_outlined,
+                  //         size: 15, color: Colors.black54),
+                  //     const SizedBox(width: 6),
+                  //     Text(bno,
+                  //         style: const TextStyle(
+                  //             fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                  //   ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.receipt_long,
+                  //       size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text(
+                  //       '${widget.cuslang == "EN" ? "PVAT" : "ก่อน VAT"}: ${fmtInt(g.pvatBill)}',
+                  //       style: const TextStyle(
+                  //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                  // ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.percent, size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text('VAT: ${fmtMoney(g.vatBill ?? 0)}',
+                  //       style: const TextStyle(
+                  //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                  // ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.money_off_csred_outlined,
+                  //       size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text('WHT: ${fmtInt(g.whtBill)}',
+                  //       style: const TextStyle(
+                  //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
+                  // ]),
                   Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.account_balance,
-                        size: 15, color: Colors.black54),
+                    const Icon(Icons.note, size: 15, color: Colors.black54),
                     const SizedBox(width: 6),
-                    Text(bno,
+                    Text(bname,
                         style: const TextStyle(
                             fontFamily: Font_.Fonts_T, fontSize: 12.5)),
                   ]),
-                // if (bno.isNotEmpty)
-                //   Row(mainAxisSize: MainAxisSize.min, children: [
-                //     const Icon(Icons.confirmation_number_outlined,
-                //         size: 15, color: Colors.black54),
-                //     const SizedBox(width: 6),
-                //     Text(bno,
-                //         style: const TextStyle(
-                //             fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                //   ]),
-                // Row(mainAxisSize: MainAxisSize.min, children: [
-                //   const Icon(Icons.receipt_long,
-                //       size: 15, color: Colors.black54),
-                //   const SizedBox(width: 6),
-                //   Text(
-                //       '${widget.cuslang == "EN" ? "PVAT" : "ก่อน VAT"}: ${fmtInt(g.pvatBill)}',
-                //       style: const TextStyle(
-                //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                // ]),
-                // Row(mainAxisSize: MainAxisSize.min, children: [
-                //   const Icon(Icons.percent, size: 15, color: Colors.black54),
-                //   const SizedBox(width: 6),
-                //   Text('VAT: ${fmtMoney(g.vatBill ?? 0)}',
-                //       style: const TextStyle(
-                //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                // ]),
-                // Row(mainAxisSize: MainAxisSize.min, children: [
-                //   const Icon(Icons.money_off_csred_outlined,
-                //       size: 15, color: Colors.black54),
-                //   const SizedBox(width: 6),
-                //   Text('WHT: ${fmtInt(g.whtBill)}',
-                //       style: const TextStyle(
-                //           fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                // ]),
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  const Icon(Icons.note, size: 15, color: Colors.black54),
-                  const SizedBox(width: 6),
-                  Text(bname,
-                      style: const TextStyle(
-                          fontFamily: Font_.Fonts_T, fontSize: 12.5)),
-                ]),
-                if (serPayweb.toString() == '0') ...[
-                  Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(
-                      Icons.warning_amber,
-                      size: 15,
-                      color: Colors.red.shade800,
-                    ),
-                    const SizedBox(width: 6),
-                    chip(
-                        widget.cuslang == 'EN'
-                            ? "The payment is not available at this time."
-                            : "ระบบปิดการชำระเงินชั่วคราว ",
-                        Colors.red.withOpacity(.08),
-                        Colors.red.shade700),
-                  ]),
-                ],
-
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Spacer(),
-                  const Icon(Icons.receipt, size: 15, color: Colors.black54),
-                  const SizedBox(width: 6),
-                  Text(
-                      '${widget.cuslang == "EN" ? "Bill All  : ${g.bill!.length ?? 0} " : "บิลทั้งหมด  : ${g.bill!.length ?? 0} "}',
-                      style: const TextStyle(
-                          color: Colors.grey,
-                          fontFamily: Font_.Fonts_T,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(width: 6),
-                  InkWell(
-                    child: SizedBox(
-                      // width: 100,
-                      child: Row(
-                        children: [
-                          Text(
-                              '${widget.cuslang == "EN" ? "Press to pay" : "กดเพื่อชำระ"}',
-                              style: const TextStyle(
-                                  decoration: TextDecoration.underline,
-                                  // decorationThickness: 2.0,
-                                  // decorationStyle: TextDecorationStyle.wavy,
-                                  color: Colors.green,
-                                  fontFamily: Font_.Fonts_T,
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w700)),
-                          Icon(
-                            Icons.chevron_right,
-                            color: Colors.green,
-                          )
-                        ],
+                  if (serPayweb.toString() == '0') ...[
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(
+                        Icons.warning_amber,
+                        size: 15,
+                        color: Colors.red.shade800,
                       ),
-                    ),
-                    onTap: () async {
-                      if (serPayweb.toString() == '1') {
-                        List<String>? selectedDocNos;
-                        if ((g.bill ?? []).length > 1) {
-                          selectedDocNos =
-                              await _showBillSelectionDialog(g.bill!);
-                          if (selectedDocNos == null) return; // User cancelled
+                      const SizedBox(width: 6),
+                      chip(
+                          widget.cuslang == 'EN'
+                              ? "The payment is not available at this time."
+                              : "ระบบปิดการชำระเงินชั่วคราว ",
+                          Colors.red.withOpacity(.08),
+                          Colors.red.shade700),
+                    ]),
+                  ],
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.receipt, size: 15, color: Colors.black54),
+                    const SizedBox(width: 6),
+                    Text(
+                        '${widget.cuslang == "EN" ? "Bill All" : "บิลทั้งหมด"} : $groupBillCount',
+                        style: const TextStyle(
+                            color: Colors.black87,
+                            fontFamily: Font_.Fonts_T,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700)),
+                  ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.payments, size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text(
+                  //       '${widget.cuslang == "EN" ? "Total" : "ยอดสุทธิรวม"} : ${fmtMoney(groupTotal)}',
+                  //       style: const TextStyle(
+                  //           color: Colors.black87,
+                  //           fontFamily: Font_.Fonts_T,
+                  //           fontSize: 12.5,
+                  //           fontWeight: FontWeight.w700)),
+                  // ]),
+                  // Row(mainAxisSize: MainAxisSize.min, children: [
+                  //   const Icon(Icons.money_off_csred_outlined,
+                  //       size: 15, color: Colors.black54),
+                  //   const SizedBox(width: 6),
+                  //   Text(
+                  //       '${widget.cuslang == "EN" ? "Discount" : "ส่วนลดรวม"} : ${fmtMoney(groupDiscount)}',
+                  //       style: const TextStyle(
+                  //           color: Colors.black54,
+                  //           fontFamily: Font_.Fonts_T,
+                  //           fontSize: 12.5,
+                  //           fontWeight: FontWeight.w700)),
+                  // ]),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Spacer(),
+                    // const Icon(Icons.receipt, size: 15, color: Colors.black54),
+                    // const SizedBox(width: 6),
+                    // Text(
+                    //     '${widget.cuslang == "EN" ? "Bill All  : $groupBillCount " : "บิลทั้งหมด  : $groupBillCount "}',
+                    //     style: const TextStyle(
+                    //         color: Colors.grey,
+                    //         fontFamily: Font_.Fonts_T,
+                    //         fontSize: 10,
+                    //         fontWeight: FontWeight.w700)),
+                    const SizedBox(width: 6),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Text(
+                        widget.cuslang == "EN" ? "Press to pay" : "กดเพื่อชำระ",
+                        style: TextStyle(
+                          color: Colors.indigo.shade700,
+                          fontFamily: Font_.Fonts_T,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                          decorationColor: Colors.indigo.shade700,
+                        ),
+                      ),
+                      onTap: () async {
+                        final preferences =
+                            await SharedPreferences.getInstance();
+                        final custNo = preferences.getString('custno');
+                        final ren = preferences.getString('renTalSer');
+                        // 1. Guard Clause: Check if payment is unavailable first and exit early.
+                        if (serPayweb.toString() != '1') {
+                          PanaraInfoDialog.showAnimatedGrow(
+                            context,
+                            title: widget.cuslang == 'EN' ? "Sorry" : "ขออภัย",
+                            message: widget.cuslang == 'EN'
+                                ? "The payment is not available at this time. Please contact the system administrator."
+                                : "ไม่สามารถชำระเงินได้ขณะนี้ระบบปิดการชำระเงินชั่วคราว กรุณาติดต่อฝ่ายบริการลูกค้า",
+                            buttonText: widget.cuslang == 'EN'
+                                ? "Acknowledge"
+                                : "รับทราบ",
+                            onTapDismiss: () {
+                              Navigator.of(context, rootNavigator: true).pop();
+                            },
+                            panaraDialogType: PanaraDialogType.warning,
+                            barrierDismissible: false,
+                          );
+                          return; // Stop execution here
+                        }
+
+                        // 2. Handle Document Selection
+                        Map<String, dynamic>? dialogResult;
+                        List<String> selectedDocNos;
+                        bool cameFromIntent = false;
+                        if (bills.length != 0) {
+                          dialogResult = await _showBillSelectionDialog(
+                            bills.toList(growable: false),
+                            serPayment: payser.toString() ?? '',
+                          );
+                          if (dialogResult == null) {
+                            return; // User cancelled
+                          }
+                          selectedDocNos = (dialogResult['docNos'] as List?)
+                                  ?.cast<String>() ??
+                              [];
+                          cameFromIntent = dialogResult['fromIntent'] == true;
                         } else {
-                          selectedDocNos = (g.bill ?? [])
+                          selectedDocNos = bills
                               .map((b) => b.docno ?? '')
                               .where((d) => d.isNotEmpty)
                               .toList();
                         }
 
+                        // 3. Update State
                         setState(() {
                           tap_pay = 1;
-                          _serPayment = payser;
-                          _serptPayment = payptser;
                         });
+
+                        // 4. Navigate to the appropriate screen based on intent authorization
+                        final bool useV4 = _hasIntentsAuth == true;
+
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => paymentSubV3InvAll(
-                              mainScreenAnimation:
+                            builder: (context) {
+                              // Shared animation logic
+                              final animation =
                                   Tween<double>(begin: 0.0, end: 1.0).animate(
-                                      CurvedAnimation(
-                                          parent: widget
-                                              .mainScreenAnimationController!,
-                                          curve: Interval((1 / count) * 5, 1.0,
-                                              curve: Curves.fastOutSlowIn))),
-                              mainScreenAnimationController:
-                                  widget.mainScreenAnimationController!,
-                              teNantModel: widget.teNantModel,
-                              cuslang: widget.cuslang,
-                              serPayment: payser.toString(),
-                              serptPayment: payptser.toString(),
-                              selectedDocNos: selectedDocNos,
-                            ),
+                                CurvedAnimation(
+                                  parent: widget.mainScreenAnimationController!,
+                                  curve: Interval(
+                                    (1 / count) * 5,
+                                    1.0,
+                                    curve: Curves.fastOutSlowIn,
+                                  ),
+                                ),
+                              );
+
+                              if (useV4) {
+                                return
+                                    // PaymentSubV4Page(
+                                    paymentSubV4InvAll(
+                                  mainScreenAnimation: animation,
+                                  mainScreenAnimationController:
+                                      widget.mainScreenAnimationController!,
+                                  teNantModel: widget.teNantModel,
+                                  cuslang: widget.cuslang,
+                                  serPayment: payser.toString(),
+                                  serptPayment: payptser.toString(),
+                                  selectedDocNos: selectedDocNos,
+                                  fromIntent: cameFromIntent,
+                                );
+                              } else {
+                                return paymentSubV3InvAll(
+                                  mainScreenAnimation: animation,
+                                  mainScreenAnimationController:
+                                      widget.mainScreenAnimationController!,
+                                  teNantModel: widget.teNantModel,
+                                  cuslang: widget.cuslang,
+                                  serPayment: payser.toString(),
+                                  serptPayment: payptser.toString(),
+                                  selectedDocNos: selectedDocNos,
+                                );
+                              }
+                            },
                           ),
                         );
-                      } else {
-                        PanaraInfoDialog.showAnimatedGrow(
-                          context,
-                          title: widget.cuslang == 'EN' ? "Sorry" : "ขออภัย",
-                          message: widget.cuslang == 'EN'
-                              ? "The payment is not available at this time. Please contact the system administrator."
-                              : "ไม่สามารถชำระเงินได้ขณะนี้ระบบปิดการชำระเงินชั่วคราว กรุณาติดต่อฝ่ายบริการลูกค้า",
-                          buttonText: widget.cuslang == 'EN'
-                              ? "Acknowledge"
-                              : "รับทราบ",
-                          onTapDismiss: () async {
-                            Navigator.of(context, rootNavigator: true).pop();
-                          },
-                          panaraDialogType: PanaraDialogType.warning,
-                          barrierDismissible: false,
-                        );
-                      }
-                    },
+                      },
+                      // onTap: () async {
+                      //   if (serPayweb.toString() == '1') {
+                      //     List<String>? selectedDocNos;
+                      //     if (bills.length > 1) {
+                      //       selectedDocNos = await _showBillSelectionDialog(
+                      //           bills.toList(growable: false));
+                      //       if (selectedDocNos == null) {
+                      //         return; // User cancelled
+                      //       }
+                      //     } else {
+                      //       selectedDocNos = bills
+                      //           .map((b) => b.docno ?? '')
+                      //           .where((d) => d.isNotEmpty)
+                      //           .toList();
+                      //     }
+
+                      //     setState(() {
+                      //       tap_pay = 1;
+                      //     });
+
+                      //     _hasIntentsAuth == null
+                      //         ? Navigator.push(
+                      //             context,
+                      //             MaterialPageRoute(
+                      //               builder: (context) => paymentSubV3InvAll(
+                      //                 mainScreenAnimation: Tween<double>(
+                      //                         begin: 0.0, end: 1.0)
+                      //                     .animate(CurvedAnimation(
+                      //                         parent: widget
+                      //                             .mainScreenAnimationController!,
+                      //                         curve: Interval(
+                      //                             (1 / count) * 5, 1.0,
+                      //                             curve:
+                      //                                 Curves.fastOutSlowIn))),
+                      //                 mainScreenAnimationController:
+                      //                     widget.mainScreenAnimationController!,
+                      //                 teNantModel: widget.teNantModel,
+                      //                 cuslang: widget.cuslang,
+                      //                 serPayment: payser.toString(),
+                      //                 serptPayment: payptser.toString(),
+                      //                 selectedDocNos: selectedDocNos,
+                      //               ),
+                      //             ),
+                      //           )
+                      //         : _hasIntentsAuth!
+                      //             ? Navigator.push(
+                      //                 context,
+                      //                 MaterialPageRoute(
+                      //                   builder: (context) =>
+                      //                       paymentSubV4InvAll(
+                      //                     mainScreenAnimation: Tween<double>(
+                      //                             begin: 0.0, end: 1.0)
+                      //                         .animate(CurvedAnimation(
+                      //                             parent: widget
+                      //                                 .mainScreenAnimationController!,
+                      //                             curve: Interval(
+                      //                                 (1 / count) * 5, 1.0,
+                      //                                 curve: Curves
+                      //                                     .fastOutSlowIn))),
+                      //                     mainScreenAnimationController: widget
+                      //                         .mainScreenAnimationController!,
+                      //                     teNantModel: widget.teNantModel,
+                      //                     cuslang: widget.cuslang,
+                      //                     serPayment: payser.toString(),
+                      //                     serptPayment: payptser.toString(),
+                      //                     selectedDocNos: selectedDocNos,
+                      //                   ),
+                      //                 ),
+                      //               )
+                      //             : Navigator.push(
+                      //                 context,
+                      //                 MaterialPageRoute(
+                      //                   builder: (context) =>
+                      //                       paymentSubV3InvAll(
+                      //                     mainScreenAnimation: Tween<double>(
+                      //                             begin: 0.0, end: 1.0)
+                      //                         .animate(CurvedAnimation(
+                      //                             parent: widget
+                      //                                 .mainScreenAnimationController!,
+                      //                             curve: Interval(
+                      //                                 (1 / count) * 5, 1.0,
+                      //                                 curve: Curves
+                      //                                     .fastOutSlowIn))),
+                      //                     mainScreenAnimationController: widget
+                      //                         .mainScreenAnimationController!,
+                      //                     teNantModel: widget.teNantModel,
+                      //                     cuslang: widget.cuslang,
+                      //                     serPayment: payser.toString(),
+                      //                     serptPayment: payptser.toString(),
+                      //                     selectedDocNos: selectedDocNos,
+                      //                   ),
+                      //                 ),
+                      //               );
+                      //   } else {
+                      //     PanaraInfoDialog.showAnimatedGrow(
+                      //       context,
+                      //       title: widget.cuslang == 'EN' ? "Sorry" : "ขออภัย",
+                      //       message: widget.cuslang == 'EN'
+                      //           ? "The payment is not available at this time. Please contact the system administrator."
+                      //           : "ไม่สามารถชำระเงินได้ขณะนี้ระบบปิดการชำระเงินชั่วคราว กรุณาติดต่อฝ่ายบริการลูกค้า",
+                      //       buttonText: widget.cuslang == 'EN'
+                      //           ? "Acknowledge"
+                      //           : "รับทราบ",
+                      //       onTapDismiss: () async {
+                      //         Navigator.of(context, rootNavigator: true).pop();
+                      //       },
+                      //       panaraDialogType: PanaraDialogType.warning,
+                      //       barrierDismissible: false,
+                      //     );
+                      //   }
+                      // },
+                    ),
+                    // IconButton(
+                    //   icon: const Icon(
+                    //     Icons.chevron_right,
+                    //     color: Colors.green,
+                    //   ),
+                    //   onPressed: () async {
+                    //     setState(() {
+                    //       tap_pay = 1;
+                    //       _serPayment = payser;
+                    //       _serptPayment = payptser;
+                    //     });
+                    //     Navigator.push(
+                    //       context,
+                    //       MaterialPageRoute(
+                    //         builder: (context) => paymentSubV2InvAll(
+                    //           mainScreenAnimation:
+                    //               Tween<double>(begin: 0.0, end: 1.0).animate(
+                    //                   CurvedAnimation(
+                    //                       parent: widget
+                    //                           .mainScreenAnimationController!,
+                    //                       curve: Interval((1 / count) * 5, 1.0,
+                    //                           curve: Curves.fastOutSlowIn))),
+                    //           mainScreenAnimationController:
+                    //               widget.mainScreenAnimationController!,
+                    //           teNantModel: widget.teNantModel,
+                    //           cuslang: widget.cuslang,
+                    //           serPayment: payser.toString(),
+                    //           serptPayment: payptser.toString(),
+                    //         ),
+                    //       ),
+                    //     );
+                    //   },
+                    // )
+                  ]),
+                ],
+              ),
+            ),
+            children: [
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+              ...bills.map(_billRow),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(width: 8),
+                  Text(
+                    widget.cuslang == "EN"
+                        ? 'Note: The amount shown does not include any penalties/overdue payments that may occur.'
+                        : 'หมายเหตุ:ยอดที่แสดงยังไม่รวมค่าปรับ/ชำระเกินกำหนดที่อาจเกิดขึ้น',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontFamily: Font_.Fonts_T,
+                      // fontWeight: FontWeight.w800,
+                      fontSize: 10,
+                    ),
                   ),
-                  // IconButton(
-                  //   icon: const Icon(
-                  //     Icons.chevron_right,
-                  //     color: Colors.green,
-                  //   ),
-                  //   onPressed: () async {
-                  //     setState(() {
-                  //       tap_pay = 1;
-                  //       _serPayment = payser;
-                  //       _serptPayment = payptser;
-                  //     });
-                  //     Navigator.push(
-                  //       context,
-                  //       MaterialPageRoute(
-                  //         builder: (context) => paymentSubV2InvAll(
-                  //           mainScreenAnimation:
-                  //               Tween<double>(begin: 0.0, end: 1.0).animate(
-                  //                   CurvedAnimation(
-                  //                       parent: widget
-                  //                           .mainScreenAnimationController!,
-                  //                       curve: Interval((1 / count) * 5, 1.0,
-                  //                           curve: Curves.fastOutSlowIn))),
-                  //           mainScreenAnimationController:
-                  //               widget.mainScreenAnimationController!,
-                  //           teNantModel: widget.teNantModel,
-                  //           cuslang: widget.cuslang,
-                  //           serPayment: payser.toString(),
-                  //           serptPayment: payptser.toString(),
-                  //         ),
-                  //       ),
-                  //     );
-                  //   },
-                  // )
-                ]),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInlineCidSearch() {
+    final isEN = widget.cuslang == 'EN';
+    final query = _cidSearchController.text.trim();
+    final hasQuery = query.isNotEmpty;
+    final matches =
+        _cidSearchTouched ? _findBanksByCid(query) : const <_CidBankMatch>[];
+    final suggestions = matches.isEmpty
+        ? _findContractSuggestions(query)
+        : const <_ContractSuggestion>[];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.indigo.withOpacity(0.16)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _cidSearchController,
+            decoration: InputDecoration(
+              hintText: isEN ? 'Enter contract no.' : 'กรอกเลขสัญญา',
+              hintStyle: TextStyle(
+                color: Colors.grey.shade500,
+                fontFamily: Font_.Fonts_T,
+              ),
+              prefixIcon: Padding(
+                padding: const EdgeInsets.only(left: 10, right: 8),
+                child:
+                    //  Container(
+                    //   width: 32,
+                    //   height: 32,
+                    //   decoration: BoxDecoration(
+                    //     color: Colors.indigo.withOpacity(0.08),
+                    //     borderRadius: BorderRadius.circular(9),
+                    //   ),
+                    // child:
+                    Icon(
+                  Icons.search,
+                  color: Colors.indigo.shade500,
+                  size: 18,
+                ),
+                // ),
+              ),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 50, minHeight: 44),
+              suffixIcon: hasQuery
+                  ? IconButton(
+                      icon: Icon(Icons.close,
+                          color: Colors.grey.shade600, size: 20),
+                      onPressed: () {
+                        setState(() {
+                          _cidSearchTouched = false;
+                          _cidSearchController.clear();
+                        });
+                      },
+                    )
+                  : IconButton(
+                      tooltip: isEN ? 'Close search' : 'ปิดการค้นหา',
+                      icon: Icon(
+                        Icons.close,
+                        color: Colors.grey.shade600,
+                        size: 20,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _showCidSearch = false;
+                          _cidSearchTouched = false;
+                          _cidSearchController.clear();
+                        });
+                      },
+                    ),
+              isDense: true,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+              filled: true,
+              fillColor: Colors.white,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    BorderSide(color: Colors.indigo.shade300, width: 1.2),
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            textInputAction: TextInputAction.search,
+            onChanged: (_) => setState(() => _cidSearchTouched = true),
+            onSubmitted: (_) => setState(() => _cidSearchTouched = true),
+          ),
+        ),
+        if (suggestions.isNotEmpty || (_cidSearchTouched && hasQuery))
+          Container(
+            margin: const EdgeInsets.only(top: 8),
+            constraints: BoxConstraints(
+              minHeight: _showCidSearch && !hasQuery
+                  ? MediaQuery.of(context).size.height * 0.42
+                  : 0,
+            ),
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF2F4FF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.indigo.withOpacity(0.08)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: matches.isEmpty
+                          ? Colors.red.withOpacity(0.08)
+                          : Colors.indigo.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          matches.isEmpty && suggestions.isEmpty
+                              ? Icons.info_outline
+                              : (matches.isNotEmpty
+                                  ? Icons.account_balance
+                                  : Icons.format_list_bulleted),
+                          size: 14,
+                          color: matches.isEmpty && suggestions.isEmpty
+                              ? Colors.red.shade700
+                              : Colors.indigo.shade700,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          matches.isEmpty
+                              ? (suggestions.isEmpty
+                                  ? (isEN ? 'No bank found' : 'ไม่พบธนาคาร')
+                                  : (hasQuery
+                                      ? (isEN
+                                          ? 'Similar contracts'
+                                          : 'เลขสัญญาใกล้เคียง')
+                                      : (isEN
+                                          ? 'Select contract'
+                                          : 'เลือกเลขสัญญา')))
+                              : (isEN
+                                  ? '${matches.length} bank(s)'
+                                  : 'พบ ${matches.length} ธนาคาร'),
+                          style: TextStyle(
+                            fontFamily: Font_.Fonts_T,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                            color: matches.isEmpty && suggestions.isEmpty
+                                ? Colors.red.shade700
+                                : Colors.indigo.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (matches.isNotEmpty)
+                  ...matches.map(
+                    (match) => _groupTile(match.group, isSearch: true),
+                  )
+                else if (suggestions.isNotEmpty)
+                  ...suggestions.map(_contractSuggestionTile),
               ],
             ),
           ),
-          children: [
-            const Divider(height: 1),
-            const SizedBox(height: 8),
-            ...(g.bill ?? const <Bill>[]).map(_billRow).toList(),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(width: 8),
-                Text(
-                  widget.cuslang == "EN"
-                      ? 'Note: The amount shown does not include any penalties/overdue payments that may occur.'
-                      : 'หมายเหตุ:ยอดที่แสดงยังไม่รวมค่าปรับ/ชำระเกินกำหนดที่อาจเกิดขึ้น',
-                  style: const TextStyle(
-                    color: Colors.red,
-                    fontFamily: Font_.Fonts_T,
-                    // fontWeight: FontWeight.w800,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
+      ],
+    );
+  }
+
+  Widget _contractSuggestionTile(_ContractSuggestion suggestion) {
+    final isEN = widget.cuslang == 'EN';
+    final bankCount = suggestion.bankNames.length;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _cidSearchController.text = suggestion.cid;
+          _cidSearchController.selection = TextSelection.fromPosition(
+            TextPosition(offset: suggestion.cid.length),
+          );
+          _cidSearchTouched = true;
+        });
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.indigo.withOpacity(0.10)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.025),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: Colors.indigo.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.confirmation_number,
+                color: Colors.indigo.shade600,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    suggestion.cid,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    isEN
+                        ? '$bankCount bank(s) · ${suggestion.billCount} bill(s) · ${fmtMoney(suggestion.total)}'
+                        : '$bankCount ธนาคาร · ${suggestion.billCount} บิล · ${fmtMoney(suggestion.total)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: Font_.Fonts_T,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, color: Colors.indigo.shade400),
           ],
         ),
       ),
     );
   }
 
-  Future<List<String>?> _showBillSelectionDialog(List<Bill> bills) async {
-    List<String> selectedDocNos = bills.map((b) => b.docno ?? '').toList();
+  Future<Map<String, dynamic>?> _showBillSelectionDialog(
+    List<Bill> bills, {
+    required String serPayment,
+  }) async {
+    final sortedBills = _sortedBills(bills);
     final isEN = widget.cuslang == 'EN';
+    final preferences = await SharedPreferences.getInstance();
+    final custNo = preferences.getString('custno');
+    final ren = preferences.getString('renTalSer');
 
-    return await showDialog<List<String>>(
+    // Track per-intent expansion (intent index → bool)
+    final Map<int, bool> expandedCards = {};
+
+    // Check bulk availability before showing dialog
+    Map<String, bool> initiatedMap = {};
+
+    await redPaymentIntents(
+        cusno: custNo.toString() ?? '',
+        propertyno: ren.toString() ?? '',
+        serPayment: serPayment);
+
+    // ✅ Print payment intents ที่โหลดได้
+    debugPrint('===== paymentIntents loaded =====');
+    debugPrint('count: ${paymentIntents.length}');
+    for (var i = 0; i < paymentIntents.length; i++) {
+      final intent = paymentIntents[i];
+      debugPrint(
+          '[$i] uuid=${intent.intentUuid} status=${intent.status} merchantId=${intent.bankmerchantid}');
+      if (intent.invoices.isNotEmpty) {
+        for (final inv in intent.invoices) {
+          debugPrint('     -> billRef=${inv.billReference}');
+        }
+      } else {
+        debugPrint('     -> (no invoices)');
+      }
+    }
+    debugPrint('=================================');
+
+    try {
+      final allDocNos = sortedBills
+          .map((b) => b.docno ?? '')
+          .where((d) => d.isNotEmpty)
+          .toList();
+      if (allDocNos.isNotEmpty) {
+        final response = await postPaymentIntentsBillReferenceAvailableBulk(
+          cusno: custNo.toString(),
+          propertyno: ren.toString(),
+          billreference: allDocNos,
+        );
+        // ✅ Print raw response จาก bulk API
+        debugPrint('===== bulk availability response =====');
+        debugPrint('status: ${response?.statusCode}');
+        debugPrint('body: ${response?.body}');
+        debugPrint('=====================================');
+
+        if (response != null &&
+            response.statusCode >= 200 &&
+            response.statusCode < 300) {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map && decoded['data'] is Map) {
+            final data = decoded['data'] as Map<String, dynamic>;
+            data.forEach((key, value) {
+              initiatedMap[key] = value == false;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Bulk availability check error: $e');
+    }
+
+    // ✅ Print initiatedMap หลัง parse
+    debugPrint('===== initiatedMap =====');
+    initiatedMap.forEach((doc, isInitiated) {
+      debugPrint('  $doc -> ${isInitiated ? "initiated" : "available"}');
+    });
+    debugPrint('========================');
+
+    List<String> selectedDocNos = sortedBills
+        .map((b) => b.docno ?? '')
+        .where((d) => d.isNotEmpty && !(initiatedMap[d] == true))
+        .toList();
+
+    // ✅ Print selectedDocNos ที่ derive ได้
+    debugPrint('===== selectedDocNos =====');
+    debugPrint('count: ${selectedDocNos.length}');
+    for (final d in selectedDocNos) {
+      debugPrint('  - $d');
+    }
+    debugPrint('==========================');
+
+    // ✅ Track ว่าผู้ใช้กดจาก card สีส้ม (intent) หรือไม่
+    bool cameFromIntentCard = false;
+
+    return await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (BuildContext context) {
         return StatefulBuilder(
@@ -1127,7 +2360,8 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
               surfaceTintColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20)),
-              titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              insetPadding: const EdgeInsets.all(8),
+              titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
               title: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1138,160 +2372,694 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                         fontWeight: FontWeight.bold,
                         fontSize: 19),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    isEN
-                        ? 'Choose the items you want to proceed with.'
-                        : 'เลือกรายการที่คุณต้องการดำเนินการต่อ',
-                    style: TextStyle(
-                        fontFamily: Font_.Fonts_T,
-                        fontSize: 12.5,
-                        color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 12),
+                  // const SizedBox(height: 4),
+                  // Text(
+                  //   isEN
+                  //       ? 'Choose the items you want to proceed with.'
+                  //       : 'เลือกรายการที่คุณต้องการดำเนินการต่อ',
+                  //   maxLines: 1,
+                  //   overflow: TextOverflow.ellipsis,
+                  //   style: TextStyle(
+                  //       fontFamily: Font_.Fonts_T,
+                  //       fontSize: 11.5,
+                  //       color: Colors.grey.shade600,
+                  //       fontWeight: FontWeight.w500),
+                  // ),
+                  // Text(
+                  //   isEN
+                  //       ? '#Note: If payment has already been initiated, please confirm to complete the process.'
+                  //       : '#หมายเหตุ : หากมีการเริ่มการชำระแล้ว กรุณากดยืนยันเพื่อดำเนินการต่อให้เสร็จสิ้น',
+                  //   maxLines: 2,
+                  //   overflow: TextOverflow.ellipsis,
+                  //   style: TextStyle(
+                  //       fontFamily: Font_.Fonts_T,
+                  //       fontSize: 10,
+                  //       color: Colors.grey.shade600,
+                  //       fontWeight: FontWeight.w500),
+                  // ),
+                  // const SizedBox(height: 8),
                   const Divider(height: 1),
                 ],
               ),
-              contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              contentPadding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
               content: Container(
-                constraints: const BoxConstraints(maxWidth: 480),
-                width: MediaQuery.of(context).size.width * 0.9,
+                constraints: const BoxConstraints(maxWidth: 600),
+                width: MediaQuery.of(context).size.width * 0.95,
+                height: MediaQuery.of(context).size.height * 0.7,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: bills.map((bill) {
-                      final docno = bill.docno ?? '';
-                      final isSelected = selectedDocNos.contains(docno);
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? Colors.green.withOpacity(0.04)
-                              : Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isSelected
-                                ? Colors.green.withOpacity(0.4)
-                                : Colors.grey.shade200,
-                            width: 1.2,
+                    children: [
+                      // const Divider(height: 12),
+                      // ✅ หัวข้อย่อย "รายการที่กำลังดำเนินการอยู่" → แสดงเฉพาะเมื่อมี intent
+                      if (paymentIntents.isNotEmpty) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, bottom: 6),
+                          child: Text(
+                            isEN
+                                ? 'The items you are currently processing'
+                                : 'รายการที่คุณกำลังดำเนินการอยู่',
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              color: Colors.orange.shade700,
+                            ),
                           ),
                         ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(14),
-                          onTap: () {
-                            setDialogState(() {
-                              if (!isSelected) {
-                                selectedDocNos.add(docno);
-                              } else {
-                                if (selectedDocNos.length > 1) {
-                                  selectedDocNos.remove(docno);
-                                } else {
-                                  Fluttertoast.showToast(
-                                    msg: isEN
-                                        ? "Please select at least one bill."
-                                        : "กรุณาเลือกอย่างน้อย 1 รายการ",
-                                    backgroundColor: Colors.red,
-                                    textColor: Colors.white,
-                                  );
+                      ] else ...[
+                        // ✅ ถ้าไม่มี intent → แสดงหัวข้อ "รายการที่ต้องชำระ" ตรงนี้แทน
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, bottom: 6),
+                          child: Text(
+                            isEN ? 'Bills to be paid' : 'รายการที่ต้องชำระ',
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                              color: Colors.indigo.shade700,
+                            ),
+                          ),
+                        ),
+                      ],
+                      // ✅ Section: รายการ payment intents ที่กำลังรอชำระ (บนสุด, scroll ได้)
+                      if (paymentIntents.isNotEmpty) ...[
+                        ...paymentIntents.toList().asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final intent = entry.value;
+                          final intentTotal =
+                              intent.amount ?? intent.total ?? 0;
+                          final billRefs = intent.invoices
+                              .map((inv) => inv.billReference ?? '')
+                              .where((r) => r.isNotEmpty)
+                              .toList();
+                          final shortUuid = (intent.intentUuid ?? '').length >
+                                  16
+                              ? '#${(intent.intentUuid ?? '').substring(0, 16)}…'
+                              : '#${intent.intentUuid ?? '-'}';
+                          final isExpanded = expandedCards[idx] ?? false;
+                          return InkWell(
+                            onTap: () {
+                              // ✅ กดที่ card → ติ๊ก checkbox ทุกบิลในรายการที่ต้องชำระอัตโนมัติ
+                              // (เฉพาะบิลที่ยังไม่ถูก initiate และยังไม่ถูกเลือก)
+                              if (billRefs.isEmpty) return;
+                              setDialogState(() {
+                                // ✅ Mark ว่าผู้ใช้กดจาก card intent
+                                cameFromIntentCard = true;
+                                for (final ref in billRefs) {
+                                  // เพิ่มเฉพาะบิลที่:
+                                  // 1) ยังไม่ถูก initiate (initiatedMap[ref] != true)
+                                  // 2) ยังไม่อยู่ใน selectedDocNos
+                                  final isInit = initiatedMap[ref] == true;
+                                  if (!isInit &&
+                                      !selectedDocNos.contains(ref)) {
+                                    selectedDocNos.add(ref);
+                                  }
                                 }
-                              }
-                            });
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 12),
-                            child: Row(
-                              children: [
-                                Checkbox(
-                                  value: isSelected,
-                                  activeColor: Colors.green,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(5)),
-                                  onChanged: (bool? value) {
-                                    setDialogState(() {
-                                      if (value == true) {
-                                        selectedDocNos.add(docno);
-                                      } else {
-                                        if (selectedDocNos.length > 1) {
-                                          selectedDocNos.remove(docno);
-                                        } else {
-                                          Fluttertoast.showToast(
-                                            msg: isEN
-                                                ? "Please select at least one bill."
-                                                : "กรุณาเลือกอย่างน้อย 1 รายการ",
-                                            backgroundColor: Colors.red,
-                                            textColor: Colors.white,
-                                          );
-                                        }
-                                      }
-                                    });
-                                  },
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(10),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 6),
+                              padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.amber.withOpacity(0.10),
+                                    Colors.orange.withOpacity(0.05),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                    color: Colors.amber.shade700, width: 1.0),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Row(
                                     children: [
-                                      Text(
-                                        docno,
-                                        style: const TextStyle(
-                                            fontFamily: Font_.Fonts_T,
-                                            fontSize: 14.5,
-                                            fontWeight: FontWeight.w700),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Row(
-                                        children: [
-                                          Icon(Icons.calendar_month_outlined,
-                                              size: 13,
-                                              color: Colors.grey.shade600),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            fmtDate(bill.date),
-                                            style: TextStyle(
+                                      // Status pill: รอชำระเงิน
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 7, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.shade700,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 5,
+                                              height: 5,
+                                              decoration: const BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 5),
+                                            Text(
+                                              intent.status ?? 'รอชำระเงิน',
+                                              style: const TextStyle(
                                                 fontFamily: Font_.Fonts_T,
-                                                fontSize: 12,
-                                                color: Colors.grey.shade600,
-                                                fontWeight: FontWeight.w500),
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 10.5,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          shortUuid,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontFamily: Font_.Fonts_T,
+                                            color: Colors.amber.shade900,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 10,
                                           ),
-                                        ],
+                                        ),
                                       ),
                                     ],
                                   ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(
-                                      fmtMoney(bill.totalBill),
-                                      style: const TextStyle(
-                                          fontFamily: Font_.Fonts_T,
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w800,
-                                          color: Colors.indigo),
+                                  const SizedBox(height: 2),
+                                  // ✅ ฿ จำนวนเงิน + ดูเลขบิล อยู่ Row เดียวกัน
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      // ฿ จำนวนเงิน — เด่น (ใหญ่ + สีชัด)
+                                      Expanded(
+                                        child: Text(
+                                          '฿${fmtMoney(intentTotal)}',
+                                          style: TextStyle(
+                                            fontFamily: Font_.Fonts_T,
+                                            color: Colors.amber.shade900,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 17,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                      ),
+                                      // ✅ ดูเลขบิล — collapsible toggle
+                                      if (billRefs.isNotEmpty)
+                                        InkWell(
+                                          onTap: () {
+                                            setDialogState(() {
+                                              expandedCards[idx] = !isExpanded;
+                                            });
+                                          },
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 4, horizontal: 6),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(
+                                                  Icons.receipt_long,
+                                                  size: 13,
+                                                  color: Colors.amber.shade900,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  isEN
+                                                      ? (isExpanded
+                                                          ? 'Hide'
+                                                          : 'Show ${billRefs.length}')
+                                                      : (isExpanded
+                                                          ? 'ซ่อน'
+                                                          : 'ดูเลขบิล (${billRefs.length})'),
+                                                  style: TextStyle(
+                                                    fontFamily: Font_.Fonts_T,
+                                                    color:
+                                                        Colors.amber.shade900,
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w700,
+                                                    decoration: TextDecoration
+                                                        .underline,
+                                                    decorationColor:
+                                                        Colors.amber.shade700,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 2),
+                                                AnimatedRotation(
+                                                  duration: const Duration(
+                                                      milliseconds: 200),
+                                                  turns: isExpanded ? 0.5 : 0,
+                                                  child: Icon(
+                                                    Icons.keyboard_arrow_down,
+                                                    size: 14,
+                                                    color:
+                                                        Colors.amber.shade900,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  // ✅ เลขบิล — แสดงเมื่อยืดออก (ครอบด้วย if เดียวกับด้านบน)
+                                  if (billRefs.isNotEmpty)
+                                    AnimatedSize(
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      curve: Curves.easeOut,
+                                      child: isExpanded
+                                          ? Padding(
+                                              padding:
+                                                  const EdgeInsets.only(top: 6),
+                                              child: Wrap(
+                                                spacing: 6,
+                                                runSpacing: 4,
+                                                children: billRefs.map((ref) {
+                                                  return Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 3),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white
+                                                          .withOpacity(0.85),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              6),
+                                                      border: Border.all(
+                                                        color: Colors
+                                                            .amber.shade700,
+                                                        width: 0.8,
+                                                      ),
+                                                    ),
+                                                    child: Text(
+                                                      ref,
+                                                      style: TextStyle(
+                                                        fontFamily:
+                                                            Font_.Fonts_T,
+                                                        color: Colors
+                                                            .amber.shade900,
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            )
+                                          : const SizedBox.shrink(),
                                     ),
-                                    Text(
-                                      isEN ? 'THB' : 'บาท',
-                                      style: TextStyle(
-                                          fontFamily: Font_.Fonts_T,
-                                          fontSize: 10,
-                                          color: Colors.grey.shade500,
-                                          fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
+                                  const SizedBox(height: 3),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: Builder(builder: (_) {
+                                      // ✅ map status → label + icon + color
+                                      final status = intent.status ?? '';
+                                      // รอการตรวจสอบ / รอตรวจสอบ / contains "review"/"pending"
+                                      final isWaitingReview =
+                                          status.contains('ตรวจ') ||
+                                              status.contains('รอ') &&
+                                                  !status.contains('ชำระ') ||
+                                              status
+                                                  .toLowerCase()
+                                                  .contains('review') ||
+                                              status
+                                                  .toLowerCase()
+                                                  .contains('pending');
+                                      // รอชำระเงิน / contains "ชำระเงิน"/"awaiting"/"pay"
+                                      final isPaid = status
+                                              .contains('รอชำระเงิน') ||
+                                          status.contains('ชำระเงิน') ||
+                                          status
+                                              .toLowerCase()
+                                              .contains('awaiting') ||
+                                          status.toLowerCase().contains('pay');
+
+                                      String btnLabel;
+                                      IconData btnIcon;
+                                      Color btnColor;
+                                      if (isWaitingReview && !isPaid) {
+                                        btnLabel = isEN
+                                            ? 'Slip attached'
+                                            : 'แนบหลักฐานแล้ว';
+                                        btnIcon = Icons.check_circle;
+                                        btnColor = Colors.green.shade600;
+                                      } else {
+                                        btnLabel = isEN
+                                            ? 'Tap to attach slip'
+                                            : 'กดเพื่อแนบหลักฐาน';
+                                        btnIcon = Icons.upload_file_rounded;
+                                        btnColor = Colors.indigo.shade600;
+                                      }
+
+                                      return ElevatedButton.icon(
+                                        onPressed: () {
+                                          // ✅ Mark ว่าผู้ใช้กดจาก card intent
+                                          cameFromIntentCard = true;
+                                          // ส่งค่ากลับ: รวมรายการ billRef ของ intent นี้
+                                          // + บิลที่ user ติ๊กไว้ใน checkbox (selectedDocNos)
+                                          // ที่ยังไม่ถูก initiate (เพื่อให้แสดงใน Tab 1 ของ V4)
+                                          final combined = <String>{
+                                            ...billRefs,
+                                            ...selectedDocNos,
+                                          }.toList();
+                                          Navigator.pop(context, {
+                                            'docNos': combined,
+                                            'fromIntent': true,
+                                          });
+                                        },
+                                        icon: Icon(btnIcon,
+                                            color: Colors.white, size: 13),
+                                        label: Text(
+                                          btnLabel,
+                                          style: const TextStyle(
+                                            fontFamily: Font_.Fonts_T,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w800,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: btnColor,
+                                          elevation: 0,
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 4),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                        const Divider(height: 8),
+                        // หัวข้อย่อย: รายการบิลทั้งหมด
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, bottom: 4),
+                          child: Text(
+                            isEN ? 'Bills to be paid' : 'รายการที่ต้องชำระ',
+                            style: TextStyle(
+                              fontFamily: Font_.Fonts_T,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 11,
+                              color: Colors.indigo.shade700,
+                            ),
+                          ),
+                        ),
+                        // ✅ กรณีไม่มีบิลเลย (ทุกบิลถูก initiate แล้ว หรือไม่มีบิลในกลุ่ม)
+                        if ((() {
+                          final availableBills = sortedBills
+                              .where(
+                                  (b) => !(initiatedMap[b.docno ?? ''] == true))
+                              .toList();
+                          return availableBills.isEmpty;
+                        })())
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 20),
+                            child: Column(
+                              children: [
+                                Icon(Icons.inbox_outlined,
+                                    size: 36, color: Colors.grey.shade400),
+                                const SizedBox(height: 8),
+                                Text(
+                                  isEN
+                                      ? 'No bills to be paid'
+                                      : 'ไม่มีรายการที่ต้องชำระ',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: Font_.Fonts_T,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
+                      ],
+                      // รายการบิล (ต่อจาก intents section)
+                      ...(() {
+                        // เรียงบิลที่ยังไม่เริ่มชำระขึ้นก่อน
+                        final displayBills = sortedBills.toList();
+                        displayBills.sort((a, b) {
+                          final aInit = initiatedMap[a.docno ?? ''] == true;
+                          final bInit = initiatedMap[b.docno ?? ''] == true;
+                          if (aInit == bInit) return 0;
+                          return aInit ? 1 : -1;
+                        });
+                        return displayBills.map((bill) {
+                          final docno = bill.docno ?? '';
+                          final bool isAlreadyInitiated =
+                              initiatedMap[docno] == true;
+                          final isSelected = !isAlreadyInitiated &&
+                              selectedDocNos.contains(docno);
+                          return isAlreadyInitiated
+                              ? SizedBox()
+                              : Container(
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  decoration: BoxDecoration(
+                                    color: isAlreadyInitiated
+                                        ? Colors.grey.shade100
+                                        : (isSelected
+                                            ? Colors.indigo.withOpacity(0.04)
+                                            : Colors.grey.shade50),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isAlreadyInitiated
+                                          ? Colors.grey.shade300
+                                          : (isSelected
+                                              ? Colors.indigo.withOpacity(0.4)
+                                              : Colors.grey.shade200),
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(14),
+                                    onTap: isAlreadyInitiated
+                                        ? null
+                                        : () {
+                                            setDialogState(() {
+                                              if (!isSelected) {
+                                                selectedDocNos.add(docno);
+                                              } else {
+                                                if (selectedDocNos.length > 1) {
+                                                  selectedDocNos.remove(docno);
+                                                } else {
+                                                  Fluttertoast.showToast(
+                                                    msg: isEN
+                                                        ? "Please select at least one bill."
+                                                        : "กรุณาเลือกอย่างน้อย 1 รายการ",
+                                                    backgroundColor: Colors.red,
+                                                    textColor: Colors.white,
+                                                  );
+                                                }
+                                              }
+                                            });
+                                          },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 12),
+                                      child: Row(
+                                        children: [
+                                          (isAlreadyInitiated)
+                                              ? SizedBox(
+                                                  width: 30,
+                                                  child: Center(
+                                                    child: Icon(
+                                                        Icons.hourglass_bottom,
+                                                        size: 20,
+                                                        color: Colors
+                                                            .grey.shade700),
+                                                  ),
+                                                )
+                                              : Checkbox(
+                                                  value: isSelected,
+                                                  activeColor: Colors.indigo,
+                                                  shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              5)),
+                                                  onChanged: isAlreadyInitiated
+                                                      ? null
+                                                      : (bool? value) {
+                                                          setDialogState(() {
+                                                            if (value == true) {
+                                                              selectedDocNos
+                                                                  .add(docno);
+                                                            } else {
+                                                              if (selectedDocNos
+                                                                      .length >
+                                                                  1) {
+                                                                selectedDocNos
+                                                                    .remove(
+                                                                        docno);
+                                                              } else {
+                                                                Fluttertoast
+                                                                    .showToast(
+                                                                  msg: isEN
+                                                                      ? "Please select at least one bill."
+                                                                      : "กรุณาเลือกอย่างน้อย 1 รายการ",
+                                                                  backgroundColor:
+                                                                      Colors
+                                                                          .red,
+                                                                  textColor:
+                                                                      Colors
+                                                                          .white,
+                                                                );
+                                                              }
+                                                            }
+                                                          });
+                                                        },
+                                                ),
+                                          const SizedBox(width: 4),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  docno,
+                                                  style: const TextStyle(
+                                                      fontFamily: Font_.Fonts_T,
+                                                      fontSize: 14.5,
+                                                      fontWeight:
+                                                          FontWeight.w700),
+                                                ),
+                                                Row(
+                                                  children: [
+                                                    // Icon(
+                                                    //   isAlreadyInitiated
+                                                    //       ? Icons.info_outline
+                                                    //       : Icons
+                                                    //           .calendar_month_outlined,
+                                                    //   size: 13,
+                                                    //   color:
+                                                    // isAlreadyInitiated
+                                                    //       ? Colors
+                                                    //           .orange.shade700
+                                                    //       : Colors
+                                                    //           .grey.shade600,
+                                                    // ),
+                                                    Text(
+                                                      isEN
+                                                          ? 'Duedate: '
+                                                          : 'ครบกำหนด: ',
+                                                      style: TextStyle(
+                                                        fontFamily:
+                                                            Font_.Fonts_T,
+                                                        fontSize: 11.5,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color:
+                                                            isAlreadyInitiated
+                                                                ? Colors.orange
+                                                                    .shade700
+                                                                : Colors.grey
+                                                                    .shade600,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      isAlreadyInitiated
+                                                          ? (isEN
+                                                              ? 'Payment initiation already started'
+                                                              : 'มีการเริ่มสร้างการชำระแล้ว')
+                                                          : fmtDate(bill.date),
+                                                      style: TextStyle(
+                                                        fontFamily:
+                                                            Font_.Fonts_T,
+                                                        fontSize:
+                                                            isAlreadyInitiated
+                                                                ? 11.5
+                                                                : 12,
+                                                        color:
+                                                            isAlreadyInitiated
+                                                                ? Colors.orange
+                                                                    .shade700
+                                                                : Colors.grey
+                                                                    .shade600,
+                                                        fontWeight:
+                                                            isAlreadyInitiated
+                                                                ? FontWeight
+                                                                    .w500
+                                                                : FontWeight
+                                                                    .w500,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 2),
+                                                if ((bill.fineTotal ?? 0) > 0)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 4),
+                                                    child: Text(
+                                                      isEN
+                                                          ? 'Fine: ${fmtMoney(bill.fineTotal)}'
+                                                          : 'ค่าปรับ: ${fmtMoney(bill.fineTotal)}',
+                                                      style: TextStyle(
+                                                        fontFamily:
+                                                            Font_.Fonts_T,
+                                                        fontSize: 11.5,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color:
+                                                            Colors.red.shade700,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                fmtMoney(bill.totalBill),
+                                                style: const TextStyle(
+                                                    fontFamily: Font_.Fonts_T,
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.w800,
+                                                    color: Colors.indigo),
+                                              ),
+                                              Text(
+                                                isEN ? 'THB' : 'บาท',
+                                                style: TextStyle(
+                                                    fontFamily: Font_.Fonts_T,
+                                                    fontSize: 10,
+                                                    color: Colors.grey.shade500,
+                                                    fontWeight:
+                                                        FontWeight.w600),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                        }).toList();
+                      })(),
+                    ],
                   ),
                 ),
               ),
-              actionsPadding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+              actionsPadding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               actions: [
                 Row(
                   children: [
@@ -1299,7 +3067,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           side: BorderSide(color: Colors.grey.shade300),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
@@ -1313,26 +3081,36 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context, selectedDocNos),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade600,
-                          elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        child: Text(
-                          isEN ? 'Confirm' : 'ยืนยัน',
-                          style: const TextStyle(
-                              fontFamily: Font_.Fonts_T,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700),
+                    const SizedBox(width: 10),
+                    // ✅ ซ่อนปุ่ม "ดำเนินการต่อ" ถ้าไม่มีรายการที่ต้องชำระ
+                    if ((() {
+                      final availableBills = sortedBills
+                          .where((b) => !(initiatedMap[b.docno ?? ''] == true))
+                          .toList();
+                      return availableBills.isNotEmpty;
+                    })())
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context, {
+                            'docNos': selectedDocNos,
+                            'fromIntent': cameFromIntentCard,
+                          }),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.indigo.shade600,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(
+                            isEN ? 'Continue' : 'ดำเนินการต่อ',
+                            style: const TextStyle(
+                                fontFamily: Font_.Fonts_T,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ],
@@ -1342,6 +3120,42 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
       },
     );
   }
+}
+
+class _CidBankMatch {
+  const _CidBankMatch({
+    required this.bank,
+    required this.bankCode,
+    required this.accountNo,
+    required this.accountName,
+    required this.bills,
+    required this.total,
+    required this.discount,
+    required this.group,
+  });
+
+  final String bank;
+  final String bankCode;
+  final String accountNo;
+  final String accountName;
+  final List<Bill> bills;
+  final double total;
+  final double discount;
+  final Data group;
+}
+
+class _ContractSuggestion {
+  _ContractSuggestion({
+    required this.cid,
+    required this.billCount,
+    required this.bankNames,
+    required this.total,
+  });
+
+  final String cid;
+  int billCount;
+  final Set<String> bankNames;
+  double total;
 }
 
 class _HeaderBar extends SliverPersistentHeaderDelegate {

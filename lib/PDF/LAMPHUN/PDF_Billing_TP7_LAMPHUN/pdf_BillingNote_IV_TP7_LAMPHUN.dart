@@ -1,23 +1,23 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:chaoperty_user/File_s.dart';
-import 'package:chaoperty_user/Man_PDF/Man_BillingNoteInvlice_PDF.dart';
 import 'package:chaoperty_user/PDF/ThaiBaht.dart';
-import 'package:chaoperty_user/color.dart';
+import 'package:chaoperty_user/PDF/pdf_constants.dart';
 import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
+import 'package:http/http.dart' as http;
 
 import '../../../CRC_16_Prompay/generate_qrcode.dart';
 
 import '../../../Constant/Myconstant.dart';
+import '../../../Man_PDF/Man_BillingNoteInvlice_PDF.dart';
 import '../../../Man_PDF/Preview_PDF/PreviewPdfgen_Bills_INV.dart';
 import '../../../Model/GetInvoice_history_Model.dart';
 
@@ -72,7 +72,10 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
       End_Bill_Paydate,
       fonts_pdf,
       Con_remark,
-      customer_name) async {
+      customer_name,
+      signature,
+      fullname,
+      billingFormat) async {
     // ------------------------------------------------------->
     // แสดง Dialog เลือกขนาดกระดาษก่อน Export
     final String? _selectedMode =
@@ -213,39 +216,33 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
 
     ///---------------------> Load QR image (โหลดรูป QR หรือรูปแทน)
     if (img1 == null || img1.toString().isEmpty) {
-      try {
-        netImage_QR.add(
-          await networkImage(
-            '${MyConstant().domain_chao}/Awaitdownload/imagenot.png',
-          ),
-        );
-      } catch (e) {
-        // Placeholder if loading fails
-        netImage_QR.add(
-          await networkImage(
-            '${MyConstant().domain_chao}/Awaitdownload/imagenot.png',
-          ),
-        );
-      }
+      netImage_QR.add(
+        await networkImage(
+          '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png',
+        ),
+      );
     } else {
+      netImage_QR.add(
+        await networkImage(
+          '${MyConstant().domain_chao_img}/files/$foder/payment/$img1',
+        ),
+      );
+    }
+
+    ///---------------------> โหลด signature image
+    Uint8List? signatureBytes;
+    if (signature != null &&
+        signature.toString().isNotEmpty &&
+        signature.toString() != 'null') {
       try {
-        netImage_QR.add(
-          await networkImage(
-            '${MyConstant().domain_chao}/files/$foder/payment/$img1',
-          ),
-        );
-      } catch (e) {
-        // Fallback to placeholder if QR image fails
-        try {
-          netImage_QR.add(
-            await networkImage(
-              '${MyConstant().domain_chao}/Awaitdownload/imagenot.png',
-            ),
-          );
-        } catch (e2) {
-          // If even placeholder fails, skip or use empty
-          netImage_QR.add(null);
+        final sigUrl = '${MyConstant().domain}/${signature}';
+        print('signature URL: $sigUrl');
+        final sigRes = await http.get(Uri.parse(sigUrl));
+        if (sigRes.statusCode == 200) {
+          signatureBytes = sigRes.bodyBytes;
         }
+      } catch (_) {
+        signatureBytes = null;
       }
     }
 
@@ -329,6 +326,25 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
     final hasNotKd = _InvoiceHistoryModels.any(
       (e) => e.dtype.toString() != 'KD',
     );
+
+    //--------> จำนวนรายการ KD (แสดงแยกบรรทัดเสมอ)
+    final int kdCount =
+        _InvoiceHistoryModels.where((e) => e.dtype.toString() == 'KD').length;
+
+    ///---------------------> จำนวน "บรรทัดที่ถูกวาดจริง" ในตาราง (Rendered row count)
+    /// ใช้แทน tableData003.length ซึ่งเป็น list ว่าง (length = 0 เสมอ) ทำให้
+    /// เงื่อนไขขึ้นหน้าใหม่เดิมตายหมด และไม่สอดคล้องกับ billingFormat
+    ///  - แบบเต็ม : วาดทุกรายการ 1 บรรทัด/รายการ
+    ///  - แบบย่อ  : รวมรายการที่ไม่ใช่ KD เหลือ 1 บรรทัด + KD อีกรายการละ 1 บรรทัด
+    final int rowCount = (billingFormat == 'แบบเต็ม')
+        ? _InvoiceHistoryModels.length
+        : ((hasNotKd ? 1 : 0) + kdCount);
+
+    /// จำนวนบรรทัดสูงสุดที่ใส่ได้ในครึ่งหน้า A4 (ต้นฉบับ+คู่ฉบับ อยู่หน้าเดียวกัน)
+    /// เกินกว่านี้ → แยกเป็นหน้าเต็มอย่างละ 1 หน้า
+    const int kMaxRowsHalfPage = 4;
+
+    final bool isCompactLayout = rowCount <= kMaxRowsHalfPage;
 
     final totalqty = "1";
 
@@ -489,7 +505,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
         pw.Row(
           children: [
             pw.Container(
-              width: 200,
+              width: 400,
               child: pw.Column(
                 mainAxisAlignment: pw.MainAxisAlignment.start,
                 mainAxisSize: pw.MainAxisSize.min,
@@ -509,7 +525,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                   ),
                   pw.Text(
                     'ที่อยู่ : $bill_addr',
-                    maxLines: 1,
+                    maxLines: 2,
                     textAlign: pw.TextAlign.left,
                     style: pw.TextStyle(
                       fontSize: font_Size,
@@ -570,7 +586,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                         ? 'ที่อยู่ : -'
                         : 'ที่อยู่ : ${addr_}',
                     textAlign: pw.TextAlign.justify,
-                    maxLines: 1,
+                    maxLines: 2,
                     style: pw.TextStyle(
                       fontSize: font_Size,
                       font: ttf,
@@ -861,26 +877,73 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                   child: pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.center,
                     children: [
-                      pw.SizedBox(height: 20 * PdfPageFormat.mm),
-                      pw.Text(
-                        'ลงชื่อ..................................................................(ผู้วางบิล)',
-                        textAlign: pw.TextAlign.left,
-                        maxLines: 1,
-                        style: pw.TextStyle(
-                            // fontWeight: pw.FontWeight.bold,
-                            font: ttf,
-                            fontSize: font_Size,
-                            color: PdfColors.grey800),
+                      pw.Container(
+                        height: 35,
+                        child: pw.Stack(
+                          children: [
+                            pw.Positioned(
+                              bottom: 0,
+                              left: 0,
+                              right: 0,
+                              child: pw.Text(
+                                'ลงชื่อ........................................................(ผู้วางบิล)',
+                                textAlign: pw.TextAlign.center,
+                                style: pw.TextStyle(
+                                  fontSize: font_Size,
+                                  font: ttf,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: Colors_pd,
+                                ),
+                              ),
+                            ),
+                            if (signatureBytes != null &&
+                                signatureBytes.isNotEmpty)
+                              pw.Positioned(
+                                bottom: 4,
+                                left: 0,
+                                right: 0,
+                                child: pw.Center(
+                                  child: pw.Image(
+                                    pw.MemoryImage(signatureBytes),
+                                    width: 100,
+                                    height: 40,
+                                    fit: pw.BoxFit.contain,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                      pw.Text(
-                        '(........................................................)',
-                        textAlign: pw.TextAlign.left,
-                        maxLines: 1,
-                        style: pw.TextStyle(
-                            // fontWeight: pw.FontWeight.bold,
-                            font: ttf,
-                            fontSize: font_Size,
-                            color: PdfColors.grey800),
+                      pw.Stack(
+                        children: [
+                          pw.Text(
+                            '(......................................................)',
+                            textAlign: pw.TextAlign.center,
+                            style: pw.TextStyle(
+                              fontSize: font_Size,
+                              font: ttf,
+                              fontWeight: pw.FontWeight.bold,
+                              color: Colors_pd,
+                            ),
+                          ),
+                          if (fullname != null && signatureBytes != null)
+                            pw.Positioned(
+                              left: 0,
+                              right: 0,
+                              top: -1,
+                              // bottom: 10,
+                              child: pw.Text(
+                                fullname,
+                                textAlign: pw.TextAlign.center,
+                                style: pw.TextStyle(
+                                  fontSize: font_Size,
+                                  font: ttf,
+                                  fontWeight: pw.FontWeight.bold,
+                                  color: Colors_pd,
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ),
@@ -970,46 +1033,44 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                       // ),
                     ],
                   )),
-                if (img1.toString() != '' &&
-                    ptser1.toString() == '2' &&
-                    netImage_QR.isNotEmpty &&
-                    netImage_QR[0] != null)
-                  pw.Container(
-                      child: pw.Column(
-                    children: [
-                      pw.Image(
-                        (netImage_QR[0]),
-                        height: 70,
-                        width: 70,
-                      ),
-                      pw.SizedBox(height: 2),
-                      pw.Text(
-                        (End_Bill_Paydate == null ||
-                                End_Bill_Paydate.toString() == '')
-                            ? 'ชำระไม่เกินวันที่ ${End_Bill_Paydate} '
-                            : 'ชำระไม่เกินวันที่ ${DateFormat('dd/MM').format(DateTime.parse(End_Bill_Paydate!))}/${DateTime.parse('${End_Bill_Paydate}').year + 543}',
-                        textAlign: pw.TextAlign.center,
-                        style: pw.TextStyle(
-                          fontSize: font_Size - 1.5,
-                          font: ttf,
-                          // fontWeight: pw.FontWeight.bold,
-                          color: Colors_pd,
+                if (img1.toString() != '')
+                  if (ptser1.toString() == '2')
+                    pw.Container(
+                        child: pw.Column(
+                      children: [
+                        pw.Image(
+                          (netImage_QR[0]),
+                          height: 70,
+                          width: 70,
                         ),
-                      ),
-                      // pw.Padding(
-                      //   padding: pw.EdgeInsets.all(0),
-                      //   child: pw.Text(
-                      //     'สแกน (Scan me)',
-                      //     textAlign: pw.TextAlign.left,
-                      //     maxLines: 1,
-                      //     style: pw.TextStyle(
-                      //         font: ttf,
-                      //         fontSize: font_Size,
-                      //         color: PdfColors.grey800),
-                      //   ),
-                      // ),
-                    ],
-                  )),
+                        pw.SizedBox(height: 2),
+                        pw.Text(
+                          (End_Bill_Paydate == null ||
+                                  End_Bill_Paydate.toString() == '')
+                              ? 'ชำระไม่เกินวันที่ ${End_Bill_Paydate} '
+                              : 'ชำระไม่เกินวันที่ ${DateFormat('dd/MM').format(DateTime.parse(End_Bill_Paydate!))}/${DateTime.parse('${End_Bill_Paydate}').year + 543}',
+                          textAlign: pw.TextAlign.center,
+                          style: pw.TextStyle(
+                            fontSize: font_Size - 1.5,
+                            font: ttf,
+                            // fontWeight: pw.FontWeight.bold,
+                            color: Colors_pd,
+                          ),
+                        ),
+                        // pw.Padding(
+                        //   padding: pw.EdgeInsets.all(0),
+                        //   child: pw.Text(
+                        //     'สแกน (Scan me)',
+                        //     textAlign: pw.TextAlign.left,
+                        //     maxLines: 1,
+                        //     style: pw.TextStyle(
+                        //         font: ttf,
+                        //         fontSize: font_Size,
+                        //         color: PdfColors.grey800),
+                        //   ),
+                        // ),
+                      ],
+                    )),
               ]),
               // pw.Row(
               //   children: (btype1.toString() == 'CASH')
@@ -1085,7 +1146,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
               //             ],
               // ),
 
-              if (serpang == 1 && tableData003.length < 7)
+              if (serpang == 1 && isCompactLayout)
                 pw.Padding(
                   padding: pw.EdgeInsets.all(0),
                   child: pw.Text(
@@ -1098,8 +1159,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                         color: PdfColors.grey500),
                   ),
                 ),
-              if (tableData003.length > 6)
-                pw.SizedBox(height: 2.2 * PdfPageFormat.mm),
+              if (!isCompactLayout) pw.SizedBox(height: 2.2 * PdfPageFormat.mm),
             ],
           ),
         ),
@@ -1178,183 +1238,173 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                           return pw.Expanded(flex: flex, child: container);
                         }).toList(),
                       )),
-                  if (hasNotKd)
-                    pw.Row(
-                      children: [
-                        // ช่องแรก เลขลำดับ
-                        pw.Container(
-                          width: 30,
-                          padding: const pw.EdgeInsets.all(2.0),
-                          child: pw.Align(
-                            alignment: pw.Alignment.center,
-                            child: pw.Text(
-                              '1', // ✅ แสดงเลขบรรทัด
-                              textAlign: pw.TextAlign.center,
-                              style: pw.TextStyle(
-                                fontSize: font_Size,
-                                font: ttf,
-                                color: PdfColors.grey800,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        // ช่องสอง docno ตัวแรก
-                        buildCell(
-                          text: 'ค่าเช่า ประจําเดือน ${totallist}',
-                          flex: 4,
-                          alignment: pw.Alignment.centerLeft,
-                          textAlign: pw.TextAlign.left,
-                        ),
-
-                        // buildCell(
-                        //   text: (_InvoiceHistoryModels.unitser.toString() == '6')
-                        //       ? '${_InvoiceHistoryModels.descr} [ หน่วยที่ใช้ไป ${_InvoiceHistoryModels.ovalue}-${_InvoiceHistoryModels.nvalue} ]'
-                        //       : '${_InvoiceHistoryModels.descr} ${DateFormat('MMM', 'th').format(DateTime.parse(_InvoiceHistoryModels.date!))} ${DateTime.parse('${_InvoiceHistoryModels.date}').year + 543}',
-                        //   flex: 4,
-                        //   alignment: pw.Alignment.centerLeft,
-                        //   textAlign: pw.TextAlign.left,
-                        // ),
-
-                        // // qty รวม
-                        // buildCell(
-                        //   text: getFormattedText(totalqty.toString()),
-                        //   flex: 1,
-                        //   alignment: pw.Alignment.centerRight,
-                        //   textAlign: pw.TextAlign.right,
-                        // ),
-
-                        // buildCell(
-                        //   text: (totalpri == 0)
-                        //       ? '-' // ถ้ารวมแล้วไม่มีค่า
-                        //       : getFormattedText(totalpri.toString()),
-                        //   flex: 1,
-                        //   alignment: pw.Alignment.centerRight,
-                        //   textAlign: pw.TextAlign.right,
-                        // ),
-
-                        // amt รวม
-                        buildCell(
-                          text: getFormattedText(totalsum.toString()),
-                          flex: 1,
-                          alignment: pw.Alignment.centerRight,
-                          textAlign: pw.TextAlign.right,
-                        ),
-
-                        // ส่วนลดรวม
-                        buildCell(
-                          text: getFormattedText(totaldis.toString()),
-                          flex: 1,
-                          alignment: pw.Alignment.centerRight,
-                          textAlign: pw.TextAlign.right,
-                        ),
-
-                        // รวมสุทธิรวม
-                        buildCell(
-                          text: getFormattedText(totalsum.toString()),
-                          flex: 1,
-                          alignment: pw.Alignment.centerRight,
-                          textAlign: pw.TextAlign.right,
-                        ),
-                      ],
-                    ),
-
-                  pw.Column(
-                    children: _InvoiceHistoryModels.where((e) =>
-                            e.dtype.toString() ==
-                            'KD') // ✅ กรองเอาเฉพาะที่ไม่ใช่ KD
-                        .toList()
-                        .asMap()
-                        .entries
-                        .map((entry) {
-                      final index = entry.key; // index เริ่มจาก 0
-                      final invoices = entry.value;
-
-                      return pw.Container(
-                        child: pw.Row(
-                          children: [
-                            pw.Container(
-                              width: 30,
-                              padding: const pw.EdgeInsets.all(2.0),
-                              child: pw.Align(
-                                alignment: pw.Alignment.center,
-                                child: pw.Text(
-                                  hasNotKd
-                                      ? '${index + 2}' // ✅ ให้เริ่มที่เลข 2
-                                      : '${index + 1}',
-                                  maxLines: 2,
-                                  textAlign: pw.TextAlign.center,
-                                  style: pw.TextStyle(
-                                    fontSize: font_Size,
-                                    font: ttf,
-                                    color: PdfColors.grey800,
+                  // ─── แบบเต็ม: แสดงทุกรายการทีละบรรทัด ───────────────────
+                  if (billingFormat == 'แบบเต็ม')
+                    pw.Column(
+                      children:
+                          _InvoiceHistoryModels.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final invoices = entry.value;
+                        return pw.Container(
+                          child: pw.Row(
+                            children: [
+                              pw.Container(
+                                width: 30,
+                                padding: const pw.EdgeInsets.all(2.0),
+                                child: pw.Align(
+                                  alignment: pw.Alignment.center,
+                                  child: pw.Text(
+                                    '${index + 1}',
+                                    maxLines: 2,
+                                    textAlign: pw.TextAlign.center,
+                                    style: pw.TextStyle(
+                                      fontSize: font_Size,
+                                      font: ttf,
+                                      color: PdfColors.grey800,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
+                              buildCell(
+                                text: (invoices.unitser.toString() == '6')
+                                    ? '${invoices.descr} ${DateFormat('MMM', 'th').format(DateTime.parse(invoices.date!))} ${DateTime.parse('${invoices.date}').year + 543} [ หน่วยที่ใช้ไป ${invoices.ovalue}-${invoices.nvalue} ]'
+                                    : '${invoices.descr} ${DateFormat('MMM', 'th').format(DateTime.parse(invoices.date!))} ${DateTime.parse('${invoices.date}').year + 543}',
+                                flex: 4,
+                                alignment: pw.Alignment.centerLeft,
+                                textAlign: pw.TextAlign.left,
+                              ),
+                              buildCell(
+                                text: getFormattedText('${invoices.total}'),
+                                flex: 1,
+                                alignment: pw.Alignment.centerRight,
+                                textAlign: pw.TextAlign.right,
+                              ),
+                              buildCell(
+                                text: getFormattedText('${invoices.dis_list}'),
+                                flex: 1,
+                                alignment: pw.Alignment.centerRight,
+                                textAlign: pw.TextAlign.right,
+                              ),
+                              buildCell(
+                                text: getFormattedText('${invoices.total}'),
+                                flex: 1,
+                                alignment: pw.Alignment.centerRight,
+                                textAlign: pw.TextAlign.right,
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
 
-                            // ✅ ใช้โค้ด buildCell เหมือนเดิม
-                            buildCell(
-                              text: (invoices.unitser.toString() == '6')
-                                  ? '${invoices.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(invoices.date!))} ${DateTime.parse('${invoices.date}').year + 543} [ หน่วยที่ใช้ไป ${invoices.ovalue}-${invoices.nvalue} ]'
-                                  : '${invoices.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(invoices.date!))} ${DateTime.parse('${invoices.date}').year + 543}',
-                              flex: 4,
-                              alignment: pw.Alignment.centerLeft,
-                              textAlign: pw.TextAlign.left,
+                  // ─── แบบย่อ: รวม non-KD เป็น 1 บรรทัด + แสดง KD แยก ──────
+                  if (billingFormat != 'แบบเต็ม') ...[
+                    if (hasNotKd)
+                      pw.Row(
+                        children: [
+                          pw.Container(
+                            width: 30,
+                            padding: const pw.EdgeInsets.all(2.0),
+                            child: pw.Align(
+                              alignment: pw.Alignment.center,
+                              child: pw.Text(
+                                '1',
+                                textAlign: pw.TextAlign.center,
+                                style: pw.TextStyle(
+                                  fontSize: font_Size,
+                                  font: ttf,
+                                  color: PdfColors.grey800,
+                                ),
+                              ),
                             ),
-                            // buildCell(
-                            //   text: getFormattedText(invoices.qty),
-                            //   flex: 1,
-                            //   alignment: pw.Alignment.centerRight,
-                            //   textAlign: pw.TextAlign.right,
-                            // ),
-                            // buildCell(
-                            //   text: (invoices.ele_ty.toString() != '0' &&
-                            //           invoices.ele_ty != null)
-                            //       ? 'อัตราพิเศษ'
-                            //       : (invoices.dtype.toString() == 'KU')
-                            //           ? getFormattedText('${invoices.pri}')
-                            //           : '-',
-                            //   flex: 1,
-                            //   alignment: pw.Alignment.centerRight,
-                            //   textAlign: pw.TextAlign.right,
-                            // ),
-                            // buildCell(
-                            //   text: (double.tryParse(
-                            //               invoices.pvat_original.toString()) !=
-                            //           0)
-                            //       ? getFormattedText(
-                            //           '${invoices.pvat_original}')
-                            //       : (invoices.dtype.toString() == 'KU')
-                            //           ? getFormattedText('${invoices.amt}')
-                            //           : getFormattedText('${invoices.pri}'),
-                            //   flex: 1,
-                            //   alignment: pw.Alignment.centerRight,
-                            //   textAlign: pw.TextAlign.right,
-                            // ),
-                            buildCell(
-                              text: getFormattedText('${invoices.total}'),
-                              flex: 1,
-                              alignment: pw.Alignment.centerRight,
-                              textAlign: pw.TextAlign.right,
-                            ),
-                            buildCell(
-                              text: getFormattedText('${invoices.dis_list}'),
-                              flex: 1,
-                              alignment: pw.Alignment.centerRight,
-                              textAlign: pw.TextAlign.right,
-                            ),
-                            buildCell(
-                              text: getFormattedText('${invoices.total}'),
-                              flex: 1,
-                              alignment: pw.Alignment.centerRight,
-                              textAlign: pw.TextAlign.right,
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
+                          ),
+                          buildCell(
+                            text: 'ค่าเช่า ประจําเดือน $totallist',
+                            flex: 4,
+                            alignment: pw.Alignment.centerLeft,
+                            textAlign: pw.TextAlign.left,
+                          ),
+                          buildCell(
+                            text: getFormattedText(totalsum.toString()),
+                            flex: 1,
+                            alignment: pw.Alignment.centerRight,
+                            textAlign: pw.TextAlign.right,
+                          ),
+                          buildCell(
+                            text: getFormattedText(totaldis.toString()),
+                            flex: 1,
+                            alignment: pw.Alignment.centerRight,
+                            textAlign: pw.TextAlign.right,
+                          ),
+                          buildCell(
+                            text: getFormattedText(totalsum.toString()),
+                            flex: 1,
+                            alignment: pw.Alignment.centerRight,
+                            textAlign: pw.TextAlign.right,
+                          ),
+                        ],
+                      ),
+                    pw.Column(
+                      children: _InvoiceHistoryModels.where(
+                              (e) => e.dtype.toString() == 'KD')
+                          .toList()
+                          .asMap()
+                          .entries
+                          .map((entry) {
+                        final index = entry.key;
+                        final invoices = entry.value;
+                        return pw.Container(
+                          child: pw.Row(
+                            children: [
+                              pw.Container(
+                                width: 30,
+                                padding: const pw.EdgeInsets.all(2.0),
+                                child: pw.Align(
+                                  alignment: pw.Alignment.center,
+                                  child: pw.Text(
+                                    hasNotKd ? '${index + 2}' : '${index + 1}',
+                                    maxLines: 2,
+                                    textAlign: pw.TextAlign.center,
+                                    style: pw.TextStyle(
+                                      fontSize: font_Size,
+                                      font: ttf,
+                                      color: PdfColors.grey800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              buildCell(
+                                text: (invoices.unitser.toString() == '6')
+                                    ? '${invoices.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(invoices.date!))} ${DateTime.parse('${invoices.date}').year + 543} [ หน่วยที่ใช้ไป ${invoices.ovalue}-${invoices.nvalue} ]'
+                                    : '${invoices.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(invoices.date!))} ${DateTime.parse('${invoices.date}').year + 543}',
+                                flex: 4,
+                                alignment: pw.Alignment.centerLeft,
+                                textAlign: pw.TextAlign.left,
+                              ),
+                              buildCell(
+                                text: getFormattedText('${invoices.total}'),
+                                flex: 1,
+                                alignment: pw.Alignment.centerRight,
+                                textAlign: pw.TextAlign.right,
+                              ),
+                              buildCell(
+                                text: getFormattedText('${invoices.dis_list}'),
+                                flex: 1,
+                                alignment: pw.Alignment.centerRight,
+                                textAlign: pw.TextAlign.right,
+                              ),
+                              buildCell(
+                                text: getFormattedText('${invoices.total}'),
+                                flex: 1,
+                                alignment: pw.Alignment.centerRight,
+                                textAlign: pw.TextAlign.right,
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
 
                   // pw.Column(
                   //   children:
@@ -1734,25 +1784,35 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                 ],
               )),
             ),
-            if (tableData003.length < 11) footer_data(serpang)
+            if (isCompactLayout) footer_data(serpang)
           ],
         ),
       );
     }
 
-    if (tableData003.length < 11)
+    ///---------------------> รูปแบบหน้าของ layout กระชับ (ต้นฉบับ+คู่ฉบับ ในหน้าเดียว)
+    final compactFormat = PdfPageFormat.a4.copyWith(
+      marginBottom: 12.00,
+      marginLeft: 10.00,
+      marginRight: 10.00,
+      marginTop: 12.00,
+    );
+
+    /// ความสูงครึ่งหน้า คิดจาก "พื้นที่ใช้งานจริง" (หัก margin บน/ล่างแล้ว)
+    /// ของเดิมใช้ a4.height / 2.05 = 410.68 x 2 = 821.36 ซึ่งเกิน
+    /// availableHeight (841.89 - 12 - 12 = 817.89) อยู่ 3.47 pt
+    /// ทำให้กล่องคู่ฉบับถูกดันไปขึ้นหน้าใหม่เปล่า ๆ เสมอ แม้มีแค่ 1-2 รายการ
+    /// หัก 1 pt เผื่อการปัดเศษทศนิยมของ MultiPage
+    final double halfPageHeight = (compactFormat.availableHeight - 1) / 2;
+
+    if (isCompactLayout)
       pdf.addPage(
         pw.MultiPage(
-          pageFormat: PdfPageFormat.a4.copyWith(
-            marginBottom: 4.00,
-            marginLeft: 8.00,
-            marginRight: 8.00,
-            marginTop: 8.00,
-          ),
+          pageFormat: compactFormat,
           build: (context) {
             return [
               pw.Container(
-                  height: PdfPageFormat.a4.height / 2.05,
+                  height: halfPageHeight,
                   decoration: const pw.BoxDecoration(
                     // color: PdfColors.green50,
                     border: pw.Border(
@@ -1767,7 +1827,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                     ],
                   )),
               pw.Container(
-                  height: PdfPageFormat.a4.height / 2.05,
+                  height: halfPageHeight,
                   decoration: const pw.BoxDecoration(
                     // color: PdfColors.red50,
                     border: pw.Border(
@@ -1801,7 +1861,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
         ),
       );
 
-    if (tableData003.length > 10)
+    if (!isCompactLayout)
       pdf.addPage(
         pw.MultiPage(
             pageFormat: PdfPageFormat.a4.copyWith(
@@ -1816,13 +1876,11 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
             build: (context) {
               return [Body_data(1)];
             },
-            footer: (tableData003.length < 10)
-                ? null
-                : (context) {
-                    return footer_data(1);
-                  }),
+            footer: (context) {
+              return footer_data(1);
+            }),
       );
-    if (tableData003.length > 10)
+    if (!isCompactLayout)
       pdf.addPage(
         pw.MultiPage(
             pageFormat: PdfPageFormat.a4.copyWith(
@@ -1837,11 +1895,9 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
             build: (context) {
               return [Body_data(2)];
             },
-            footer: (tableData003.length < 10)
-                ? null
-                : (context) {
-                    return footer_data(2);
-                  }),
+            footer: (context) {
+              return footer_data(2);
+            }),
       );
 
     // final bytes = await pdf.save();
@@ -1866,14 +1922,6 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
       // Upload the file
       await uploadFile(data, name_1);
     } else if (Preview_ser.toString() == 'File') {
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      await FlutterFileDialog.saveFile(
-        params: SaveFileDialogParams(
-          data: data,
-          fileName: 'ใบวางบิล/ใบแจ้งหนี้${cFinn}',
-        ),
-      );
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
       // MimeType type = MimeType.PDF;

@@ -1,5 +1,6 @@
 class InvoiceHistoryModel {
   String? ser;
+  String? st;
   String? daterec;
   String? date;
   String? dateacc;
@@ -38,6 +39,7 @@ class InvoiceHistoryModel {
   String? total_t;
   String? wht_t;
   String? cid;
+  String? unit;
   String? unitser;
   String? zn;
   String? zser;
@@ -59,9 +61,15 @@ class InvoiceHistoryModel {
   String? wht_original;
   String? amount_original;
   String? expname;
+  String? expser;
+  String? exptser;
+  String? vser;
+  String? vtype;
+  String? etype;
 
   InvoiceHistoryModel({
     this.ser,
+    this.st,
     this.daterec,
     this.date,
     this.dateacc,
@@ -100,6 +108,7 @@ class InvoiceHistoryModel {
     this.total_t,
     this.wht_t,
     this.cid,
+    this.unit,
     this.unitser,
     this.zn,
     this.zser,
@@ -119,10 +128,16 @@ class InvoiceHistoryModel {
     this.wht_original,
     this.amount_original,
     this.expname,
+    this.expser,
+    this.exptser,
+    this.vser,
+    this.vtype,
+    this.etype,
   });
 
   InvoiceHistoryModel.fromJson(Map<String, dynamic> json) {
     ser = json['ser'];
+    st = json['st'];
     daterec = json['daterec'];
     date = json['date'];
     dateacc = json['dateacc'];
@@ -161,6 +176,7 @@ class InvoiceHistoryModel {
     total_t = json['total_t'];
     wht_t = json['wht_t'];
     cid = json['cid'];
+    unit = json['unit'];
     unitser = json['unitser'];
     zn = json['zn'];
     zser = json['zser'];
@@ -182,11 +198,17 @@ class InvoiceHistoryModel {
     wht_original = json['wht_original'];
     amount_original = json['amount_original'];
     expname = json['expname'];
+    expser = json['expser'];
+    exptser = json['exptser'];
+    vser = json['vser'];
+    vtype = json['vtype'];
+    etype = json['etype'];
   }
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = new Map<String, dynamic>();
     data['ser'] = this.ser;
+    data['st'] = this.st;
     data['daterec'] = this.daterec;
     data['date'] = this.date;
     data['dateacc'] = this.dateacc;
@@ -225,6 +247,7 @@ class InvoiceHistoryModel {
     data['total_t'] = this.total_t;
     data['wht_t'] = this.wht_t;
     data['cid'] = this.cid;
+    data['unit'] = this.unit;
     data['unitser'] = this.unitser;
     data['zn'] = this.zn;
     data['zser'] = this.zser;
@@ -246,6 +269,11 @@ class InvoiceHistoryModel {
     data['wht_original'] = this.wht_original;
     data['amount_original'] = this.amount_original;
     data['expname'] = this.expname;
+    data['expser'] = this.expser;
+    data['exptser'] = this.exptser;
+    data['vser'] = this.vser;
+    data['vtype'] = this.vtype;
+    data['etype'] = this.etype;
 
     return data;
   }

@@ -1,4 +1,7 @@
-
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -9,13 +12,9 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 
 import '../../CRC_16_Prompay/generate_qrcode.dart';
+
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
-import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
 
 class Pdfgen_Temporary_receipt_TP7_Ama {
   static void exportPDF_Temporary_receipt_TP7_Ama(
@@ -95,7 +94,7 @@ class Pdfgen_Temporary_receipt_TP7_Ama {
         netImage_QR.add(iconImage);
       } else {
         netImage_QR.add(await networkImage(
-            '${MyConstant().domain_chao}/files/$foder/payment/${finnancetransModels[i].img}'));
+            '${MyConstant().domain_chao_img}/files/$foder/payment/${finnancetransModels[i].img}'));
       }
     }
     bool hasNonCashTransaction = finnancetransModels.any((transaction) {

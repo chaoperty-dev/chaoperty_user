@@ -1,6 +1,36 @@
 // ignore_for_file: unused_import, unused_local_variable, unnecessary_null_comparison, unused_field, override_on_non_overriding_member, prefer_const_constructors, unnecessary_import, implementation_imports, prefer_const_constructors_in_immutables, non_constant_identifier_names, avoid_init_to_null, prefer_void_to_null, unnecessary_brace_in_string_interps, avoid_print, empty_catches, sized_box_for_whitespace, use_build_context_synchronously, file_names, prefer_const_literals_to_create_immutables, prefer_const_declarations, unnecessary_string_interpolations, prefer_collection_literals, sort_child_properties_last, avoid_unnecessary_containers, prefer_is_empty, prefer_final_fields, camel_case_types, avoid_web_libraries_in_flutter, prefer_typing_uninitialized_variables, no_leading_underscores_for_local_identifiers, deprecated_member_use
 import 'package:intl/intl.dart';
 
+// Hoisted on 2026-07-08: previously created fresh on every convertToThaiBaht()
+// call. ThaiBaht is called by 144 PDF generator files; hoisting saves
+// ~NumberFormat ctor cost (small but adds up) and lets the digit/position
+// arrays be shared as a single allocation.
+final NumberFormat _kBahtFormat1 = NumberFormat("#,##0.00", "en_US");
+final NumberFormat _kBahtFormat2 = NumberFormat("###0.00", "en_US");
+
+const List<String> _digitThai = [
+  'ศูนย์',
+  'หนึ่ง',
+  'สอง',
+  'สาม',
+  'สี่',
+  'ห้า',
+  'หก',
+  'เจ็ด',
+  'แปด',
+  'เก้า',
+];
+
+const List<String> _positionThai = [
+  '',
+  'สิบ',
+  'ร้อย',
+  'พัน',
+  'หมื่น',
+  'แสน',
+  'ล้าน',
+];
+
 String roundToTwoDecimals(String input) {
   // ลบเครื่องหมายจุลภาคออกจากตัวเลข
   String sanitizedInput = input.replaceAll(',', '');
@@ -14,30 +44,8 @@ String roundToTwoDecimals(String input) {
 }
 
 String convertToThaiBaht(double amount) {
-  var nFormat = NumberFormat("#,##0.00", "en_US");
-  var nFormat2 = NumberFormat("###0.00", "en_US");
-  final List<String> _digitThai = [
-    'ศูนย์',
-    'หนึ่ง',
-    'สอง',
-    'สาม',
-    'สี่',
-    'ห้า',
-    'หก',
-    'เจ็ด',
-    'แปด',
-    'เก้า'
-  ];
-
-  final List<String> _positionThai = [
-    '',
-    'สิบ',
-    'ร้อย',
-    'พัน',
-    'หมื่น',
-    'แสน',
-    'ล้าน'
-  ];
+  final nFormat = _kBahtFormat1;
+  final nFormat2 = _kBahtFormat2;
   /////////////////////////////------------------------>(จำนวนเต็ม)
   String convertNumberToText(int number) {
     String result = '';

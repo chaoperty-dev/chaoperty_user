@@ -1,6 +1,8 @@
-import 'dart:convert';
+import 'package:auto_size_text/auto_size_text.dart';
+import 'package:chaoperty_user/File_s.dart';
+import 'package:chaoperty_user/PDF/ThaiBaht.dart';
+import 'package:chaoperty_user/loadAndCacheImage.dart';
 import 'package:file_saver/file_saver.dart';
-import 'package:flutter_file_dialog/flutter_file_dialog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -9,18 +11,12 @@ import 'dart:math' as math;
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
+
 import '../../CRC_16_Prompay/generate_qrcode.dart';
+
 import '../../Constant/Myconstant.dart';
-import '../../File_s.dart';
 import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Bills_INV.dart';
-import '../../Man_PDF/Preview_PDF/PreviewPdfgen_Billsplay.dart';
 import '../../Model/GetInvoice_history_Model.dart';
-import '../../Model/trans_re_bill_history_model.dart';
-import '../../PDF/ThaiBaht.dart';
-import '../../loadAndCacheImage.dart';
-import '../../screen/bill_history.dart';
 
 class Pdfgen_BillingNoteInvlice_TP8_Ortorkor {
   //////////---------------------------------------------------->(ใบวางบิล แจ้งหนี้)  ใช้  ++
@@ -73,7 +69,8 @@ class Pdfgen_BillingNoteInvlice_TP8_Ortorkor {
       End_Bill_Paydate,
       fonts_pdf,
       Con_remark,
-      customer_name) async {
+      customer_name,
+      signature) async {
     int YearQRthai = await int.parse(DateFormat('yyyy')
             .format(DateTime.parse(End_Bill_Paydate))
             .toString()) +
@@ -118,11 +115,11 @@ class Pdfgen_BillingNoteInvlice_TP8_Ortorkor {
     // }
     if (img1 == null || img1.toString() == '') {
       netImage_QR.add(await networkImage(
-          '${MyConstant().domain_chao}/Awaitdownload/imagenot.png'));
+          '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png'));
       // netImage_QR.add(iconImage);
     } else {
       netImage_QR.add(await networkImage(
-          '${MyConstant().domain_chao}/files/$foder/payment/${img1}'));
+          '${MyConstant().domain_chao_img}/files/$foder/payment/${img1}'));
     }
     final tableHeaders = [
       'ลำดับ',
@@ -2101,19 +2098,9 @@ class Pdfgen_BillingNoteInvlice_TP8_Ortorkor {
     } else if (Preview_ser.toString() == 'File') {
       // final List<int> bytes = await pdf.save();
       // final Uint8List data = Uint8List.fromList(bytes);
-      // await FlutterFileDialog.saveFile(
-      //   params: SaveFileDialogParams(
-      //     data: data,
-      //     fileName: 'ใบวางบิล_ใบแจ้งหนี้${cFinn}.pdf',
-      //   ),
-      // );
-      final List<int> bytes = await pdf.save();
-      final Uint8List data = Uint8List.fromList(bytes);
-      final dir = await FileSaver.instance.saveFile(
-          name: 'ใบวางบิล/ใบแจ้งหนี้${cFinn}',
-          bytes: data,
-          ext: "pdf",
-          mimeType: MimeType.other);
+      // MimeType type = MimeType.PDF;
+      // final dir = await FileSaver.instance
+      //     .saveFile('ใบวางบิล/ใบแจ้งหนี้${cFinn}', data, "pdf", mimeType: type);
     } else {
       Navigator.push(
           context,

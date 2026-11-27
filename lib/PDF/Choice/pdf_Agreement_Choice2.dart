@@ -12,10 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-
 import '../../Constant/Myconstant.dart';
 import '../../Man_PDF/Preview_PDF/Preview_Agreement.dart';
-
 
 class Expense {
   final String nameExp;
@@ -124,6 +122,38 @@ class Pdfgen_Agreement_Choice2 {
     String thaiDate = DateFormat('d เดือน MMM yyyy', 'th').format(date);
     var nFormat = NumberFormat("#,##0.00", "en_US");
     var nFormat2 = NumberFormat("###0.00", "en_US");
+    String _fmtDMY(dynamic val, {String locale = 'th'}) {
+      try {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty) return '-';
+        final dt = DateFormat("dd-MM-yyyy HH:mm:ss").parse('$s 00:00:00');
+        return '${DateFormat('dd MMM', locale).format(dt)} ${dt.year + 543}';
+      } catch (_) {
+        return '-';
+      }
+    }
+
+    String _fmtISO(dynamic val, {String locale = 'th'}) {
+      try {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty) return '-';
+        final dt = DateTime.parse(s);
+        return '${DateFormat('dd MMM', locale).format(dt)} ${dt.year + 543}';
+      } catch (_) {
+        return '-';
+      }
+    }
+
+    DateTime? _dtYMD(dynamic val) {
+      try {
+        final s = val?.toString().trim() ?? '';
+        if (s.isEmpty || s == '0000-00-00' || s == 'null') return null;
+        return DateFormat("yyyy-MM-dd HH:mm:ss").parse('$s 00:00:00');
+      } catch (_) {
+        return null;
+      }
+    }
+
     final iconImage =
         (await rootBundle.load('images/LOGO.png')).buffer.asUint8List();
     final ByteData image = await rootBundle.load('images/image7-11.png');
@@ -598,7 +628,7 @@ class Pdfgen_Agreement_Choice2 {
                                     Datex_text.text == '' ||
                                     Datex_text.text == null)
                                 ? 'วันที่ 00-00-0000'
-                                : 'วันที่ ${DateFormat('dd MMM', 'TH').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('${Datex_text.text} 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('${Datex_text.text} 00:00:00')}").year + 543}',
+                                : 'วันที่ ${_fmtDMY(Datex_text.text, locale: 'TH')}',
                             //  'วันที่ ${thaiDate}',
                             // 'วันที่ ${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}").year + 543}',
                             textAlign: pw.TextAlign.center,
@@ -1125,7 +1155,7 @@ class Pdfgen_Agreement_Choice2 {
                                           Form_sdate == '' ||
                                           Form_sdate == null)
                                       ? '-'
-                                      : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}").year + 543}',
+                                      : '${_fmtDMY(Form_sdate)}',
                                   // "$Form_sdate",
                                   textAlign: pw.TextAlign.center,
                                   style: pw.TextStyle(
@@ -1159,7 +1189,7 @@ class Pdfgen_Agreement_Choice2 {
                                           Form_ldate == '' ||
                                           Form_ldate == null)
                                       ? '-'
-                                      : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}").year + 543}',
+                                      : '${_fmtDMY(Form_ldate)}',
                                   //   "$Form_ldate",
                                   textAlign: pw.TextAlign.center,
                                   style: pw.TextStyle(
@@ -1232,7 +1262,7 @@ class Pdfgen_Agreement_Choice2 {
                                 child: pw.Text(
                                   (DatexChoice_Sub2_3text == null)
                                       ? '-'
-                                      : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_3text 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_3text 00:00:00')}").year + 543}',
+                                      : '${_fmtDMY(DatexChoice_Sub2_3text)}',
                                   // : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_3text 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$DatexChoice_Sub2_3text 00:00:00')}").year + 543}',
                                   textAlign: pw.TextAlign.center,
                                   style: pw.TextStyle(
@@ -1351,7 +1381,7 @@ class Pdfgen_Agreement_Choice2 {
                                                   Form_sdate == '' ||
                                                   Form_sdate == null)
                                               ? '-'
-                                              : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_sdate 00:00:00')}").year + 543}',
+                                              : '${_fmtDMY(Form_sdate)}',
                                           // "$Form_sdate",
                                           textAlign: pw.TextAlign.center,
                                           style: pw.TextStyle(
@@ -1386,7 +1416,7 @@ class Pdfgen_Agreement_Choice2 {
                                                   Form_ldate == '' ||
                                                   Form_ldate == null)
                                               ? '-'
-                                              : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}").year + 543}',
+                                              : '${_fmtDMY(Form_ldate)}',
                                           //   "$Form_ldate",
                                           textAlign: pw.TextAlign.center,
                                           style: pw.TextStyle(
@@ -1701,7 +1731,14 @@ class Pdfgen_Agreement_Choice2 {
                                                             .toString() ==
                                                         '')
                                                 ? '-'
-                                                : '${expenses[index].sday} ${DateFormat('MMM', 'TH').format(DateTime.parse("${DateFormat("yyyy-MM-dd HH:mm:ss").parse('${expenses[index].dueDate} 00:00:00')}"))} ${DateTime.parse('${expenses[index].dueDate} 00:00:00').year + 543}',
+                                                : (() {
+                                                    final d = _dtYMD(
+                                                        expenses[index]
+                                                            .dueDate);
+                                                    return d == null
+                                                        ? '-'
+                                                        : '${expenses[index].sday} ${DateFormat('MMM', 'TH').format(d)} ${d.year + 543}';
+                                                  })(),
                                             // (expenses[index].dueDate == null ||
                                             //         expenses[index]
                                             //                 .dueDate
@@ -1752,8 +1789,15 @@ class Pdfgen_Agreement_Choice2 {
                                                             Form_ldate == '' ||
                                                             Form_ldate == null)
                                                         ? '-'
-                                                        : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}"))} ${DateTime.parse("${DateFormat("dd-MM-yyyy HH:mm:ss").parse('$Form_ldate 00:00:00')}").year + 543}'
-                                                    : '${expenses[index].sday} ${DateFormat('MMM', 'TH').format(DateTime.parse("${DateFormat("yyyy-MM-dd HH:mm:ss").parse('${expenses[index].max_duedate} 00:00:00')}"))} ${DateTime.parse('${expenses[index].max_duedate} 00:00:00').year + 543}',
+                                                        : '${_fmtDMY(Form_ldate)}'
+                                                    : (() {
+                                                        final d = _dtYMD(
+                                                            expenses[index]
+                                                                .max_duedate);
+                                                        return d == null
+                                                            ? '-'
+                                                            : '${expenses[index].sday} ${DateFormat('MMM', 'TH').format(d)} ${d.year + 543}';
+                                                      })(),
                                             // '${expenses[index].max_duedate}',
                                             textAlign: pw.TextAlign.center,
                                             style: pw.TextStyle(
@@ -1931,12 +1975,14 @@ class Pdfgen_Agreement_Choice2 {
                               child: pw.Text(
                                 (quotxSelectModels
                                             .where((e) =>
-                                                e.expser.toString() == '17')
+                                                e.expser.toString() == '17' ||
+                                                e.dtype.toString() == 'F' ||
+                                                e.etype.toString() == 'F')
                                             .length ==
                                         0)
                                     ? '0.00 บาท (~${convertToThaiBaht(0.00)}~)'
-                                    : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '17').map((e) => e.amt != null ? double.parse(e.amt.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท ' +
-                                        '(~${convertToThaiBaht((quotxSelectModels.where((e) => e.expser.toString() == '17').map((e) => e.amt != null ? double.parse(e.amt.toString()) : 0.00).fold(0.00, (a, b) => a + b)))}~)',
+                                    : '${nFormat.format(quotxSelectModels.where((e) => e.expser.toString() == '17' || e.dtype.toString() == 'F' || e.etype.toString() == 'F').map((e) => e.amt != null ? double.parse(e.amt.toString()) : 0.00).fold(0.00, (a, b) => a + b))} บาท ' +
+                                        '(~${convertToThaiBaht((quotxSelectModels.where((e) => e.expser.toString() == '17' || e.dtype.toString() == 'F' || e.etype.toString() == 'F').map((e) => e.amt != null ? double.parse(e.amt.toString()) : 0.00).fold(0.00, (a, b) => a + b)))}~)',
                                 textAlign: pw.TextAlign.center,
                                 style: pw.TextStyle(
                                   color: Colors_pd,
@@ -2417,7 +2463,12 @@ class Pdfgen_Agreement_Choice2 {
                                   : '${quotxSelectModels.where((model) => model.expser.toString() == '2').map(
                                         (model) => (model.pdate == null)
                                             ? ''
-                                            : '${DateFormat('dd MMM', 'th').format(DateTime.parse("${DateFormat("yyyy-MM-dd HH:mm:ss").parse('${model.pdate} 00:00:00')}"))} ${DateTime.parse('${model.pdate} 00:00:00').year + 543}',
+                                            : (() {
+                                                final d = _dtYMD(model.pdate);
+                                                return d == null
+                                                    ? ''
+                                                    : '${DateFormat('dd MMM', 'th').format(d)} ${d.year + 543}';
+                                              })(),
                                         // : '${model.pdate}',
                                       ).join('')}',
                               textAlign: pw.TextAlign.center,
@@ -3696,7 +3747,7 @@ class Pdfgen_Agreement_Choice2 {
                               children: [
                                 pw.SizedBox(height: 1 * PdfPageFormat.mm),
                                 pw.Text(
-                                  '12.6 เมื่อสัญญาเช่านี้สิ้นสุดลงไม่ว่าจะเนื่องจากสาเหตุประการใดก็ตามรวมทั้งเนื่องจากการครบอายุของสัญญาเช่าถ้าผู้ให้เช่าประสงค์ให้ผู้เช่ารื้อ\nถอนบรรดาสิ่งแก้ไขเปลี่ยนแปลงเพิ่มเติมออกไปผู้เช่าจะต้องรื้อถอนปรับปรุงพื้นที่เพื่อส่งมอบพื้นที่เช่าและอุปกรณ์ทั้งหมดให้คืนสู่สภาพเดิมด้วย\nค่าใช้จ่ายของผู้เช่าเองหากผู้เช่าไม่รื้อถอนปรับปรุงผู้ให้เช่ามีสิทธิเข้าไปรื้อถอนปรับปรุงสถานที่เช่าได้เองโดยผู้เช่าเป็นผู้รับผิดชอบค่าใช้จ่ายให้แก่\nผู้ให้เช่า',
+                                  '12.6 เมื่อสัญญาเช่านี้สิ้นสุดลงไม่ว่าจะเนื่องจากสาเหตุประการใดก็ตาม รวมทั้งเนื่องจากการครบอายุของสัญญาเช่า หากผู้ให้เช่าประสงค์ให้ผู้เช่า  รื้อถอน   ปรับปรุง   บรรดาสิ่งที่ผู้เช่าได้แก้ไข   เปลี่ยนแปลง   ริ้อถอนหรือเพิ่มเติมในสถานที่เช่า  ผู้เช่าจะต้อง  รื้อถอน  ปรับปรุง  แล้วแต่กรณี  เพื่อส่งมอบพื้นที่เช่า   และอุปกรณ์ทั้งหมดคืนแก่ผู้ให้เช่าในสภาพเดิม    ด้วยค่าใช้จ่ายของผู้เช่าเองหากผู้เช่าไม่รื้อถอน  ปรับปรุง  ผู้ให้เช่ามีสิทธิ เข้าไปรื้อถอนปรับปรุงสถานที่เช่าได้เอง  โดยผู้เช่าต้องเป็นผู้รับผิดชอบค่าใช้จ่ายให้แก่ผู้ให้เช่า',
                                   textAlign: pw.TextAlign.left,
                                   maxLines: 5,
                                   style: pw.TextStyle(
@@ -4522,7 +4573,7 @@ class Pdfgen_Agreement_Choice2 {
             ////////////------------------->
             ///
             // Get_Value_NameShop_index: Get_Value_NameShop_index,
-            // Get_Value_cid: Get_Value_cid,
+            Get_Value_cid: Get_Value_cid,
             // verticalGroupValue: _verticalGroupValue,
             // Form_nameshop: Form_nameshop,
             // Form_typeshop: Form_typeshop,

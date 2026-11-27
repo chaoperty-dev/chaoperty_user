@@ -1,0 +1,63 @@
+name: Flutter CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Cache pub dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: 3.38.3
+          channel: stable
+          cache: true
+
+      - name: Resolve locked dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Analyze
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${{ github.base_ref }}" ]; then
+            echo "Checking changed Dart files against origin/${{ github.base_ref }}..."
+            CHANGED_FILES=$(git diff --name-only --diff-filter=d "origin/${{ github.base_ref }}...HEAD" -- '*.dart' | tr '\n' ' ')
+            if [ -n "$CHANGED_FILES" ]; then
+              echo "Analyzing changed files: $CHANGED_FILES"
+              flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings $CHANGED_FILES
+            else
+              echo "No changed Dart files. Skipping analyze."
+            fi
+          else
+            echo "Running analyze..."
+            flutter analyze --no-pub --no-fatal-infos --no-fatal-warnings
+          fi
+
+      - name: Test
+        run: |
+          TEST_FILES=$(find test -name "*_test.dart" ! -name "widget_test.dart")
+          echo "Running tests on: $TEST_FILES"
+          flutter test --no-pub $TEST_FILES
+
+      # Skip Build web on PR to save time; build only when pushing to master
+      - name: Build web
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: flutter build web --no-pub --no-tree-shake-icons
