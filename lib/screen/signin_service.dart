@@ -1,7 +1,6 @@
 // lib/screen/signin_service.dart
 // Conditional imports: ใช้ dart:html บน web, ใช้ stub บน mobile
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -12,8 +11,6 @@ import '../Model/GetC_regis_Model.dart';
 import 'Screen_new/fitness_app_home_screen.dart';
 import 'market_select_screen.dart';
 import 'market_service.dart';
-import 'signin_service_stub.dart'
-    if (dart.library.html) 'signin_service_web.dart' as platform;
 
 /// ตรวจสอบว่า string เป็น MD5 hash (32 hex chars) หรือไม่
 bool _looksLikeMd5(String s) {
@@ -63,6 +60,18 @@ class SignInResult {
 /// - ใช้ได้ทั้งตอน login ปกติ และตอนที่ผู้ใช้รีเฟรชหน้าเว็บ (browser refresh)
 /// - เลียนแบบ signInThread() ใน loginscreen.dart
 class SignInService {
+  /// เช็คว่ามี credentials บันทึกไว้ในเครื่องหรือไม่ (ไม่ยิง network)
+  ///
+  /// ใช้เป็น fast path ตอนเปิดแอป: ถ้าไม่มี ก็ไป Login ได้เลย
+  /// ไม่ต้องรอ POST ไป backend ให้เสียเวลา
+  static Future<bool> hasSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final username = prefs.getString('UsernameUSer')?.trim() ?? '';
+    final password = prefs.getString('pass_word')?.trim() ?? '';
+    final savedCustno = prefs.getString('custno')?.trim() ?? '';
+    return username.isNotEmpty && password.isNotEmpty && savedCustno.isNotEmpty;
+  }
+
   /// ตรวจสอบ username/password ที่บันทึกไว้ใน SharedPreferences
   /// แล้วคืนค่า SignInResult เพื่อบอกว่าควรไปหน้าไหน
   ///
@@ -72,15 +81,6 @@ class SignInService {
   ///   3. Backend ตอบกลับมา > 1 ตลาด -> ให้ผู้เรียกเปิด MarketSelectScreen
   ///   4. Backend ตอบกลับมา 0 ตลาด / error -> failure (ไป LoginScreen)
   static Future<SignInResult> validateSavedSession() async {
-    // ✅ Debug: แสดง localStorage keys ทั้งหมดเพื่อตรวจสอบว่า
-    //    SharedPreferences เก็บข้อมูลลงที่ไหน (localStorage/IndexedDB)
-    try {
-      final keys = await platform.debugGetLocalStorageKeys();
-      debugPrint('🔍 [AuthGate] localStorage keys (${keys.length}): $keys');
-    } catch (e) {
-      debugPrint('🔍 [AuthGate] localStorage debug error: $e');
-    }
-
     final prefs = await SharedPreferences.getInstance();
     final username = prefs.getString('UsernameUSer')?.trim() ?? '';
     final password = prefs.getString('pass_word')?.trim() ?? '';
@@ -169,13 +169,13 @@ class SignInService {
   /// สร้าง MarketSelectScreen พร้อม callback สำหรับ navigate หลังเลือกตลาด
   /// ใช้ในกรณี requiresMarketSelection = true
   ///
-  /// [context] จำเป็นต้องใช้สำหรับให้ MarketService.applyMarket
-  /// ทำ Navigator.pushAndRemoveUntil ไป FitnessAppHomeScreen ได้
-  static Widget buildMarketSelectScreen(
-      BuildContext context, List<c_regis_Model> markets) {
+  /// MarketSelectScreen ส่ง BuildContext ของตัวเองเข้า callback เพื่อให้
+  /// navigation ยังทำงานหลัง AuthGate ถูก pushAndRemoveUntil ออกไปแล้ว
+  static Widget buildMarketSelectScreen(List<c_regis_Model> markets) {
     return MarketSelectScreen(
       markets: markets,
-      onSelect: (selected) => MarketService.applyMarket(context, selected),
+      onSelect: (marketContext, selected) =>
+          MarketService.applyMarket(marketContext, selected),
     );
   }
 }

@@ -60,7 +60,7 @@ Future<void> downloadImage(fileName, foder) async {
     // first we make a request to the url like you did
     // in the android and ios version
     final http.Response r = await http.get(
-      Uri.parse('${new_Url}/Awaitdownload/$fileName'),
+      Uri.parse('${MyConstant().domain_chao_img}/Awaitdownload/$fileName'),
     );
 
     // we get the bytes from the body

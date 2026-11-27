@@ -1,13 +1,14 @@
 {
-    "name": "chaoperty_user",
-    "short_name": "chaoperty_user",
+    "name": "Chaoperty",
+    "short_name": "Chaoperty",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#4CAF50",
+    "theme_color": "#4CAF50",
+    "description": "ระบบจัดการอสังหาริมทรัพย์ครบวงจร สำหรับผู้เช่าและผู้ใช้งาน",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
+    "lang": "th",
     "icons": [
         {
             "src": "icons/Icon-192.png",

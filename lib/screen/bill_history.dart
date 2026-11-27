@@ -1764,7 +1764,8 @@ class _BillHistoryState extends State<BillHistory> {
                                                                   child:
                                                                       Padding(
                                                                     padding:
-                                                                        const EdgeInsets.all(
+                                                                        const EdgeInsets
+                                                                            .all(
                                                                             4.0),
                                                                     child: Icon(
                                                                         Icons
@@ -1803,8 +1804,9 @@ class _BillHistoryState extends State<BillHistory> {
                                                                             .center,
                                                                     children: [
                                                                         Padding(
-                                                                          padding:
-                                                                              const EdgeInsets.all(2.0),
+                                                                          padding: const EdgeInsets
+                                                                              .all(
+                                                                              2.0),
                                                                           child:
                                                                               Text(
                                                                             '${Slip_history}',
@@ -1891,8 +1893,9 @@ class _BillHistoryState extends State<BillHistory> {
                                                                       .center,
                                                               children: <Widget>[
                                                                 Image.network(
-                                                                    '${MyConstant().domain_chao}/files/$foder/slip/${Slip_history}',
-                                                                    cacheWidth: 500)
+                                                                    '${MyConstant().domain_chao_img}/files/$foder/slip/${Slip_history}',
+                                                                    cacheWidth:
+                                                                        500)
                                                               ],
                                                             ),
                                                     ),
@@ -1903,7 +1906,7 @@ class _BillHistoryState extends State<BillHistory> {
                                                       color: Colors.blue[200],
                                                       borderRadius:
                                                           const BorderRadius
-                                                                  .only(
+                                                              .only(
                                                               topLeft: Radius
                                                                   .circular(6),
                                                               topRight: Radius
@@ -1969,7 +1972,7 @@ class _BillHistoryState extends State<BillHistory> {
                                                 //     'https://png.pngtree.com/png-vector/20190820/ourmid/pngtree-no-image-vector-illustration-isolated-png-image_1694547.jpg');
                                               } else {
                                                 newValuePDFimg.add(
-                                                    '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+                                                    '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
                                               }
                                             }
                                             final tableData00 = [

@@ -931,7 +931,7 @@ class _PayscreenState extends State<Payscreen> {
             bill_default = bill_defaultx;
             bill_tser = bill_tserx;
             imglogo_ =
-                '${MyConstant().domain}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
+                '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
             renTalModels.add(renTalModel);
             if (bill_defaultx == 'P') {
               bills_name_ = 'บิลธรรมดา';
@@ -3239,7 +3239,7 @@ class _PayscreenState extends State<Payscreen> {
                                                     //     'https://png.pngtree.com/png-vector/20190820/ourmid/pngtree-no-image-vector-illustration-isolated-png-image_1694547.jpg');
                                                   } else {
                                                     newValuePDFimg.add(
-                                                        '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+                                                        '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
                                                   }
                                                 }
 

@@ -55,11 +55,19 @@ class _PreviewPdfgen_BillsState extends State<PreviewPdfgen_Bills> {
     _loadPermission();
   }
 
+  @override
+  void reassemble() {
+    super.reassemble();
+    // hot reload: initState ไม่ rerun -> ต้องเช็คสิทธิ์ใหม่ทุกครั้งที่ hot reload
+    _loadPermission();
+  }
+
   Future<void> _loadPermission() async {
     final prefs = await SharedPreferences.getInstance();
+    final rentalId = prefs.getString('renTalSer')?.trim();
     final allowed = prefs.getBool('allowedBill');
     setState(() {
-      _allowed = (allowed == null) ? true : allowed;
+      _allowed = rentalId == '106' ? false : ((allowed == null) ? true : allowed);
     });
   }
 

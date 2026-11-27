@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -131,7 +130,7 @@ class Pdfgen_Agreementnim3 {
     if (contractPhotoModels.isNotEmpty &&
         (contractPhotoModels[0].pic_plan ?? '').isNotEmpty) {
       photo_pic_plan = await loadImageFromUrl(
-        '${MyConstant().domain}/files/nimcity/contract/${contractPhotoModels[0].pic_plan!}',
+        '${MyConstant().domain_chao_img}/files/nimcity/contract/${contractPhotoModels[0].pic_plan!}',
       );
     } // รูปแปลน
 
@@ -139,7 +138,7 @@ class Pdfgen_Agreementnim3 {
     if (contractPhotoModels.isNotEmpty &&
         (contractPhotoModels[0].pic_shop ?? '').isNotEmpty) {
       photo_pic_shop = await loadImageFromUrl(
-        '${MyConstant().domain}/files/nimcity/contract/${contractPhotoModels[0].pic_shop!}',
+        '${MyConstant().domain_chao_img}/files/nimcity/contract/${contractPhotoModels[0].pic_shop!}',
       );
     } //รูปสถานที่
     pw.Widget Textx({

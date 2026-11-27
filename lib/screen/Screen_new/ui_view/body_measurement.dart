@@ -143,7 +143,7 @@ class _BodyContentState extends State<_BodyContent> {
   @override
   Widget build(BuildContext context) {
     final isPaidPositive = widget.sumPaid > 0.00;
-    final isInvoiceZero = widget.sumInvoices == 0.0;
+    final isInvoiceZero = widget.sumOutstanding == 0.0;
     final cuslangs = widget.cuslangs;
 
     return Padding(
@@ -205,7 +205,7 @@ class _BodyContentState extends State<_BodyContent> {
                                 padding:
                                     const EdgeInsets.only(left: 4, bottom: 3),
                                 child: Text(
-                                  _nFormat.format(widget.sumInvoices),
+                                  _nFormat.format(widget.sumOutstanding),
                                   textAlign: isPaidPositive
                                       ? TextAlign.start
                                       : TextAlign.center,
@@ -351,8 +351,8 @@ class _BodyContentState extends State<_BodyContent> {
                 padding: const EdgeInsets.only(left: 24, bottom: 2, top: 2),
                 child: Text(
                   cuslangs == 'EN'
-                      ? '#Note:The displayed amount excludes any applicable fines.'
-                      : '#หมายเหตุ:ยอดที่แสดงเป็นยอดไม่รวมค่าปรับกรณีที่มีค่าปรับเกิดขึ้น',
+                      ? '#Note: The displayed amount includes applicable late fees.'
+                      : '#หมายเหตุ:ยอดที่แสดงรวมค่าปรับแล้ว',
                   textAlign: TextAlign.center,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,

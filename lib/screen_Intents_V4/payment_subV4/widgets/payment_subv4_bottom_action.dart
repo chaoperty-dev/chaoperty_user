@@ -118,26 +118,26 @@ class PaymentSubV4BottomAction extends StatelessWidget {
             const SizedBox(height: 7),
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 64,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: canPress
                       ? const LinearGradient(
                           colors: [
-                            PaymentSubV4Theme.primaryOrange,
-                            PaymentSubV4Theme.primaryOrangeDark,
+                            PaymentSubV4Theme.primaryAction,
+                            PaymentSubV4Theme.primaryActionDark,
                           ],
                         )
                       : const LinearGradient(
                           colors: [Color(0xFFCBD5E1), Color(0xFF94A3B8)],
                         ),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(18),
                   boxShadow: canPress
                       ? const [
                           BoxShadow(
-                            color: Color(0x3DF97316),
-                            blurRadius: 12,
-                            offset: Offset(0, 5),
+                            color: Color(0x4D2563EB),
+                            blurRadius: 18,
+                            offset: Offset(0, 8),
                           ),
                         ]
                       : null,
@@ -145,10 +145,10 @@ class PaymentSubV4BottomAction extends StatelessWidget {
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(18),
                     onTap: canPress ? onActionPressed : null,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 13),
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -167,7 +167,7 @@ class PaymentSubV4BottomAction extends StatelessWidget {
                               size: 20,
                               color: Colors.white,
                             ),
-                            const SizedBox(width: 7),
+                            const SizedBox(width: 10),
                             Flexible(
                               child: Text(
                                 label,
@@ -181,7 +181,7 @@ class PaymentSubV4BottomAction extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 5),
+                            const SizedBox(width: 8),
                             const Icon(
                               Icons.chevron_right_rounded,
                               size: 21,

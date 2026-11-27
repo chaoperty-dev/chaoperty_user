@@ -4,15 +4,43 @@ import '../Model/GetC_regis_Model.dart';
 import '../color.dart';
 import 'Screen_new/fitness_app_theme.dart';
 
-class MarketSelectScreen extends StatelessWidget {
+class MarketSelectScreen extends StatefulWidget {
   final List<c_regis_Model> markets;
-  final Future<void> Function(c_regis_Model) onSelect;
+
+  /// รับ context ของ MarketSelectScreen เอง ไม่ใช่ context ของหน้าที่ push มา
+  ///
+  /// AuthGate ใช้ pushAndRemoveUntil() เพื่อเข้าหน้านี้ ดังนั้น context ของ
+  /// AuthGate ถูก unmount ทันที หาก callback capture context เก่าไว้
+  /// MarketService.applyMarket() จะจบที่ `if (!ctx.mounted) return;` เงียบ ๆ
+  /// ทำให้กดการ์ดตลาดแล้วไม่ไปต่อ
+  final Future<void> Function(BuildContext context, c_regis_Model model)
+      onSelect;
 
   const MarketSelectScreen({
     super.key,
     required this.markets,
     required this.onSelect,
   });
+
+  @override
+  State<MarketSelectScreen> createState() => _MarketSelectScreenState();
+}
+
+class _MarketSelectScreenState extends State<MarketSelectScreen> {
+  /// ป้องกันแตะตลาดหลายใบระหว่าง network/prefs ของใบแรกยังทำงาน
+  bool _isSelectingMarket = false;
+
+  Future<void> _selectMarket(c_regis_Model model) async {
+    if (_isSelectingMarket) return;
+    setState(() => _isSelectingMarket = true);
+    try {
+      // ส่ง context ที่ยัง mounted ของ MarketSelectScreen เอง
+      await widget.onSelect(context, model);
+    } finally {
+      // กรณี error หรือ user ยังอยู่หน้านี้ ต้องกดใหม่ได้
+      if (mounted) setState(() => _isSelectingMarket = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +82,7 @@ class MarketSelectScreen extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'พบ ${markets.length} ตลาดในบัญชีของคุณ',
+                        'พบ ${widget.markets.length} ตลาดในบัญชีของคุณ',
                         style: const TextStyle(
                           fontFamily: Font_.Fonts_T,
                           fontSize: 12,
@@ -70,12 +98,13 @@ class MarketSelectScreen extends StatelessWidget {
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
-                itemCount: markets.length,
+                itemCount: widget.markets.length,
                 itemBuilder: (ctx, i) => Padding(
                   padding: const EdgeInsets.only(bottom: 14),
                   child: _MarketCard(
-                    model: markets[i],
-                    onTap: () => onSelect(markets[i]),
+                    model: widget.markets[i],
+                    // single-flight: แตะซ้ำระหว่าง API/prefs ทำงานจะถูกเพิกเฉย
+                    onTap: () => _selectMarket(widget.markets[i]),
                   ),
                 ),
               ),
@@ -98,7 +127,7 @@ class _MarketCard extends StatelessWidget {
     final foder = (model.rentalFoder ?? '').trim();
     final logoFile = (model.rentalLogo ?? '').trim();
     final logoUrl = (foder.isNotEmpty && logoFile.isNotEmpty)
-        ? '${MyConstant().domain_chao}/files/$foder/logo/$logoFile'
+        ? '${MyConstant().domain_chao_img}/files/$foder/logo/$logoFile'
         : '';
 
     final name = model.pn ?? '-';

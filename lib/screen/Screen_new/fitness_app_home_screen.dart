@@ -96,7 +96,7 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
 
   Future<void> _loadPreference() async {
     final prefs = await SharedPreferences.getInstance();
-    final base = MyConstant().domain_chao;
+    final base = MyConstant().domain_chao_img;
     cus_photo = prefs.getString('photo');
     cus_foder = prefs.getString('foder');
     setState(() {
@@ -122,27 +122,17 @@ class _FitnessAppHomeScreenState extends State<FitnessAppHomeScreen>
         }),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          body: FutureBuilder<bool>(
-            future: getData(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox();
-              return Stack(
-                children: [
-                  tabBody,
-                  // bottomBar(),
-                ],
-              );
-            },
+          body: Stack(
+            children: [
+              tabBody,
+              // bottomBar(),
+            ],
           ),
           extendBody: true,
           bottomNavigationBar: bottomBar(),
         ),
       ),
     );
-  }
-
-  Future<bool> getData() async {
-    return true;
   }
 
   Widget bottomBar() {

@@ -130,6 +130,10 @@ class Bill {
   final double? whtBill;
   final double? totalBill;
   final double? totalDisendbill;
+  final double? finePvat;
+  final double? fineVat;
+  final double? fineTotal;
+  final int? fineLateDays;
 
   Bill({
     this.docno,
@@ -145,6 +149,10 @@ class Bill {
     this.whtBill,
     this.totalBill,
     this.totalDisendbill,
+    this.finePvat,
+    this.fineVat,
+    this.fineTotal,
+    this.fineLateDays,
   });
 
   factory Bill.fromJson(Map<String, dynamic> json) => Bill(
@@ -161,6 +169,10 @@ class Bill {
         whtBill: (json['wht_bill'] as num?)?.toDouble(),
         totalBill: (json['total_bill'] as num?)?.toDouble(),
         totalDisendbill: (json['total_disendbill'] as num?)?.toDouble(),
+        finePvat: (json['fine_pvat'] as num?)?.toDouble(),
+        fineVat: (json['fine_vat'] as num?)?.toDouble(),
+        fineTotal: (json['fine_total'] as num?)?.toDouble(),
+        fineLateDays: (json['fine_late_days'] as num?)?.toInt(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -177,5 +189,9 @@ class Bill {
         'wht_bill': whtBill,
         'total_bill': totalBill,
         'total_disendbill': totalDisendbill,
+        'fine_pvat': finePvat,
+        'fine_vat': fineVat,
+        'fine_total': fineTotal,
+        'fine_late_days': fineLateDays,
       };
 }

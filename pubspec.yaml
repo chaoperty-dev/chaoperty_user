@@ -33,7 +33,7 @@ dependencies:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.2
+  # cupertino_icons: ^1.0.2  # removed 2026-09-17: 0 imports in lib/, no CupertinoIcons usage
   # cupertino_stepper: ^0.2.1  # removed 2026-07-08: not imported anywhere
   dio: ^5.0.1
   # im_stepper: ^1.0.1+1
@@ -75,8 +75,8 @@ dependencies:
 
   image: ^4.0.17
   pdf: ^3.10.1
-  syncfusion_flutter_pdf: ^32.2.4
-  font_awesome_flutter: ^10.3.0
+  # syncfusion_flutter_pdf: ^32.2.4  # removed 2026-09-17: 0 imports; pdfviewer/xlsio bring it transitively
+  # font_awesome_flutter: ^10.3.0  # removed 2026-09-17: 0 imports, no FontAwesome usage
   # file_cryptor: ^0.0.3  # Commented out due to archive dependency conflict with syncfusion_flutter_xlsio
   path_provider: ^2.0.9
   # pdfjs: ^2.5.207+3
@@ -84,9 +84,16 @@ dependencies:
   # responsive_grid_list: ^1.3.0  # removed 2026-07-08: not imported
   # crc: ^0.0.2  # removed 2026-07-08: not imported (lib/CRC_16_Prompay uses local impl)
   # crc32_checksum: ^0.0.2  # removed 2026-07-08: not imported
+  # ห้ามลบ: lib/loadAndCacheImage.dart + PDF 2 ไฟล์ import flutter_cache_manager
+  # ซึ่งได้มาแบบ transitive จาก cached_network_image เท่านั้น
   cached_network_image: ^3.3.1 # no windows
+  # ประกาศตรงเพราะ 5 ไฟล์ import: global_http.dart, loginscreen.dart,
+  # signin_service.dart, personalinfo_screen.dart, APIS-V2/payment-intents.dart
+  # (เดิมได้มาแบบ transitive จึงเปราะ — ถ้า dep ต้นทางถอนจะพังทั้งโปรเจกต์)
+  crypto: ^3.0.3
+  http: 1.1.0
   http_parser: ^4.0.0 # restored 2026-07-08: imported in lib/
-  syncfusion_flutter_signaturepad: ^32.2.4
+  # syncfusion_flutter_signaturepad: ^32.2.4  # removed 2026-09-17: 0 imports, no SfSignaturePad usage
   url_launcher: 6.1.14
   share_plus: ^12.0.1
   pretty_qr_code: ^3.6.0 # restored 2026-07-08: used by payment_subV4_InvAll.dart:2865 (PrettyQr widget)
@@ -99,20 +106,24 @@ dependencies:
   syncfusion_flutter_datepicker: ^32.2.4
   syncfusion_localizations: ^32.2.4
   # flutter_image_compress: ^2.0.3  # removed 2026-07-08: not imported
-  typed_data: ^1.3.2
+  # typed_data: ^1.3.2  # removed 2026-09-17: 0 imports; Uint8List comes from dart:typed_data / foundation
   syncfusion_flutter_pdfviewer: ^32.2.4
   syncfusion_flutter_barcodes: ^32.2.4
   # open_file_plus:  # Commented out - v1 embedding incompatible
   # excel: ^2.1.0  # Commented out due to archive dependency conflict with syncfusion_flutter_xlsio
-  xml: 6.3.0
+  # xml: 6.3.0  # removed 2026-09-17: 0 imports, no XmlDocument/XmlBuilder usage
   loading_indicator: ^3.1.1
   bottom_sheet: ^4.0.0
-  pinput: ^6.0.2
+  # pinput: ^6.0.2  # removed 2026-09-17: 0 imports, no Pinput usage
   # top_snackbar_flutter: ^3.1.0  # removed 2026-07-08: not imported
   awesome_snackbar_content: ^0.1.3 # restored 2026-07-08: imported in lib/
   x_message: ^0.1.0 # restored 2026-07-08: imported in lib/
   widgets_to_image: ^2.0.1
-  ficonsax: ^0.0.3
+  # ถอด 2026-09-19: package นี้ bundle ฟอนต์ 3 ตัว (IconsaxBold/Outline/Bulk)
+  # รวม ~676K แต่ lib/ ใช้จริงแค่ IconsaxBold.information 2 จุด
+  # (home_select_cid.dart, select_screen.dart) ซึ่งเปลี่ยนเป็น
+  # Icons.info_outline ของ Material แล้ว ⇒ ประหยัด 3 request ตอนเปิดแอป
+  # ficonsax: ^0.0.3
   webview_flutter: ^4.4.0
   carousel_slider: ^5.0.0
   marquee: ^2.2.3
@@ -121,7 +132,7 @@ dependencies:
   # font_awesome_flutter: ^10.1.0
   # flutter_rating_bar: ^4.0.1  # removed 2026-07-08: not imported
   # intl: ^0.17.0
-  animations: ^2.0.3
+  # animations: ^2.0.3  # removed 2026-09-17: 0 imports
   loading_animation_widget: ^1.2.1
   image_downloader_web: ^2.0.2
   # image_gallery_saver: ^2.0.3
@@ -142,7 +153,14 @@ dependencies:
   otp_timer_button: ^1.1.1
   # qr: ^3.0.1  # removed 2026-07-08: not imported anywhere, qr_flutter covers use case
   qr_flutter: ^4.1.0
-  chaoperty_floating_loader: ^0.1.9
+  # ห้ามใส่กลับโดยไม่ดู pubspec ของ package ก่อน: chaoperty_floating_loader
+  # ประกาศ assets: ของตัวเอง (gif/png demo ของ duck + โลโก้) → Flutter บังคับ
+  # bundle เข้าแอปทุกตัวที่ depend ไม่ว่าโค้ดจะเรียกใช้หรือไม่ = +6.4M ทุก build
+  # ตรวจ 2026-09-17: ใน lib/ มีแค่ import ที่คอมเมนต์ไว้ 2 บรรทัด
+  # (screen_Intents_V3/folw_EX.dart:14 และ screen_Intents/folw_EX.dart:14)
+  # จึงถอดออก — ถ้าจะใช้จริงในอนาคต ให้ vendor โค้ดที่ต้องใช้เข้ามาเอง
+  # แทนการ depend ทั้ง package
+  # chaoperty_floating_loader: ^0.1.9
   floating_bottom_navigation_bar: ^1.5.2
   screenshot: ^3.0.0
   # mobile_scanner: ^5.2.3
@@ -153,7 +171,10 @@ dependency_overrides:
   uuid: 4.2.2
   http: 1.1.0
   intl: 0.18.1
-  win32: 5.0.0
+  # ห้าม pin win32 5.0.0: guid.dart ใช้ UnmodifiableUint8ListView ซึ่งถูกถอดจาก
+  # dart:typed_data ตั้งแต่ Dart 3.4 ทำให้ test/build ล้มด้วย "Method not found"
+  # และ win32_registry 2.1.0 (มาจาก device_info_plus) ต้องการ win32 ^5.11.0
+  # จึงไม่มี override — ปล่อยให้ pub resolve เอง (ได้ 5.15.0)
   xml: 6.3.0
   js: 0.6.7
 
@@ -198,29 +219,59 @@ flutter:
   # Pruned 2026-07-08: removed unused TP1-TP4_1, card/, LogoBank/ roots,
   # assets/images/ root (replaced with LogoBank/ subfolder only), images/
   # root replaced with explicit files actually referenced by code.
+  #
+  # Pruned 2026-09-17: ปิด asset ที่ grep แล้ว 0 reference ใน lib/ (ประหยัด
+  # ~14.2M จาก bundle ของเว็บ) ทุกบรรทัดที่ปิดมีหลักฐานกำกับ — ถ้าภายหลังมี
+  # โค้ดใหม่อ้างถึง ให้เปิดกลับ ไม่ต้องลบโฟลเดอร์ทิ้ง
+  #   grep -rn "assets/<path>" lib/   → ต้องเจอ ก่อนเปิดกลับ
   assets:
     - images/Icon-chao.png
     - images/LOGO.png
-    - images/chaoperty_dark.png
-    - images/thai_qr_payment.png
-    - images/thai_qr_payment_2.png
-    - images/icon_thaiqr.png
-    - assets/images/Icon-chao.png
-    - assets/images/LOGO.png
-    - assets/images/icon_thaiqr.png
-    - assets/images/thai_qr_payment.png
-    - assets/images/LogoBank/
-    - assets/images/New folder/
-    - assets/images/TP1/
-    - assets/images/TP2/
-    - assets/images/TP3/
-    - assets/images/TP4/
-    - assets/images/TP4_1/
-    - assets/images/card/
-    - assets/design_course/
-    - assets/fitness_app/
-    - assets/hotel/
-    - assets/introduction_animation/
+    - images/chaoperty_dark.png # File_s.dart:41
+    # - images/thai_qr_payment.png   # 0 active refs (ที่เหลืออยู่ใน PDF เป็นคอมเมนต์)
+    - images/thai_qr_payment_2.png # payment_subV4_InvAll.dart:2859
+    - images/icon_thaiqr.png # payment_subV4_InvAll.dart:3046,3067,3443
+    - assets/images/Icon-chao.png # ใช้หนักสุด ~35 จุด
+    # PDF templates call rootBundle.load('images/...'), so asset keys must
+    # keep this exact prefix for Flutter web to serve /assets/images/...
+    - images/image7-11.png
+    - images/Choice_BG_PDF.png
+    - images/choice_logo2.png
+    # - assets/images/LOGO.png            # 0 refs — โค้ดใช้ images/LOGO.png
+    # - assets/images/icon_thaiqr.png     # 0 refs — โค้ดใช้ images/icon_thaiqr.png
+    # - assets/images/thai_qr_payment.png # 0 refs
+    - assets/images/LogoBank/ # dynamic: 'assets/images/LogoBank/$logoFile' — ห้ามปิด
+    # - assets/images/New folder/  # 6.2M  0 refs (Receip_Template, B1_TP* ทั้งหมด)
+    # - assets/images/TP1/         # 264K  0 refs
+    # - assets/images/TP2/         # 268K  0 refs
+    # - assets/images/TP3/         # 408K  0 refs
+    # - assets/images/TP4/         # 316K  0 refs
+    # - assets/images/TP4_1/       # 892K  0 refs
+    # - assets/images/card/        # 8K    0 refs — และมี localhost.key อยู่ในนั้น
+    #                              #       ห้าม ship private key ขึ้น web root
+    # - assets/design_course/          # 860K  0 refs
+    - assets/fitness_app/ # 2.8M  ใช้จริง — ห้ามปิด
+    # - assets/hotel/                  # 4.3M  0 refs
+    # - assets/introduction_animation/ # 724K  0 refs
+
+    # ===== ฟอนต์สำหรับ PDF (ย้ายมาจาก fonts: 2026-09-19) =====
+    # ประกาศใน fonts: = Flutter โหลดทันทีตอนเปิดแอป (ช้า)
+    # ประกาศใน assets: = โหลดเมื่อ rootBundle.load() ถูกเรียก (ตอนสั่งพิมพ์)
+    #
+    # โค้ดที่เรียก (ใช้ rootBundle.load('fonts/...') ทั้งหมด):
+    #   THSarabunNew.ttf        — fonts_pdf default ใน Man_*.dart 8 ไฟล์
+    #                             + pdf_*.dart ที่ยัง active ~10 ไฟล์
+    #   THSarabunNewBold.ttf    — pdf_AC_his_statusbill_80MM.dart:95,
+    #                             pdf_BillingNote_IV_80MM.dart:95
+    #   NotoSansLao.ttf         — fonts_pdf ตอน rt_Language == 'LA' (6 ไฟล์)
+    #   NotoSansLao-Regular.ttf — เหมือนข้างบน แต่อีก 2 ไฟล์เรียกชื่อนี้
+    #
+    # ห้ามลบบรรทัดใดบรรทัดหนึ่งโดยไม่ grep หา call site ก่อน ไม่งั้นตอนพิมพ์
+    # PDF จะ crash 'Unable to load asset'
+    - fonts/THSarabunNew.ttf
+    - fonts/THSarabunNewBold.ttf
+    - fonts/NotoSansLao.ttf
+    - fonts/NotoSansLao-Regular.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware
@@ -238,6 +289,13 @@ flutter:
   # NotoSerif, NotoSansLaoRegular, Sarabun* (only referenced by commented-out
   # PDF code). Kept fonts actually used by Color.Fonts_T, fitness_app_theme,
   # and rootBundle.load('fonts/THSarabunNew.ttf') in PDF generators.
+  #
+  # อ่านก่อนแก้: ในบล็อก fonts: นี้ใส่เฉพาะฟอนต์ที่ "UI ต้องใช้ตอนวาดหน้า"
+  # เท่านั้น (ประกาศที่ family แล้ว Flutter จะโหลดทันทีตอนเปิดแอป)
+  #
+  # ฟอนต์ที่ใช้เฉพาะตอน generate PDF ให้ประกาศใน assets: แทน (ด้านบนของไฟล์)
+  # — rootBundle.load() ทำงานเหมือนกัน แต่จะโหลดเมื่อสั่งพิมพ์เท่านั้น
+  # ประหยัดเวลาโหลดครั้งแรกบนมือถือ/LINE
   fonts:
     - family: LINESeed1
       fonts:
@@ -247,8 +305,7 @@ flutter:
       fonts:
         - asset: fonts/LINESeedSansTH_Rg.ttf
 
-    - family: THSarabunNew
-      fonts:
-        - asset: fonts/THSarabunNew.ttf
+    # THSarabunNew / THSarabunNewBold / NotoSansLao* ย้ายไป assets:
+    # (2026-09-19) เพราะใช้แค่ตอน generate PDF ไม่ต้องอยู่ใน initial font load
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/custom-fonts/#from-packages

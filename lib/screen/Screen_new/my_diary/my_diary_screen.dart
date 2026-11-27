@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:ui';
 
 import 'package:auto_size_text/auto_size_text.dart';
@@ -7,6 +7,7 @@ import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk-slip.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4_InvAll.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
@@ -27,6 +28,7 @@ import '../../../screen_Intents/bankCodeMap.dart';
 import '../../loginscreen.dart';
 import '../../market_select_screen.dart';
 import '../../market_service.dart';
+import '../../model/contractInvoice.dart';
 import '../fitness_app_home_screen.dart';
 import '../fitness_app_theme.dart';
 import '../ui_view/body_measurement.dart';
@@ -184,7 +186,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
 
   Future<Null> checkPreferance() async {
     DateTime currentDate = DateTime.now();
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
 
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
 
@@ -360,10 +362,54 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       []; // ยอดที่มี payment intent อยู่แล้ว/ชำระไปแล้ว
   double All_total = 0.00, totaltoday = 0.00;
 
-  // รวมยอดบิล (amtall + vatall) อย่างปลอดภัยแม้ค่าจะเป็น null/empty
+  final Map<String, double> _invoiceFineByDocNo = <String, double>{};
+
+  // ยอดที่ผู้ใช้ต้องชำระจริง: ยอดบิล + VAT + ค่าปรับของบิลนั้น
   double _billAmount(InvoiceModel inv) =>
       (double.tryParse(inv.amtall ?? '') ?? 0) +
-      (double.tryParse(inv.vatall ?? '') ?? 0);
+      (double.tryParse(inv.vatall ?? '') ?? 0) +
+      (_invoiceFineByDocNo[inv.docno?.trim() ?? ''] ?? 0);
+
+  Future<void> _loadInvoiceFines({
+    required String rentalId,
+    required String? customerNumber,
+  }) async {
+    _invoiceFineByDocNo.clear();
+    if (customerNumber == null || customerNumber.isEmpty) return;
+
+    try {
+      final response = await http.get(Uri.parse(
+        '${MyConstant().domain}/GC_billGropInv_UserPaytypeV2.php'
+        '?isAdd=true&ren=$rentalId&custno_inv=${Uri.encodeQueryComponent(customerNumber)}',
+      ));
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        debugPrint('_loadInvoiceFines HTTP ${response.statusCode}');
+        return;
+      }
+
+      final decoded = jsonDecode(response.body);
+      final contracts = decoded is Map<String, dynamic>
+          ? <ContractInvoice>[ContractInvoice.fromJson(decoded)]
+          : decoded is List
+              ? decoded
+                  .whereType<Map<String, dynamic>>()
+                  .map(ContractInvoice.fromJson)
+                  .toList(growable: false)
+              : const <ContractInvoice>[];
+      for (final contract in contracts) {
+        for (final data in contract.data ?? const []) {
+          for (final bill in data.bill ?? const []) {
+            final docNo = bill.docno?.trim() ?? '';
+            if (docNo.isNotEmpty) {
+              _invoiceFineByDocNo[docNo] = bill.fineTotal ?? 0;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      debugPrint('_loadInvoiceFines error: $error');
+    }
+  }
 
   /// ตรวจสอบสถานะ "ชำระได้" ของบิลแบบกลุ่ม (1 ครั้งต่อสัญญา)
   /// คืนค่า Map<billReference, bool> (true = ชำระได้)
@@ -421,6 +467,7 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
       return;
     }
 
+    await _loadInvoiceFines(rentalId: ren, customerNumber: custNo);
     final todayStr = DateFormat('yyyy-MM-dd').format(_DateTimeNew);
 
     for (int index = 0; index < teNantModels.length; index++) {
@@ -1238,15 +1285,15 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => PaymentSubV4Page(
+        builder: (_) => paymentSubV4InvAll(
           teNantModel: teNantModels.isEmpty ? null : teNantModels,
           cuslang: cus_lang,
           serPayment: serPayment,
           serptPayment: null,
           selectedDocNos: docNos,
           fromIntent: true,
-          targetIntentUuid: t.intentUuid,
-          targetPaymentIntentNo: t.paymentIntentNo,
+          // targetIntentUuid: t.intentUuid,
+          // targetPaymentIntentNo: t.paymentIntentNo,
         ),
       ),
     );
@@ -1264,10 +1311,10 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     ];
     final fromText = _transectionDateFrom == null
         ? (isEn ? 'From' : 'จาก')
-        : DateFormat('yyyy-MM-dd').format(_transectionDateFrom!);
+        : '${DateFormat('dd-MM').format(_transectionDateFrom!)}-${_transectionDateFrom!.year + 543}';
     final toText = _transectionDateTo == null
         ? (isEn ? 'To' : 'ถึง')
-        : DateFormat('yyyy-MM-dd').format(_transectionDateTo!);
+        : '${DateFormat('dd-MM').format(_transectionDateTo!)}-${_transectionDateTo!.year + 543}';
     final hasDateFilter =
         _transectionDateFrom != null || _transectionDateTo != null;
 
@@ -1508,12 +1555,12 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
     }
   }
 
-  /// Format ISO-8601 string as dd-MM-yyyy (e.g. 04-08-2026).
+  /// Format ISO-8601 string as dd-MM-yyyy พ.ศ. (e.g. 04-08-2569).
   /// Falls back to the raw string if it cannot be parsed.
   String _formatDateDdMmYyyy(String iso) {
     final d = _parseIsoDate(iso);
     if (d == null) return iso;
-    return DateFormat('dd-MM-yyyy').format(d);
+    return '${DateFormat('dd-MM').format(d)}-${d.year + 543}';
   }
 
   Widget _buildTransectionCard(TransectionIntent t) {
@@ -1910,8 +1957,8 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                         ),
                         Text(
                           isEN
-                              ? '#note:The displayed amount does not include fines'
-                              : '#หมายเหตุ:ยอดที่แสดงเป็นยอดที่ยังไม่รวมค่าปรับ',
+                              ? '#note: The displayed amount includes late fees.'
+                              : '#หมายเหตุ:ยอดที่แสดงรวมค่าปรับแล้ว',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -3023,9 +3070,11 @@ class _MyDiaryScreenState extends State<MyDiaryScreen>
                                         MaterialPageRoute(
                                           builder: (_) => MarketSelectScreen(
                                             markets: AppMarkets.markets,
-                                            onSelect: (selected) =>
+                                            // callback รับ context ของหน้าเลือกตลาดเอง
+                                            onSelect: (marketContext,
+                                                    selected) =>
                                                 MarketService.applyMarket(
-                                                    context, selected),
+                                                    marketContext, selected),
                                           ),
                                         ),
                                       );

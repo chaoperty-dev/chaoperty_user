@@ -15,13 +15,14 @@
 // /flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security
 // /flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-define=web-browser-flag=--disable-web-security --no-tree-shake-icons
 // ** */ flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user_intents/
-// flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user/
+// flutter build web --dart-define=BROWSER_IMAGE_DECODING_ENABLED=false-browser-flag=--disable-web-security --no-tree-shake-icons --base-href /user_test/
 //----------------------------------------------------->
 
 //----------------------------------------------------->
 //
 import 'dart:async';
-import 'dart:html' as html;
+import 'dart:ui' show PlatformDispatcher;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -29,6 +30,7 @@ import 'package:provider/provider.dart';
 import 'package:syncfusion_localizations/syncfusion_localizations.dart';
 
 import 'Constant/api_session.dart';
+import 'debug/remote_debug_reporter.dart';
 import 'screen/loginscreen.dart';
 import 'screen/provider/homeprovider.dart';
 import 'screen/provider/payhisprovider.dart';
@@ -39,53 +41,112 @@ import 'security/watermark_widget.dart';
 // ==== ตัวแปรเก็บ URL เริ่มต้น (แก้ปัญหา Router ลบ Hash) ====
 String initialAppUrl = '';
 
+const _debugLogEndpoint = String.fromEnvironment('DEBUG_LOG_ENDPOINT');
+final _remoteDebugLoggingEnabled = _debugLogEndpoint.isNotEmpty;
+
+Future<void> _reportDebugError(
+  String source,
+  Object error, [
+  StackTrace? stackTrace,
+]) async {
+  if (!_remoteDebugLoggingEnabled) return;
+
+  await reportRemoteDebugError(
+    endpoint: _debugLogEndpoint,
+    source: source,
+    error: error.toString(),
+    stackTrace: stackTrace?.toString() ?? '',
+  );
+}
+
 void main() {
-  // ===== ปิด debugPrint และ print ทั้งหมดเมื่อ kEnableDebugPrint = true =====
-  // ต้องครอบตั้งแต่ WidgetsFlutterBinding.ensureInitialized() ด้านใน Zone
-  // มิฉะนั้น callback ของ Flutter (เช่น onPressed -> signInThread) จะรันใน
-  // Zone.root และพ้นจากการดักจับ print
   runZonedGuarded(
     () async {
-      // เก็บเวลาเริ่มต้นเพื่อวัดประสิทธิภาพ
-      final stopwatch = Stopwatch()..start();
-
       WidgetsFlutterBinding.ensureInitialized();
 
-      // สำคัญมาก: เก็บ URL ไว้ตั้งแต่เปิดแอป ก่อนที่ Flutter Router จะลบมันทิ้ง!
-      initialAppUrl = Uri.base.toString();
-      try {
-        initialAppUrl = Uri.decodeFull(html.window.location.href);
-      } catch (e) {}
-
-      // Initialize ApiSession to load saved tokens from SharedPreferences
-      await ApiSession.initialize();
-
-      // 1) ปิด debugPrint โดยตั้งเป็นฟังก์ชันว่าง
-      // 2) ดักจับ print ผ่าน ZoneSpecification (print ไม่สามารถ assign ใหม่ได้)
-      if (!kEnableDebugPrint) {
+      if (kDebugMode || _remoteDebugLoggingEnabled) {
+        FlutterError.onError = (details) {
+          if (kDebugMode) {
+            FlutterError.presentError(details);
+            debugPrint('FLUTTER ERROR: ${details.exceptionAsString()}');
+            debugPrintStack(stackTrace: details.stack);
+          }
+          unawaited(_reportDebugError(
+            'FlutterError',
+            details.exception,
+            details.stack,
+          ));
+        };
+        PlatformDispatcher.instance.onError = (error, stackTrace) {
+          if (kDebugMode) {
+            debugPrint('UNCAUGHT ERROR: $error');
+            debugPrintStack(stackTrace: stackTrace);
+          }
+          unawaited(_reportDebugError('PlatformDispatcher', error, stackTrace));
+          return true;
+        };
+        if (kDebugMode) {
+          ErrorWidget.builder = (details) {
+            debugPrint('WIDGET ERROR: ${details.exceptionAsString()}');
+            debugPrintStack(stackTrace: details.stack);
+            unawaited(_reportDebugError(
+              'ErrorWidget',
+              details.exception,
+              details.stack,
+            ));
+            return Material(
+              color: Colors.white,
+              child: SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Text(
+                    'DEBUG ERROR\n\n${details.exceptionAsString()}\n\n${details.stack ?? ''}',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          };
+        }
+      }
+      if (!kDebugMode) {
         debugPrint = (String? message, {int? wrapWidth}) {};
       }
 
-      if (kEnableDebugPrint) {
-        debugPrint('Initialization took: ${stopwatch.elapsedMilliseconds}ms');
-      }
+      // สำคัญมาก: เก็บ URL ไว้ตั้งแต่เปิดแอป ก่อนที่ Flutter Router จะลบมันทิ้ง!
+      initialAppUrl = currentDebugPageUrl();
 
-      runApp(const SplashApp());
+      unawaited(_reportDebugError(
+        'AppStart',
+        'Flutter debug session started',
+      ));
+
+      // Initialize ApiSession to load saved tokens from SharedPreferences
+      // Deferred: ไม่ block startup — โหลดแบบ fire-and-forget
+      // (AuthGate จะเรียก getInstance() เองอยู่แล้ว จึงไม่ต้องรอที่นี่)
+      unawaited(ApiSession.initialize());
+
+      // เข้าแอปทันที — ตัด SplashApp ออกเพราะสร้าง MaterialApp ซ้ำอีกชั้น
+      // และมี CircularProgressIndicator วนตลอด ทำให้เข้า login ช้าโดยไม่จำเป็น
+      runApp(const MyApp());
     },
     (error, stack) {
-      final message = 'Uncaught error: $error';
-      if (kEnableDebugPrint) {
-        debugPrint('$message\n$stack');
+      if (kDebugMode || _remoteDebugLoggingEnabled) {
+        if (kDebugMode) {
+          debugPrint('ZONE ERROR: $error');
+          debugPrintStack(stackTrace: stack);
+        }
+        unawaited(_reportDebugError('Zone', error, stack));
       }
-      _appendAppDebugLog(message);
     },
     zoneSpecification: ZoneSpecification(
       print: (self, parent, zone, line) {
-        final message = line?.toString() ?? '';
-        if (kEnableDebugPrint) {
+        if (kDebugMode) {
           parent.print(zone, line);
         }
-        _appendAppDebugLog(message);
       },
     ),
   );
@@ -93,24 +154,6 @@ void main() {
 
 // ==== bool เปิด/ปิด ลายน้ำ ====
 const bool kShowWatermark = false; // ← true = เปิด, false = ปิด
-
-// ==== bool เปิด/ปิด debugPrint ====
-const bool kEnableDebugPrint = false; // ← true = เปิด, false = ปิด
-final ValueNotifier<List<String>> appDebugLogs =
-    ValueNotifier<List<String>>(<String>[]);
-final ValueNotifier<bool> appShowDebugPanel = ValueNotifier<bool>(false);
-
-void _appendAppDebugLog(String line) {
-  // ??????? ValueNotifier rebuild ??????? build phase
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    final logs = List<String>.from(appDebugLogs.value);
-    logs.add(line);
-    if (logs.length > 120) {
-      logs.removeRange(0, logs.length - 120);
-    }
-    appDebugLogs.value = logs;
-  });
-}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -179,108 +222,9 @@ class MyApp extends StatelessWidget {
             );
           }
 
-          return ValueListenableBuilder<List<String>>(
-            valueListenable: appDebugLogs,
-            builder: (context, logs, child) {
-              return ValueListenableBuilder<bool>(
-                valueListenable: appShowDebugPanel,
-                builder: (context, showDebug, child) {
-                  // ปิด debug overlay ทั้งหมดเมื่อ kEnableDebugPrint = true
-                  // (ไม่งั้น Stack ครอบ child ทำให้ UI ซีดจาง + กิน hit-test)
-                  if (!kEnableDebugPrint) {
-                    return child!;
-                  }
-                  return Stack(
-                    children: [
-                      child!,
-                      Positioned(
-                        bottom: 16,
-                        right: 16,
-                        child: FloatingActionButton.small(
-                          heroTag: 'debug-log-toggle',
-                          backgroundColor: Colors.black87,
-                          foregroundColor: Colors.white,
-                          onPressed: () {
-                            appShowDebugPanel.value = !showDebug;
-                          },
-                          child: const Icon(Icons.bug_report),
-                        ),
-                      ),
-                      if (showDebug)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          height: MediaQuery.of(context).size.height * 0.45,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.85),
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(16),
-                                topRight: Radius.circular(16),
-                              ),
-                            ),
-                            child: Column(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 12),
-                                  child: Row(
-                                    children: [
-                                      const Text(
-                                        'Debug Log',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.close,
-                                          color: Colors.white,
-                                        ),
-                                        onPressed: () {
-                                          appShowDebugPanel.value = false;
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Divider(color: Colors.white54, height: 1),
-                                Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12),
-                                    child: ListView.builder(
-                                      itemCount: logs.length,
-                                      reverse: true,
-                                      itemBuilder: (context, index) {
-                                        final log =
-                                            logs[logs.length - 1 - index];
-                                        return Text(
-                                          log,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-                child: child,
-              );
-            },
-            child: result,
-          );
+          // Debug overlay ถอดออกแล้ว — เคยมี ValueListenableBuilder 2 ชั้น
+          // ครอบทั้งแอป ทำให้ทุก log rebuild ทั้ง tree
+          return result;
         },
         // home: const ButtonNavBar(),
         home: const AuthGate(),
@@ -306,20 +250,48 @@ class AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<AuthGate> {
   Future<SignInResult>? _resultFuture;
+  bool _hasNavigated = false;
+
+  /// true = ยังไม่มี credentials ในเครื่อง → render Login ตรง ไม่ยิง API
+  bool _skipToLogin = false;
+
+  /// true เฉพาะช่วงอ่าน SharedPreferences รอบแรก
+  ///
+  /// แยกจาก _resultFuture เพราะ build รอบแรก _resultFuture ยัง null เสมอ
+  /// ของเดิมตีความ null ว่า "ไป Login" แล้ว schedule MaterialPageRoute ทันที
+  /// แม้ _runGate กำลังเช็ค credentials อยู่ ทำให้ route แข่งกับ auth validation
+  bool _isCheckingSavedCredentials = false;
 
   @override
   void initState() {
     super.initState();
-    // ✅ Defer async validateSavedSession() ไปหลัง frame แรก
-    // เพื่อหลีกเลี่ยง _LocalizationsScope assertion ใน window.dart
+    // URL special ต้องให้ LoginScreen จัดการทันที (LINE callback / userWeb)
     if (_shouldLetLoginHandleUrl()) {
-      _resultFuture = null;
+      _skipToLogin = true;
     } else {
-      // ใช้ Future.microtask แทน เพื่อให้แน่ใจว่า widget tree พร้อมแล้ว
-      _resultFuture = Future<SignInResult>.microtask(
-        () async => await SignInService.validateSavedSession(),
-      );
+      _isCheckingSavedCredentials = true;
+      _runGate();
     }
+  }
+
+  /// Fast path: เช็ค credentials ในเครื่องก่อน (ไม่ยิง network)
+  ///
+  /// เปิดเว็บครั้งแรกที่ยังไม่ล็อกอิน → ไม่มี credentials → ไป Login ทันที
+  /// ไม่ต้องรอ `validateSavedSession()` ที่ยิง POST ไป backend
+  Future<void> _runGate() async {
+    final hasCredentials = await SignInService.hasSavedCredentials();
+    if (!mounted) return;
+
+    setState(() {
+      _isCheckingSavedCredentials = false;
+      if (hasCredentials) {
+        // มี credentials ค่อย validate กับ backend ใน FutureBuilder ด้านล่าง
+        _resultFuture = SignInService.validateSavedSession();
+      } else {
+        // ไม่มี credentials: Login render ตรงใน AuthGate, ไม่ยิง POST
+        _skipToLogin = true;
+      }
+    });
   }
 
   bool _shouldLetLoginHandleUrl() {
@@ -335,6 +307,9 @@ class _AuthGateState extends State<AuthGate> {
   // ✅ นำทางหลังจาก build เสร็จ เพื่อไม่ให้ LoginScreen.initState ทำงาน
   // ระหว่างที่ AuthGate กำลัง build (ป้องกัน setState during build loop)
   void _navigateTo(Widget page) {
+    if (_hasNavigated) return;
+    _hasNavigated = true;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
@@ -346,9 +321,17 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    // URL พิเศษ -> ให้ LoginScreen จัดการเอง (นำทางหลัง build)
-    if (_resultFuture == null) {
-      _navigateTo(const LoginScreen());
+    // URL special หรือไม่มี credentials → render Login เป็น child ตรง ๆ
+    //
+    // ห้ามใช้ _navigateTo ที่นี่: route post-frame เพิ่ม frame/transition และ
+    // build แรก _resultFuture ยัง null ทำให้ route แข่งกับ _runGate จน startup ช้า
+    // LoginScreen เองไม่ยิง POST เมื่อไม่มี URL special / credentials
+    if (_skipToLogin) {
+      return const LoginScreen();
+    }
+
+    // ระหว่าง SharedPreferences read ครั้งเดียว: มี placeholder สั้น ๆ เท่านั้น
+    if (_isCheckingSavedCredentials || _resultFuture == null) {
       return const _GatePlaceholder();
     }
 
@@ -359,9 +342,9 @@ class _AuthGateState extends State<AuthGate> {
           return const _GatePlaceholder();
         }
 
+        // validate credentials ล้มเหลว → render Login ตรง ไม่ route ซ้อน
         if (!snapshot.hasData) {
-          _navigateTo(const LoginScreen());
-          return const _GatePlaceholder();
+          return const LoginScreen();
         }
 
         final result = snapshot.data!;
@@ -374,17 +357,16 @@ class _AuthGateState extends State<AuthGate> {
 
         // ✅ กรณี backend ตอบหลายตลาด -> เปิด MarketSelectScreen ให้ผู้ใช้เลือก
         if (result.requiresMarketSelection && result.validMarkets.isNotEmpty) {
-          _navigateTo(SignInService.buildMarketSelectScreen(
-              context, result.validMarkets));
+          _navigateTo(
+              SignInService.buildMarketSelectScreen(result.validMarkets));
           return const _GatePlaceholder();
         }
 
-        // ✅ กรณี failure (ไม่มี creds / password ผิด / error) -> LoginScreen
+        // backend validation failure → Login render ตรง ไม่เพิ่ม route/frame
         if (result.errorMessage != null) {
           debugPrint('AuthGate failure: ${result.errorMessage}');
         }
-        _navigateTo(const LoginScreen());
-        return const _GatePlaceholder();
+        return const LoginScreen();
       },
     );
   }
@@ -416,98 +398,6 @@ class HexColor extends Color {
       hexColor = 'FF' + hexColor;
     }
     return int.parse(hexColor, radix: 16);
-  }
-}
-
-// Splash Screen ที่โหลดเร็วก่อนแอปหลัก
-class SplashApp extends StatefulWidget {
-  const SplashApp({super.key});
-
-  @override
-  State<SplashApp> createState() => _SplashAppState();
-}
-
-class _SplashAppState extends State<SplashApp> {
-  bool _isReady = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeApp();
-  }
-
-  Future<void> _initializeApp() async {
-    if (mounted) {
-      setState(() {
-        _isReady = true;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_isReady) {
-      return const MyApp();
-    }
-
-    // Splash Screen ง่ายๆ โหลดเร็ว
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Colors.white,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // ใช้ Icon แทนรูป (โหลดเร็วกว่า)
-              // const Icon(
-              //   Icons.home_work,
-              //   size: 80,
-              //   color: Colors.white,
-              // ),
-              const SizedBox(height: 20),
-              // const Text(
-              //   'Chaoperty',
-              //   style: TextStyle(
-              //     fontSize: 32,
-              //     fontWeight: FontWeight.bold,
-              //     color: Colors.black,
-              //   ),
-              // ),
-              // รูปอยู่ใน CircularProgressIndicator
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    // CircularProgressIndicator รอบนอก
-                    const SizedBox(
-                      width: 90,
-                      height: 90,
-                      child: CircularProgressIndicator(
-                        color: Colors.indigo,
-                        strokeWidth: 4,
-                      ),
-                    ),
-                    // รูปตรงกลาง
-                    ClipOval(
-                      child: Image.asset(
-                        'images/Icon-chao.png',
-                        width: 70,
-                        height: 70,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

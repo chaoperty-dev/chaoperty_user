@@ -67,17 +67,20 @@
   </script>
   
   <!-- ===== Mobile & App Meta ===== -->
-  <meta name="flutter-renderer" content="canvaskit">
   <meta name="theme-color" content="#4CAF50">
   <meta name="msapplication-TileColor" content="#4CAF50">
   <meta name="msapplication-navbutton-color" content="#4CAF50">
   
   <!-- ===== Preload Critical Resources ===== -->
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+  <!-- ไม่มี Google Fonts: grep แล้ว 0 การใช้ fonts.googleapis/gstatic ใน lib/
+       (ฟอนต์ทั้งหมด bundle เองใน pubspec: LINESeed1/2, THSarabunNew)
+       preconnect/dns-prefetch ที่ชี้ไปโดเมนที่ไม่ได้ใช้ = เสียเปล่า
+
+       หมายเหตุ: path เป็น relative จะ resolve ผ่าน <base href> ด้านบนเอง
+       จึงถูกต้องทั้งตอน --base-href /user/ และ /user_intents/ ห้ามใส่ / นำหน้า
+       (ของเดิม prefetch /icons/Icon-192.png เป็น absolute จะหลุด base path) -->
   <link rel="preload" href="flutter.js" as="script">
   <link rel="preload" href="main.dart.js" as="script">
-  <link rel="prefetch" href="/icons/Icon-192.png">
 
   <!-- บังคับ browser ไม่ให้ cache index.html -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -114,6 +117,63 @@
     flt-glass-pane {
       touch-action: none !important;
     }
+
+    /* Chrome/Safari and many Android WebViews resize the visual viewport when
+       browser chrome changes. A fixed html/body can then enter a repaint loop.
+       LINE keeps the original locked viewport and gesture handling below. */
+    html.chaop-mobile-browser,
+    html.chaop-mobile-browser body {
+      position: relative;
+      height: auto;
+      min-height: 100%;
+    }
+    html.chaop-mobile-browser body {
+      min-height: 100dvh;
+    }
+  </style>
+
+  <!-- ===== Boot loader: กลบช่วงหน้าขาวก่อน Flutter paint เฟรมแรก =====
+       ทำไมต้องมี: ระหว่างที่โหลด main.dart.js + canvaskit ผู้ใช้จะเห็นจอขาว
+       เปล่า ๆ หลายวินาที (โดยเฉพาะบน LINE WebView เครือข่ายมือถือ)
+       พื้นหลังต้องเป็น #ffffff ให้ตรงกับ Scaffold แรกของ Flutter
+       (main.dart AuthGate + loginscreen = Colors.white) เผื่อกรณี overlay
+       ถูกเอาออกก่อนที่ Flutter จะ paint จริง จะได้เนียนไม่มีสีสะดุด -->
+  <style>
+    #chaop-boot {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      background: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                   'Helvetica Neue', Arial, sans-serif;
+      transition: opacity 250ms ease;
+      -webkit-transition: opacity 250ms ease;
+    }
+    #chaop-boot.chaop-hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .chaop-spinner {
+      width: 34px;
+      height: 34px;
+      border: 3px solid rgba(76, 175, 80, 0.22);
+      border-top-color: #4CAF50;
+      border-radius: 50%;
+      animation: chaop-spin 800ms linear infinite;
+      -webkit-animation: chaop-spin 800ms linear infinite;
+    }
+    @keyframes chaop-spin { to { transform: rotate(360deg); } }
+    @-webkit-keyframes chaop-spin { to { -webkit-transform: rotate(360deg); } }
+    #chaop-boot-text {
+      font-size: 14px;
+      color: #6b7280;
+      letter-spacing: 0.2px;
+    }
   </style>
 
   <!-- Favicon -->
@@ -126,14 +186,82 @@
     {{flutter_build_config}}
   </script>
 
+  <script>
+    (function () {
+      if (location.port !== '8080') return;
+
+      var endpoint = location.protocol + '//' + location.hostname + ':8081/log';
+      var report = function (source, error) {
+        try {
+          var request = new XMLHttpRequest();
+          request.open('POST', endpoint, true);
+          request.send(JSON.stringify({
+            time: new Date().toISOString(),
+            source: source,
+            error: String(error || 'Unknown browser error'),
+            url: location.href,
+            userAgent: navigator.userAgent || '',
+          }));
+        } catch (_) {}
+      };
+
+      window.chaopReportBootError = report;
+      window.addEventListener('error', function (event) {
+        var target = event.target;
+        var detail = event.message ||
+          (target && (target.src || target.href)) ||
+          'Unknown browser error';
+        report('BrowserError', detail);
+      }, true);
+      window.addEventListener('unhandledrejection', function (event) {
+        report('UnhandledRejection', event.reason);
+      });
+
+      var viewportEventCount = 0;
+      var viewportTimer;
+      var reportViewport = function (trigger) {
+        if (viewportEventCount >= 12) return;
+        viewportEventCount += 1;
+        var viewport = window.visualViewport;
+        report('Viewport:' + trigger, JSON.stringify({
+          innerWidth: window.innerWidth,
+          innerHeight: window.innerHeight,
+          visualWidth: viewport ? viewport.width : null,
+          visualHeight: viewport ? viewport.height : null,
+          visualScale: viewport ? viewport.scale : null,
+          devicePixelRatio: window.devicePixelRatio,
+          screenWidth: window.screen.width,
+          screenHeight: window.screen.height,
+          documentClass: document.documentElement.className,
+        }));
+      };
+      var scheduleViewportReport = function (trigger) {
+        clearTimeout(viewportTimer);
+        viewportTimer = setTimeout(function () {
+          reportViewport(trigger);
+        }, 150);
+      };
+      setTimeout(function () { reportViewport('initial'); }, 300);
+      window.addEventListener('resize', function () {
+        scheduleViewportReport('window-resize');
+      });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function () {
+          scheduleViewportReport('visual-resize');
+        });
+      }
+    })();
+  </script>
+
   <!-- This script adds the flutter initialization JS code -->
   <script src="flutter.js" defer></script>
 
-  <!-- PDF.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.8.335/pdf.min.js"></script>
-  <script type="text/javascript">
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.8.335/pdf.worker.min.js";
-  </script>
+  <!-- PDF.js — ตรวจแล้ว 2026-09-17: ไม่มีโค้ดใน lib/ อ้าง pdfjsLib เลย
+       (grep "pdfjsLib|pdf.js|cdnjs" ใน lib/ = 0 ผล) แต่ tag นี้เป็น render-blocking
+       script ที่โหลดจาก CDN ก่อนทุกอย่างบนหน้า ⇒ ทำให้ first paint ช้าลงเปล่า ๆ
+       ถ้าเปิดกลับ ให้ใช้ defer ด้วย ไม่ใช่ sync:
+       <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.8.335/pdf.min.js"></script>
+  -->
 
   <!-- Security & Optimization (Production Only) -->
   <script>
@@ -187,56 +315,185 @@
       <p>Please enable JavaScript to use this application.</p>
     </div>
   </noscript>
-  
-  <script>
-    // ป้องกัน LINE WebView pull-to-dismiss และ iOS Safari overscroll
-    // ต้องใช้ passive: false เพื่อให้ preventDefault() ทำงานได้
-    document.addEventListener('touchmove', function (e) {
-      e.preventDefault();
-    }, { passive: false });
 
-    // ป้องกัน double-tap zoom บน iOS
-    var lastTouchEnd = 0;
-    document.addEventListener('touchend', function (e) {
-      var now = Date.now();
-      if (now - lastTouchEnd < 300) {
+  <!-- Boot loader — กลบช่วงหน้าขาวก่อน Flutter paint เฟรมแรก
+       ลำดับสำคัญ: element นี้ต้องมาก่อน <script> ที่เรียก _flutter.loader.load()
+       ไม่งั้นตอน JS เริ่มทำงานจะไม่มีอะไรให้ซ่อน -->
+  <div id="chaop-boot" role="status" aria-live="polite">
+    <div class="chaop-spinner"></div>
+    <div id="chaop-boot-text">กำลังโหลด…</div>
+  </div>
+
+  <script>
+    var chaopUserAgent = navigator.userAgent || '';
+    var chaopIsLineWebView = /\bLine\//i.test(chaopUserAgent);
+    var chaopIsMobileBrowser = window.matchMedia &&
+      window.matchMedia('(pointer: coarse)').matches;
+    var chaopVisualViewport = window.visualViewport;
+    var chaopIsDesktopEmulation = chaopVisualViewport &&
+      chaopVisualViewport.scale < 0.9 &&
+      window.innerWidth > window.screen.width * 1.2;
+
+    // Keep LINE behavior unchanged. Other mobile browsers must not use a
+    // fixed document viewport because browser-chrome resizing can flicker.
+    if (chaopIsDesktopEmulation) {
+      document.documentElement.classList.add('chaop-desktop-emulation');
+    } else if (!chaopIsLineWebView && chaopIsMobileBrowser) {
+      document.documentElement.classList.add('chaop-mobile-browser');
+    }
+
+    if (chaopIsLineWebView) {
+      // ป้องกัน LINE WebView pull-to-dismiss และ iOS Safari overscroll
+      // ต้องใช้ passive: false เพื่อให้ preventDefault() ทำงานได้
+      document.addEventListener('touchmove', function (e) {
         e.preventDefault();
-      }
-      lastTouchEnd = now;
-    }, { passive: false });
+      }, { passive: false });
+
+      // ป้องกัน double-tap zoom บน iOS
+      var lastTouchEnd = 0;
+      document.addEventListener('touchend', function (e) {
+        var now = Date.now();
+        if (now - lastTouchEnd < 300) {
+          e.preventDefault();
+        }
+        lastTouchEnd = now;
+      }, { passive: false });
+    }
   </script>
 
   <script>
-    (function () {
-      if (!('serviceWorker' in navigator)) {
-        window.addEventListener('load', function () { _flutter.loader.load(); });
-        return;
+    // โหลด Flutter แบบไม่ใช้ Service Worker
+    //
+    // ทำไมปิด SW (2026-09-17):
+    //   - ไม่มีอะไรพึ่ง SW: ไม่มี push/firebase_messaging, ไม่มี offline mode,
+    //     LINE WebView ไม่รองรับ PWA install อยู่แล้ว
+    //   - สิ่งที่ SW ทำงานเดียวคือ cache asset ซึ่ง .htaccess ทำแทนได้แล้ว
+    //     (Cache-Control: immutable บนไฟล์ที่มี hash ในชื่อ)
+    //   - SW คือสาเหตุอันดับ 1 ของ "แก้โค้ดแล้วผู้ใช้ยังเห็นของเก่า"
+    //
+    // serviceWorkerVersion: null = ห้าม Flutter register SW ใหม่
+    // แต่ตัวนี้ "ไม่ลบ" SW ที่ติดค้างในเครื่องผู้ใช้ไปแล้ว จึงต้อง unregister
+    // แบบเงียบ ๆ ข้างล่างด้วย — ไม่ reload ไม่โหลดซ้ำ รอบถัดไปจะสะอาดเอง
+    //
+    // ของเดิม (ถอดออกแล้ว): unregister + clear cache + location.reload(true)
+    // ทุก session เพราะ flag เก็บใน sessionStorage ซึ่งตายเมื่อปิด tab
+    // → เปิด LINE ใหม่ทุกครั้งต้องโหลด main.dart.js + canvaskit ซ้ำสองรอบ
+    // ---- ซ่อน boot loader ----
+    // เรียกตอน Flutter บอกว่าเฟรมแรกวาดเสร็จแล้ว (first-frame event) ไม่ใช่
+    // ตอน load() เสร็จ — ถ้าซ่อนตอน load() เสร็จจะเจอจอขาวต่ออีกช่วงสั้น ๆ
+    // เพราะ engine ยังไม่ paint
+    var chaopBoot = document.getElementById('chaop-boot');
+    var chaopHideBoot = function () {
+      if (!chaopBoot) return;
+      chaopBoot.classList.add('chaop-hide');
+      // ลบออกจาก DOM จริงหลัง fade จบ — กันไม่ให้ element นี้บัง
+      // touch/scroll ของ Flutter (pointer-events: none กันไว้แล้วชั้นหนึ่ง
+      // แต่ลบออกไปเลยชัวร์กว่า)
+      setTimeout(function () {
+        if (chaopBoot && chaopBoot.parentNode) {
+          chaopBoot.parentNode.removeChild(chaopBoot);
+        }
+      }, 300);
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+      }).catch(function () {}); // เงียบ — ล้มก็ไม่ควร block การโหลดแอป
+    }
+
+    // กันเหนียว: ถ้า Flutter start นานผิดปกติ อย่าให้ค้าง spinner แบบไม่มี
+    // สถานะบอกผู้ใช้ — ไม่มี retry อัตโนมัติ จึงห้ามเขียนว่า "กำลังลองใหม่"
+    var chaopBootTimeout = setTimeout(function () {
+      var t = document.getElementById('chaop-boot-text');
+      if (t) t.textContent = 'กำลังเริ่มระบบ กรุณารอสักครู่…';
+      if (window.chaopReportBootError) {
+        window.chaopReportBootError('BootTimeout',
+          'Flutter did not paint its first frame within 20 seconds');
       }
+    }, 20000);
 
-      // ทุก session ใหม่ → unregister SW เก่า + ล้าง cache → reload
-      // ทำให้แน่ใจว่าได้ version ล่าสุดทุกครั้งที่เปิด LINE ใหม่
-      if (!sessionStorage.getItem('_sw_done')) {
-        sessionStorage.setItem('_sw_done', '1');
+    // CanvasKit/WebGL can repaint repeatedly on some Huawei devices without a
+    // Flutter exception. Desktop-emulation detection (below) is exactly the
+    // Huawei Browser case, so use the stable CPU backend there. Override with
+    // ?huaweiCpu=1 (force) or ?huaweiCpu=0 (compare the WebGL path).
+    var chaopCpuCanvasOverride = new URLSearchParams(location.search)
+      .get('huaweiCpu');
+    var chaopUseCpuCanvas = chaopCpuCanvasOverride === '1' ||
+      (chaopCpuCanvasOverride !== '0' && chaopIsDesktopEmulation);
 
-        Promise.all([
-          navigator.serviceWorker.getRegistrations().then(function (regs) {
-            return Promise.all(regs.map(function (r) { return r.unregister(); }));
-          }),
-          caches.keys().then(function (names) {
-            return Promise.all(names.map(function (n) { return caches.delete(n); }));
-          })
-        ]).then(function () {
-          window.location.reload(true);
-        });
+    // CPU backend loads network images with XHR, which needs CORS. Production
+    // origins are allow-listed by the image hosts, but the local dev server is
+    // not, so route them through the local proxy in tool/debug_log_server.dart.
+    // Never runs on the production host.
+    var chaopIsLocalDev = location.hostname === '127.0.0.1' ||
+      location.hostname === 'localhost';
+    var chaopImageProxyOverride = new URLSearchParams(location.search)
+      .get('imageProxy');
+    var chaopUseLocalImageProxy = new URLSearchParams(location.search)
+      .get('imageProxy') === '1' ||
+      (chaopImageProxyOverride !== '0' && chaopIsLocalDev &&
+        location.port === '8080');
+    if (chaopUseLocalImageProxy) {
+      var chaopOriginalXhrOpen = XMLHttpRequest.prototype.open;
+      XMLHttpRequest.prototype.open = function (method, url) {
+        try {
+          var remoteUrl = new URL(String(url), location.href);
+          var isChoicePics =
+            remoteUrl.hostname === 'choice-pics.chaoperties.com' &&
+            remoteUrl.pathname.indexOf('/Choice/chao_api/') === 0;
+          var isChaoImage =
+            remoteUrl.hostname === 'chaoperties.com' &&
+            (remoteUrl.pathname.indexOf('/Choice/chao_api/files/') === 0 ||
+              remoteUrl.pathname === '/Choice/chao_api/gen_qr_img.php');
+          if (isChoicePics || isChaoImage) {
+            url = 'http://127.0.0.1:8081/image?url=' +
+              encodeURIComponent(remoteUrl.href);
+          }
+        } catch (_) {}
+        return chaopOriginalXhrOpen.apply(this, arguments);
+      };
+    }
 
-        return; // รอ reload — ไม่โหลด Flutter ในรอบนี้
-      }
+    window.addEventListener('load', function () {
+      _flutter.loader.load({
+        serviceWorker: { serviceWorkerVersion: null },
+        onEntrypointLoaded: function (engineInitializer) {
+          var engineOptions = chaopUseCpuCanvas
+            ? { canvasKitForceCpuOnly: true }
+            : undefined;
 
-      // reload แล้ว → โหลด Flutter ปกติ
-      window.addEventListener('load', function () {
-        _flutter.loader.load();
+          if (chaopUseCpuCanvas && window.chaopReportBootError) {
+            window.chaopReportBootError(
+              'Renderer',
+              'CanvasKit CPU backend enabled for Huawei desktop emulation'
+            );
+          }
+
+          engineInitializer.initializeEngine(engineOptions).then(function (appRunner) {
+            return appRunner.runApp();
+          }).then(function () {
+            // runApp() resolve = Flutter รับ widget tree แล้ว แต่ browser อาจยัง
+            // ไม่ paint canvas เฟรมแรก ถ้าซ่อนทันทีจะมีจอขาวกระพริบใน LINE
+            // รอ requestAnimationFrame 2 รอบ: รอบแรก Flutter queue paint,
+            // รอบสอง browser commit เฟรมจริง แล้วค่อย fade boot overlay
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                clearTimeout(chaopBootTimeout);
+                chaopHideBoot();
+              });
+            });
+          }).catch(function (error) {
+            clearTimeout(chaopBootTimeout);
+            if (window.chaopReportBootError) {
+              window.chaopReportBootError('FlutterEngine', error);
+            }
+            var t = document.getElementById('chaop-boot-text');
+            if (t) t.textContent = 'เปิดระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';
+          });
+        },
       });
-    })();
+    });
   </script>
 </body>
 

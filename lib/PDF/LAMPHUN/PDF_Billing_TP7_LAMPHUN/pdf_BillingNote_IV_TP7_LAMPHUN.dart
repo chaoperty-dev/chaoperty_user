@@ -218,13 +218,13 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
     if (img1 == null || img1.toString().isEmpty) {
       netImage_QR.add(
         await networkImage(
-          '${MyConstant().domain_chao}/Awaitdownload/imagenot.png',
+          '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png',
         ),
       );
     } else {
       netImage_QR.add(
         await networkImage(
-          '${MyConstant().domain_chao}/files/$foder/payment/$img1',
+          '${MyConstant().domain_chao_img}/files/$foder/payment/$img1',
         ),
       );
     }
@@ -235,7 +235,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
         signature.toString().isNotEmpty &&
         signature.toString() != 'null') {
       try {
-        final sigUrl = '${MyConstant().domain_chao}/${signature}';
+        final sigUrl = '${MyConstant().domain}/${signature}';
         print('signature URL: $sigUrl');
         final sigRes = await http.get(Uri.parse(sigUrl));
         if (sigRes.statusCode == 200) {
@@ -326,6 +326,25 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
     final hasNotKd = _InvoiceHistoryModels.any(
       (e) => e.dtype.toString() != 'KD',
     );
+
+    //--------> จำนวนรายการ KD (แสดงแยกบรรทัดเสมอ)
+    final int kdCount =
+        _InvoiceHistoryModels.where((e) => e.dtype.toString() == 'KD').length;
+
+    ///---------------------> จำนวน "บรรทัดที่ถูกวาดจริง" ในตาราง (Rendered row count)
+    /// ใช้แทน tableData003.length ซึ่งเป็น list ว่าง (length = 0 เสมอ) ทำให้
+    /// เงื่อนไขขึ้นหน้าใหม่เดิมตายหมด และไม่สอดคล้องกับ billingFormat
+    ///  - แบบเต็ม : วาดทุกรายการ 1 บรรทัด/รายการ
+    ///  - แบบย่อ  : รวมรายการที่ไม่ใช่ KD เหลือ 1 บรรทัด + KD อีกรายการละ 1 บรรทัด
+    final int rowCount = (billingFormat == 'แบบเต็ม')
+        ? _InvoiceHistoryModels.length
+        : ((hasNotKd ? 1 : 0) + kdCount);
+
+    /// จำนวนบรรทัดสูงสุดที่ใส่ได้ในครึ่งหน้า A4 (ต้นฉบับ+คู่ฉบับ อยู่หน้าเดียวกัน)
+    /// เกินกว่านี้ → แยกเป็นหน้าเต็มอย่างละ 1 หน้า
+    const int kMaxRowsHalfPage = 4;
+
+    final bool isCompactLayout = rowCount <= kMaxRowsHalfPage;
 
     final totalqty = "1";
 
@@ -882,7 +901,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                               pw.Positioned(
                                 bottom: 4,
                                 left: 0,
-                                right: 14,
+                                right: 0,
                                 child: pw.Center(
                                   child: pw.Image(
                                     pw.MemoryImage(signatureBytes),
@@ -911,8 +930,8 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                             pw.Positioned(
                               left: 0,
                               right: 0,
-                              top: -4,
-                              bottom: 10,
+                              top: -1,
+                              // bottom: 10,
                               child: pw.Text(
                                 fullname,
                                 textAlign: pw.TextAlign.center,
@@ -1127,7 +1146,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
               //             ],
               // ),
 
-              if (serpang == 1 && tableData003.length < 7)
+              if (serpang == 1 && isCompactLayout)
                 pw.Padding(
                   padding: pw.EdgeInsets.all(0),
                   child: pw.Text(
@@ -1140,8 +1159,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                         color: PdfColors.grey500),
                   ),
                 ),
-              if (tableData003.length > 6)
-                pw.SizedBox(height: 2.2 * PdfPageFormat.mm),
+              if (!isCompactLayout) pw.SizedBox(height: 2.2 * PdfPageFormat.mm),
             ],
           ),
         ),
@@ -1766,25 +1784,35 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                 ],
               )),
             ),
-            if (tableData003.length < 11) footer_data(serpang)
+            if (isCompactLayout) footer_data(serpang)
           ],
         ),
       );
     }
 
-    if (tableData003.length < 11)
+    ///---------------------> รูปแบบหน้าของ layout กระชับ (ต้นฉบับ+คู่ฉบับ ในหน้าเดียว)
+    final compactFormat = PdfPageFormat.a4.copyWith(
+      marginBottom: 12.00,
+      marginLeft: 10.00,
+      marginRight: 10.00,
+      marginTop: 12.00,
+    );
+
+    /// ความสูงครึ่งหน้า คิดจาก "พื้นที่ใช้งานจริง" (หัก margin บน/ล่างแล้ว)
+    /// ของเดิมใช้ a4.height / 2.05 = 410.68 x 2 = 821.36 ซึ่งเกิน
+    /// availableHeight (841.89 - 12 - 12 = 817.89) อยู่ 3.47 pt
+    /// ทำให้กล่องคู่ฉบับถูกดันไปขึ้นหน้าใหม่เปล่า ๆ เสมอ แม้มีแค่ 1-2 รายการ
+    /// หัก 1 pt เผื่อการปัดเศษทศนิยมของ MultiPage
+    final double halfPageHeight = (compactFormat.availableHeight - 1) / 2;
+
+    if (isCompactLayout)
       pdf.addPage(
         pw.MultiPage(
-          pageFormat: PdfPageFormat.a4.copyWith(
-            marginBottom: 12.00,
-            marginLeft: 10.00,
-            marginRight: 10.00,
-            marginTop: 12.00,
-          ),
+          pageFormat: compactFormat,
           build: (context) {
             return [
               pw.Container(
-                  height: PdfPageFormat.a4.height / 2.05,
+                  height: halfPageHeight,
                   decoration: const pw.BoxDecoration(
                     // color: PdfColors.green50,
                     border: pw.Border(
@@ -1799,7 +1827,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
                     ],
                   )),
               pw.Container(
-                  height: PdfPageFormat.a4.height / 2.05,
+                  height: halfPageHeight,
                   decoration: const pw.BoxDecoration(
                     // color: PdfColors.red50,
                     border: pw.Border(
@@ -1833,7 +1861,7 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
         ),
       );
 
-    if (tableData003.length > 10)
+    if (!isCompactLayout)
       pdf.addPage(
         pw.MultiPage(
             pageFormat: PdfPageFormat.a4.copyWith(
@@ -1848,13 +1876,11 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
             build: (context) {
               return [Body_data(1)];
             },
-            footer: (tableData003.length < 10)
-                ? null
-                : (context) {
-                    return footer_data(1);
-                  }),
+            footer: (context) {
+              return footer_data(1);
+            }),
       );
-    if (tableData003.length > 10)
+    if (!isCompactLayout)
       pdf.addPage(
         pw.MultiPage(
             pageFormat: PdfPageFormat.a4.copyWith(
@@ -1869,11 +1895,9 @@ class Pdfgen_BillingNoteInvlice_TP7_LAMPHUN {
             build: (context) {
               return [Body_data(2)];
             },
-            footer: (tableData003.length < 10)
-                ? null
-                : (context) {
-                    return footer_data(2);
-                  }),
+            footer: (context) {
+              return footer_data(2);
+            }),
       );
 
     // final bytes = await pdf.save();

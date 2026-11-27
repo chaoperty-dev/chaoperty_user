@@ -464,7 +464,7 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
                                 : 'กดเพื่อ "แนบหลักฐานและยืนยัน"')
                             : (isEn
                                 ? 'Start payment'
-                                : 'กดเพื่อ "เริ่มการชำระ"'),
+                                : 'กดเพื่อชำระ'),
                         onActionPressed: () async {
                           if (hasActivePayment) {
                             await _openTab1AttachFlow(isEn);
@@ -609,6 +609,7 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
       isEn: isEn,
       summary: _summaryWithActiveAmount(vm.state),
       slip: vm.state.slipState,
+      slipStateBuilder: () => vm.state.slipState,
       isBankTransfer: vm.state.selectedPaymentModel?.isBankTransfer == true,
       billDead: vm.state.qrState.isBillDead,
       onShowQr: () => _showQrFromAttachSheet(isEn),
@@ -626,9 +627,19 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
         );
       },
       onConfirm: () async {
-        await vm.uploadSlip();
+        final success = await vm.uploadSlip();
+        if (success && mounted) await _returnAfterSlipUpload();
       },
     );
+  }
+
+  /// กลับหน้าก่อนหน้าหลังอัปโหลดสำเร็จเหมือน legacy
+  ///
+  /// `showAttachSlipSheet` ปิด sheet ก่อนเรียก callback แล้ว จึง pop แค่หน้า
+  /// PaymentSubV4 นี้ ไม่ pop ซ้ำจนไปปิดหน้าหลักของแอป
+  Future<void> _returnAfterSlipUpload() async {
+    if (!mounted) return;
+    Navigator.of(context).pop();
   }
 
   /// เปิด flow แนบหลักฐานของการ์ดแท็บ 2
@@ -645,6 +656,7 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
       isEn: isEn,
       summary: _summaryWithActiveAmount(vm.state),
       slip: vm.state.slipState,
+      slipStateBuilder: () => vm.state.slipState,
       isBankTransfer: vm.state.selectedPaymentModel?.isBankTransfer == true,
       billDead: vm.state.qrState.isBillDead,
       onShowQr: () => _showQrFromAttachSheet(isEn),
@@ -662,7 +674,8 @@ class _PaymentSubV4ViewState extends State<_PaymentSubV4View>
         );
       },
       onConfirm: () async {
-        await vm.uploadSlip();
+        final success = await vm.uploadSlip();
+        if (success && mounted) await _returnAfterSlipUpload();
       },
     );
   }

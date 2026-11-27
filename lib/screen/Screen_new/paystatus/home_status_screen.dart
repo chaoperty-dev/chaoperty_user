@@ -215,7 +215,7 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
         cusPhoto!.toLowerCase() != 'null' &&
         cusFoder != null &&
         cusFoder!.isNotEmpty) {
-      final newUrl = MyConstant().domain_chao;
+      final newUrl = MyConstant().domain_chao_img;
       cusImgLogo = '$newUrl/files/$cusFoder/contract/$cusPhoto';
     }
   }
@@ -277,7 +277,7 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
 
     if (rentals.isNotEmpty && rentals[0].imglogo!.trim().isNotEmpty) {
       final urlimg =
-          '${MyConstant().domain_chao}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
+          '${MyConstant().domain_chao_img}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
       newValuePDFimg.add(urlimg);
       preferences.setString('renTal_logo', urlimg);
     }
@@ -500,7 +500,7 @@ class _ReceiptPayScreenState extends State<ReceiptPayScreen>
       // สร้าง URL รูป: domain_chao/files/{foder}/slip/{slipFileName}
       final imageUrl = slipFileName.startsWith('http')
           ? slipFileName
-          : '${MyConstant().domain_chao}/files/$folderName/slip/$slipFileName';
+          : '${MyConstant().domain_chao_img}/files/$folderName/slip/$slipFileName';
 
       debugPrint('📎 View slip URL: $imageUrl');
 
@@ -1033,9 +1033,11 @@ class InvoiceCard extends StatelessWidget {
             ? 'Payment date: Please contact staff.'
             : 'วันที่ชำระ: กรุณาติดต่อเจ้าหน้าที่';
       } else {
-        final f = DateFormat('dd-MM-yyyy');
-        dueStr =
-            isEN ? 'Payment date ${f.format(d)}' : 'วันที่ชำระ ${f.format(d)}';
+        final f = DateFormat('dd-MM');
+        final thaiYear = d.year + 543;
+        dueStr = isEN
+            ? 'Payment date ${f.format(d)}-$thaiYear'
+            : 'วันที่ชำระ ${f.format(d)}-$thaiYear';
       }
     }
 
@@ -1472,7 +1474,7 @@ class _SlipStatusBarState extends State<_SlipStatusBar> {
       // 2) ตรวจสอบว่าไฟล์มีอยู่จริงบน server (HEAD request)
       final imageUrl = slipFileName.startsWith('http')
           ? slipFileName
-          : '${MyConstant().domain_chao}/files/$folderName/slip/$slipFileName';
+          : '${MyConstant().domain_chao_img}/files/$folderName/slip/$slipFileName';
 
       try {
         final headRes = await http.head(Uri.parse(imageUrl));

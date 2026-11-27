@@ -212,7 +212,7 @@ class _InvioceScreenState extends State<InvioceScreen>
         cusPhoto!.toLowerCase() != 'null' &&
         cusFoder != null &&
         cusFoder!.isNotEmpty) {
-      final newUrl = MyConstant().domain_chao;
+      final newUrl = MyConstant().domain_chao_img;
       cusImgLogo = '$newUrl/files/$cusFoder/contract/$cusPhoto';
     }
   }
@@ -409,7 +409,7 @@ class _InvioceScreenState extends State<InvioceScreen>
                                 if (rentals.isNotEmpty &&
                                     rentals[0].imglogo!.trim().isNotEmpty) {
                                   final urlimg =
-                                      '${MyConstant().domain_chao}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
+                                      '${MyConstant().domain_chao_img}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
                                   newValuePDFimg.add(urlimg);
                                   preferences.setString('renTal_logo', urlimg);
                                 }
@@ -520,7 +520,7 @@ class _InvioceScreenState extends State<InvioceScreen>
                         if (rentals.isNotEmpty &&
                             rentals[0].imglogo!.trim().isNotEmpty) {
                           final urlimg =
-                              '${MyConstant().domain_chao}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
+                              '${MyConstant().domain_chao_img}/files/$folder/logo/${rentals[0].imglogo!.trim()}';
                           newValuePDFimg.add(urlimg);
                           preferences.setString('renTal_logo', urlimg);
                         }
@@ -838,9 +838,11 @@ class InvoiceCard extends StatelessWidget {
             ? 'Payment due: Please contact staff.'
             : 'กำหนดชำระ: กรุณาติดต่อเจ้าหน้าที่';
       } else {
-        final f = DateFormat('dd-MM-yyyy');
-        dueStr =
-            isEN ? 'Payment due ${f.format(d)}' : 'กำหนดชำระ ${f.format(d)}';
+        final f = DateFormat('dd-MM');
+        final thaiYear = d.year + 543;
+        dueStr = isEN
+            ? 'Payment due ${f.format(d)}-$thaiYear'
+            : 'กำหนดชำระ ${f.format(d)}-$thaiYear';
       }
     }
 

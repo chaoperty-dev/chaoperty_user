@@ -53,3 +53,29 @@ class ImageElement {
   void setAttribute(String name, String value) {}
   ImageElement({this.src});
 }
+
+class Navigator {
+  String userAgent = '';
+}
+
+class Screen {
+  int width = 0;
+}
+
+class Location {
+  String href = '';
+}
+
+class WindowBase {
+  final Location location = Location();
+  void close() {}
+}
+
+class Window {
+  final Navigator navigator = Navigator();
+  final Screen screen = Screen();
+  WindowBase? open(String url, String target, [String? features]) =>
+      WindowBase();
+}
+
+final Window window = Window();

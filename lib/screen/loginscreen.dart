@@ -51,17 +51,27 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
 
-    // ตรวจสอบ URL fragment จาก LINE callback (กรณี redirect กลับมา)
-    _checkLineCallback();
+    // ให้ Login card วาด first frame ก่อน แล้วค่อยเริ่มงาน URL/prefs ด้านล่าง
+    //
+    // งานเหล่านี้ไม่จำเป็นต่อการวาด username/password fields แต่เดิมรันพร้อม
+    // build แรก ทำให้ cold launch บน LINE WebView ช้า แม้ asset โหลดเสร็จแล้ว
+    // ลำดับข้างในต้องคงเดิม: parse LINE callback → register listener → URL auto-login
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
 
-    // รับ callback จาก LINE OAuth (ผ่าน auth.html)
-    _setupLineOAuthListener();
+      // ตรวจสอบ URL fragment จาก LINE callback (กรณี redirect กลับมา)
+      _checkLineCallback();
 
-    Line_IoginAuto().then((value) {
-      // print('object>>. $value');
-      if (ser_Web == 0) {
-        checkPreferance();
-      }
+      // รับ callback จาก LINE OAuth (ผ่าน auth.html)
+      _setupLineOAuthListener();
+
+      Line_IoginAuto().then((value) {
+        // ไม่มี special URL → ตรวจ prefs เพื่อ restore home ตาม behavior เดิม
+        // ไม่มี credentials → แค่ return, ไม่ยิง signInThread/POST
+        if (ser_Web == 0) {
+          checkPreferance();
+        }
+      });
     });
   }
 
@@ -286,9 +296,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (url.isEmpty) {
       url = Uri.decodeFull(Uri.base.toString());
     }
-     int index = url.indexOf('userWeb=');
+    int index = url.indexOf('userWeb=');
     try {
- 
       int index2 = url.indexOf('username=');
       int index3 = url.indexOf('passwd=');
       int index4 = url.indexOf('serrental=');
@@ -391,14 +400,11 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
 
-    final viewInsetsBottom = MediaQuery.of(context).viewInsets.bottom;
     return Scaffold(
-      // เพิ่มบรรทัดนี้เข้าไป เพื่อปิดการดันหน้าจอของ Flutter
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       backgroundColor: Colors.white, // สีพื้นหลังหลัก
       // ใช้ Container ครอบทั้งหน้าจอเพื่อทำพื้นหลัง Gradient
       body: Container(
-        height: double.infinity,
         width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -418,6 +424,8 @@ class _LoginScreenState extends State<LoginScreen> {
             builder: (context, constraints) {
               return SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 child: ConstrainedBox(
                   // บังคับให้พื้นที่ Scroll มีความสูงขั้นต่ำเท่ากับหน้าจอที่เหลืออยู่
                   constraints: BoxConstraints(
@@ -833,7 +841,11 @@ class _LoginScreenState extends State<LoginScreen> {
         ? '' // LINE OAuth ไม่ต้องใช้ password
         : (ser_Web == 1 ? rawPassword : hashedPassword);
 
-    final url = '${MyConstant().domain}/GC_user_loginV2.php';
+    final url = (line_rser.toString() == '106')
+        ? '${MyConstant().domain}/TEST_API/GC_user_login.php'
+        : '${MyConstant().domain}/GC_user_loginV2.php';
+
+    // '${MyConstant().domain}/GC_user_loginV2.php';
 
     debugPrint('URL: $url');
     debugPrint('Username: $user');
@@ -846,7 +858,7 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('Sending request to backend...');
       final response = await http.post(
         Uri.parse(url),
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
+        // headers: {'Content-Type': 'application/json; charset=utf-8'},
         body: json.encode({
           'isAdd': 'true',
           'username': user,
@@ -955,8 +967,9 @@ class _LoginScreenState extends State<LoginScreen> {
             MaterialPageRoute(
               builder: (_) => MarketSelectScreen(
                 markets: validModels,
-                onSelect: (selected) =>
-                    MarketService.applyMarket(context, selected),
+                // callback รับ context ของ MarketSelectScreen เอง
+                onSelect: (marketContext, selected) =>
+                    MarketService.applyMarket(marketContext, selected),
               ),
             ),
           );

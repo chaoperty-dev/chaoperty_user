@@ -514,7 +514,7 @@ class _RepaeScreenState extends State<RepaeScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '${DateFormat('dd/MM/yyyy').format(DateTime.parse('${item.mdate} 00:00:00'))}',
+                      '${DateFormat('dd/MM').format(DateTime.parse('${item.mdate} 00:00:00'))}/${DateTime.parse('${item.mdate} 00:00:00').year + 543}',
                       style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 12,

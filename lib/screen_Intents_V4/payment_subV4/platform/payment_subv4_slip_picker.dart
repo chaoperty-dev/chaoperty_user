@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image/image.dart' as img;
+import 'package:universal_html/html.dart' as html;
 
 /// ผลลัพธ์รูปสลิปที่พร้อมอัปโหลด
 ///
@@ -43,42 +45,27 @@ class PaymentSubV4SlipPicker {
   static const String mergedFileName = 'merged_slip.jpg';
   static const String singleFileName = 'slip_upload.jpg';
 
-  /// เลือกรูปจาก gallery (หลายรูปได้) แล้วรวมเป็นรูปเดียวเมื่อเลือกมากกว่า 1
+  /// เลือกรูปสลิปจาก gallery ได้ครั้งละ 1 รูป
   static Future<SlipImageResult?> pickAndCompressImage() async {
     try {
+      if (kIsWeb) return _pickFromWeb();
+
       final picker = ImagePicker();
-      final pickedFiles = await picker.pickMultiImage(
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
         imageQuality: 55,
         maxWidth: 700,
         maxHeight: 700,
       );
+      if (pickedFile == null) return null;
 
-      if (pickedFiles.isEmpty) return null;
-
-      final rawList = <Uint8List>[];
-      for (final file in pickedFiles) {
-        final bytes = await file.readAsBytes();
-        if (bytes.isNotEmpty) rawList.add(bytes);
-      }
-      if (rawList.isEmpty) return null;
-
-      if (rawList.length == 1) {
-        final single = await _shrinkIfNeeded(rawList.first);
-        return SlipImageResult(
-          bytes: single,
-          fileName: _fileNameOrDefault(pickedFiles.first, singleFileName),
-          mimeType: 'image/jpeg',
-        );
-      }
-
-      final merged = await mergeImages(rawList);
-      if (merged == null) return null;
+      final bytes = await pickedFile.readAsBytes();
+      if (bytes.isEmpty) return null;
 
       return SlipImageResult(
-        bytes: merged,
-        fileName: mergedFileName,
+        bytes: await _shrinkIfNeeded(bytes),
+        fileName: _fileNameOrDefault(pickedFile, singleFileName),
         mimeType: 'image/jpeg',
-        mergedCount: rawList.length,
       );
     } catch (e) {
       debugPrint('❌ pickAndCompressImage error: $e');
@@ -86,6 +73,59 @@ class PaymentSubV4SlipPicker {
     }
   }
 
+  /// Web ใช้ native file input ตาม legacy (`FileUploadInputElement`).
+  /// ส่ง bytes ดิบกลับทันทีเพื่อไม่ให้การ decode/resize รูปบน UI thread ทำให้หน้าเว็บค้าง.
+  static Future<SlipImageResult?> _pickFromWeb() async {
+    final completer = Completer<SlipImageResult?>();
+    final input = html.FileUploadInputElement()
+      ..accept = 'image/*'
+      ..multiple = false
+      ..style.display = 'none';
+    html.document.body?.append(input);
+
+    void finish(SlipImageResult? result) {
+      if (!completer.isCompleted) completer.complete(result);
+      input.remove();
+    }
+
+    input.onAbort.listen((_) => finish(null));
+    input.onError.listen((_) => finish(null));
+    input.onChange.listen((_) async {
+      final files = input.files;
+      if (files == null || files.isEmpty) {
+        finish(null);
+        return;
+      }
+
+      try {
+        final file = files.first;
+        final reader = html.FileReader()..readAsArrayBuffer(file);
+        await reader.onLoadEnd.first;
+        final result = reader.result;
+        final bytes = result is Uint8List
+            ? result
+            : result is ByteBuffer
+                ? Uint8List.view(result)
+                : null;
+        if (bytes == null || bytes.isEmpty) {
+          finish(null);
+          return;
+        }
+
+        finish(SlipImageResult(
+          bytes: bytes,
+          fileName: file.name.isEmpty ? singleFileName : file.name,
+          mimeType: mimeTypeFor(file.name),
+        ));
+      } catch (error) {
+        debugPrint('❌ Web slip image read error: $error');
+        finish(null);
+      }
+    });
+
+    input.click();
+    return completer.future;
+  }
   /// รวมหลายรูปเป็นรูปเดียวในแนวตั้ง — ทำงานใน isolate เพื่อไม่บล็อก UI
   ///
   /// ล้มเหลวหรือ timeout จะคืนรูปแรกแทน เพื่อไม่ให้ผู้ใช้ต้องเลือกใหม่

@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:chaoperty_user/Model/GetTrans_Model.dart';
 
-import 'package:ficonsax/ficonsax.dart';
+// import 'package:ficonsax/ficonsax.dart';  // ถอด 2026-09-19: เหลือแต่ Iconsax ที่คอมเมนต์ไว้
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
@@ -115,6 +115,7 @@ class PersonalInfoScreenState extends State<PersonalInfoScreen> {
     _scrollController.dispose();
     super.dispose();
   }
+
   List<QuotxSelectModel> quotxSelectModels = [];
   List<CustomerModel> customerModels = [];
   String? rtname,
@@ -464,7 +465,7 @@ class PersonalInfoScreenState extends State<PersonalInfoScreen> {
 
     // Format the date as 'YYYY-MM-DD'
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
     SharedPreferences preferences = await SharedPreferences.getInstance();
     String? DateLogin;
     setState(() {
@@ -681,12 +682,12 @@ class PersonalInfoScreenState extends State<PersonalInfoScreen> {
             Form_area.text = teNantModel.area.toString();
             Form_ln.text = teNantModel.area_c.toString();
             Form_wnote.text = teNantModel.wnote.toString();
-            Form_sdate.text = DateFormat('dd-MM-yyyy')
-                .format(DateTime.parse('${teNantModel.sdate} 00:00:00'))
-                .toString();
-            Form_ldate.text = DateFormat('dd-MM-yyyy')
-                .format(DateTime.parse('${teNantModel.ldate} 00:00:00'))
-                .toString();
+            final _sd = DateTime.parse('${teNantModel.sdate} 00:00:00');
+            Form_sdate.text =
+                '${DateFormat('dd-MM').format(_sd)}-${_sd.year + 543}';
+            final _ld = DateTime.parse('${teNantModel.ldate} 00:00:00');
+            Form_ldate.text =
+                '${DateFormat('dd-MM').format(_ld)}-${_ld.year + 543}';
             Form_period.text = teNantModel.period.toString();
             Form_rtname.text = teNantModel.rtname.toString();
             Form_docno.text = teNantModel.docno.toString();
@@ -1785,7 +1786,7 @@ class PersonalInfoScreenState extends State<PersonalInfoScreen> {
                                                       Expanded(
                                                         flex: 1,
                                                         child: Text(
-                                                          '${DateFormat('dd-MM-yyyy').format(DateTime.parse('${quotxSelectModels[index].sdate!} 00:00:00'))} - ${DateFormat('dd-MM-yyyy').format(DateTime.parse('${quotxSelectModels[index].ldate!} 00:00:00'))}',
+                                                          '${DateFormat('dd-MM').format(DateTime.parse('${quotxSelectModels[index].sdate!} 00:00:00'))}-${DateTime.parse('${quotxSelectModels[index].sdate!} 00:00:00').year + 543} - ${DateFormat('dd-MM').format(DateTime.parse('${quotxSelectModels[index].ldate!} 00:00:00'))}-${DateTime.parse('${quotxSelectModels[index].ldate!} 00:00:00').year + 543}',
                                                           textAlign:
                                                               TextAlign.start,
                                                           style:
@@ -3751,7 +3752,7 @@ class PersonalInfoScreenState extends State<PersonalInfoScreen> {
                                                                       child:
                                                                           Text(
                                                                         // maxFontSize: 15,
-                                                                        '${DateFormat('dd-MM-yyyy').format(DateTime.parse('${_TransModels[index].duedate!} 00:00:00'))}',
+                                                                        '${DateFormat('dd-MM').format(DateTime.parse('${_TransModels[index].duedate!} 00:00:00'))}-${DateTime.parse('${_TransModels[index].duedate!} 00:00:00').year + 543}',
                                                                         textAlign:
                                                                             TextAlign.start,
                                                                         style: const TextStyle(

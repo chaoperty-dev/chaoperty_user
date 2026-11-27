@@ -2259,7 +2259,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
             bill_default = bill_defaultx;
             bill_tser = bill_tserx;
             imglogo_ =
-                '${MyConstant().domain}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
+                '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
             renTalModels.add(renTalModel);
             if (bill_defaultx == 'P') {
               bills_name_ = 'บิลธรรมดา';
@@ -2499,7 +2499,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
         renTalModels[0].imglogo != null &&
         renTalModels[0].imglogo!.trim().isNotEmpty) {
       newValuePDFimg.add(
-          '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+          '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
     }
 
     await in_Trans_invoice(newValuePDFimg, showSuccess: false);
@@ -3136,8 +3136,8 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                                     payment_img!.isNotEmpty &&
                                                     payment_img != '' &&
                                                     payment_img != 'null'
-                                                ? '${MyConstant().domain_chao}/files/$foder/payment/$payment_img'
-                                                : '${MyConstant().domain_chao}/Awaitdownload/imagenot.png',
+                                                ? '${MyConstant().domain_chao_img}/files/$foder/payment/$payment_img'
+                                                : '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png',
                                             width: double.infinity,
                                             height: qrSize + qrSize,
                                             fit: BoxFit.contain,
@@ -3720,7 +3720,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
                                   payment_img!.isNotEmpty &&
                                   payment_img != 'null') {
                                 final imgUrl =
-                                    '${MyConstant().domain_chao}/files/$foder/payment/$payment_img';
+                                    '${MyConstant().domain_chao_img}/files/$foder/payment/$payment_img';
 
                                 String userAgent = html
                                     .window.navigator.userAgent
@@ -6324,7 +6324,7 @@ class _paymentSubV3InvAllState extends State<paymentSubV3InvAll>
       if (renTalModels[0].imglogo!.trim() == '') {
       } else {
         newValuePDFimg.add(
-            '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
+            '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
       }
     }
     DateTime now = DateTime.now();

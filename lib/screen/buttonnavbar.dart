@@ -138,7 +138,7 @@ class _ButtonNavBarState extends State<ButtonNavBar> {
 
     // Format the date as 'YYYY-MM-DD'
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
     //  '${Uri.base.toString().substring(0, Uri.base.toString().length - 8)}/chao_api';
 
     SharedPreferences preferences = await SharedPreferences.getInstance();

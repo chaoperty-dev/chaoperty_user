@@ -5,6 +5,7 @@ import 'package:chaoperty_user/screen_Intents/APIS-V2/config-intents.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/n10-bill-reference-available-bulk.dart';
 import 'package:chaoperty_user/screen_Intents/APIS-V2/payment-intents.dart';
 import 'package:chaoperty_user/screen_Intents_V3/payment_subV3_InvAll.dart';
+import 'package:chaoperty_user/screen_Intents_V4/payment_subV4_InvAll.dart';
 import 'package:chaoperty_user/video_player_helper.dart';
 import 'package:chaoperty_user/screen_Intents/bankCodeMap.dart';
 import 'package:chaoperty_user/screen_Intents_V4/payment_subV4/payment_subv4_page.dart';
@@ -944,7 +945,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(16),
                                     child: Image.network(
-                                      'https://chaoperties.com/user/guide_user/img/img_payment.jpg',
+                                      '${MyConstant().domain_chao_img}/guide_user/img/img_payment.jpg',
                                       fit: BoxFit.contain,
                                       cacheWidth: 480,
                                     ),
@@ -978,7 +979,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
                                 child: Image.network(
-                                  'https://chaoperties.com/user/guide_user/img/img_payment.jpg',
+                                  '${MyConstant().domain_chao_img}/guide_user/img/img_payment.jpg',
                                   fit: BoxFit.contain,
                                   loadingBuilder: (_, child, progress) =>
                                       progress == null
@@ -1053,7 +1054,7 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                               borderRadius: BorderRadius.circular(12),
                               onTap: () => showInlineVideoDialog(
                                 context,
-                                'https://chaoperties.com/user/guide_user/vdo/vdo_payment.mp4',
+                                '${MyConstant().domain_chao_img}/guide_user/vdo/vdo_payment.mp4',
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1775,7 +1776,9 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                               );
 
                               if (useV4) {
-                                return PaymentSubV4Page(
+                                return
+                                    // PaymentSubV4Page(
+                                    paymentSubV4InvAll(
                                   mainScreenAnimation: animation,
                                   mainScreenAnimationController:
                                       widget.mainScreenAnimationController!,
@@ -2935,20 +2938,38 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                                                       fontWeight:
                                                           FontWeight.w700),
                                                 ),
-                                                const SizedBox(height: 4),
                                                 Row(
                                                   children: [
-                                                    Icon(
-                                                      isAlreadyInitiated
-                                                          ? Icons.info_outline
-                                                          : Icons
-                                                              .calendar_month_outlined,
-                                                      size: 13,
-                                                      color: isAlreadyInitiated
-                                                          ? Colors
-                                                              .orange.shade700
-                                                          : Colors
-                                                              .grey.shade600,
+                                                    // Icon(
+                                                    //   isAlreadyInitiated
+                                                    //       ? Icons.info_outline
+                                                    //       : Icons
+                                                    //           .calendar_month_outlined,
+                                                    //   size: 13,
+                                                    //   color:
+                                                    // isAlreadyInitiated
+                                                    //       ? Colors
+                                                    //           .orange.shade700
+                                                    //       : Colors
+                                                    //           .grey.shade600,
+                                                    // ),
+                                                    Text(
+                                                      isEN
+                                                          ? 'Duedate: '
+                                                          : 'ครบกำหนด: ',
+                                                      style: TextStyle(
+                                                        fontFamily:
+                                                            Font_.Fonts_T,
+                                                        fontSize: 11.5,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color:
+                                                            isAlreadyInitiated
+                                                                ? Colors.orange
+                                                                    .shade700
+                                                                : Colors.grey
+                                                                    .shade600,
+                                                      ),
                                                     ),
                                                     const SizedBox(width: 6),
                                                     Text(
@@ -2980,6 +3001,27 @@ class _paymentMainV3InvAllState extends State<paymentMainV3InvAll> {
                                                     ),
                                                   ],
                                                 ),
+                                                const SizedBox(height: 2),
+                                                if ((bill.fineTotal ?? 0) > 0)
+                                                  Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 4),
+                                                    child: Text(
+                                                      isEN
+                                                          ? 'Fine: ${fmtMoney(bill.fineTotal)}'
+                                                          : 'ค่าปรับ: ${fmtMoney(bill.fineTotal)}',
+                                                      style: TextStyle(
+                                                        fontFamily:
+                                                            Font_.Fonts_T,
+                                                        fontSize: 11.5,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color:
+                                                            Colors.red.shade700,
+                                                      ),
+                                                    ),
+                                                  ),
                                               ],
                                             ),
                                           ),

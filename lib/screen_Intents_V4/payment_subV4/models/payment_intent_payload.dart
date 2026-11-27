@@ -160,7 +160,11 @@ class PaymentIntentPayload {
   }
 
   /// สร้าง invoices[] หนึ่งรายการ
-  /// หมายเหตุ: amount = (amt + vat) - wht และ total = amtall ตามต้นแบบ
+  ///
+  /// `amount` และฐาน `total` ใช้ยอดบิลรวม VAT (`total_bill`) เพื่อให้ตรงกับ
+  /// ยอดที่ผู้ใช้เห็น; `late_fee` คือค่าปรับของ invoice และรวมอยู่ใน `total` แล้ว
+  /// เช่น `220 + 250 = 470`. ถ้า API เก่าไม่มี `total_bill` ใช้ค่าเดิม fallback
+  /// จาก `amtall`/`amt + vat - wht` ตามลำดับ
   static Map<String, dynamic> buildInvoiceEntry({
     required InvoiceModel inv,
     required List<IntentsInvoiceHistoryModel> history,
@@ -170,17 +174,24 @@ class PaymentIntentPayload {
   }) {
     final docno = inv.docno ?? '';
     final amtNet = _d(inv.amt) + _d(inv.vat) - _d(inv.wht);
+    final billTotal = _d(inv.total_bill);
+
+    // `total_bill` คือยอดบิลรวม VAT ที่ผู้ใช้เห็นและต้องชำระจริง
+    // `amtall` คือยอดก่อน VAT จึงห้ามใช้เป็น total ของ invoice payload
+    // เมื่อมีค่าปรับ total ต้องรวมยอดบิล + late_fee: 220 + 250 = 470
+    final amount = billTotal > 0 ? billTotal : amtNet;
+    final total = (billTotal > 0 ? billTotal : _d(inv.amtall)) + invoiceFine;
 
     return {
       'invoice_id': 0,
       'bill_reference': docno,
-      'amount': _d2(amtNet),
+      'amount': _d2(amount),
       'late_fee': _d2(invoiceFine),
       'discount_amount': _d(inv.dis),
       'deposit_amount': 0,
       'insurance_amount': 0,
       'withholding_amount': 0,
-      'total': _d(inv.amtall),
+      'total': _d2(total),
       'list_fee': buildListFee(docno: docno, fine: fine),
       'metadata': buildMetadata(
         history: history,

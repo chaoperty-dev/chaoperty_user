@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:path/path.dart' as path;
 
@@ -37,6 +38,20 @@ class PreviewPdfgen_Billsplay extends StatefulWidget {
 
 class _PreviewPdfgen_BillsplayState extends State<PreviewPdfgen_Billsplay> {
   bool _busy = false; // ✅ กันกดรัว + แสดง overlay ในขณะประมวลผล
+  bool _hideBottomPdfActions = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPdfActionAccess();
+  }
+
+  Future<void> _loadPdfActionAccess() async {
+    final preferences = await SharedPreferences.getInstance();
+    final rentalId = preferences.getString('renTalSer')?.trim();
+    if (!mounted) return;
+    setState(() => _hideBottomPdfActions = rentalId == '106');
+  }
 
   // ✅ sanitize ชื่อไฟล์กันอักขระต้องห้าม (Windows/macOS)
   String _safeFileName(String name, {String fallback = 'document'}) {
@@ -269,25 +284,25 @@ class _PreviewPdfgen_BillsplayState extends State<PreviewPdfgen_Billsplay> {
                     pdfFileName: _pdfName(),
                   ),
                 ),
-                // ✅ แถบปุ่มล่าง: print + download PDF
-                Material(
-                  color: AppBarColors.hexColor.withOpacity(0.8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      IconButton(
-                        tooltip: 'พิมพ์ PDF',
-                        icon: const Icon(Icons.print, color: Colors.white),
-                        onPressed: _busy ? null : _printPdf,
-                      ),
-                      IconButton(
-                        tooltip: 'ดาวน์โหลด PDF',
-                        icon: const Icon(Icons.download, color: Colors.white),
-                        onPressed: _busy ? null : _downloadPdf,
-                      ),
-                    ],
+                if (!_hideBottomPdfActions)
+                  Material(
+                    color: AppBarColors.hexColor.withOpacity(0.8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          tooltip: 'พิมพ์ PDF',
+                          icon: const Icon(Icons.print, color: Colors.white),
+                          onPressed: _busy ? null : _printPdf,
+                        ),
+                        IconButton(
+                          tooltip: 'ดาวน์โหลด PDF',
+                          icon: const Icon(Icons.download, color: Colors.white),
+                          onPressed: _busy ? null : _downloadPdf,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
               ],
             ),
             // ✅ ลายน้ำทับทั้งจอ (ไม่รับการคลิก)

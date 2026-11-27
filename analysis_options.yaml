@@ -2,28 +2,79 @@
 # check for errors, warnings, and lints.
 #
 # The issues identified by the analyzer are surfaced in the UI of Dart-enabled
-# IDEs (https://dart.dev/tools#ides-and-editors). The analyzer can also be
+# IDEs (Dart-Code). The analyzer can also be
 # invoked from the command line by running `flutter analyze`.
 
 # The following line activates a set of recommended lints for Flutter apps,
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # packages/fluttertoast/ คือ copy ที่ vendor ไว้ (v8.2.5) ไม่ได้ใช้แล้ว —
+  # pubspec.lock resolve fluttertoast 9.0.0 จาก pub.dev แทน ถ้าไม่ exclude
+  # analyzer จะสแกนซ้ำและรายงาน lint ของ third-party ปนเข้ามาในผลของโปรเจกต์
+  exclude:
+    - packages/**
+
+  errors:
+    # Flutter 3.38 deprecate withOpacity / MaterialStateProperty ทั้งโปรเจกต์
+    # ตั้งเป็น ignore เพื่อไม่ให้ท่วมผล — ค่อยไล่ migrate ทีหลังเป็นงานแยก
+    deprecated_member_use: ignore
+
 linter:
-  # The lint rules applied to this project can be customized in the
-  # section below to disable rules from the `package:flutter_lints/flutter.yaml`
-  # included above or to enable additional rules. A list of all available lints
-  # and their documentation is published at
-  # https://dart-lang.github.io/linter/lints/index.html.
+  # ปิดเฉพาะ lint สไตล์ที่ขัดกับ convention ของ codebase นี้ (โค้ดเดิมเขียนแบบนี้
+  # มาก่อนและตั้งใจ) — ที่เหลือเปิดไว้ตาม flutter_lints เพื่อให้ยังจับของจริงได้
   #
-  # Instead of disabling a lint rule for the entire project in the
-  # section below, it can also be suppressed for a single line of code
-  # or a specific dart file by using the `// ignore: name_of_lint` and
-  # `// ignore_for_file: name_of_lint` syntax on the line or in the file
-  # producing the lint.
+  # หมายเหตุ: `dart fix --apply` จะไม่แตะ rule ที่ปิดไว้ข้างล่างนี้ ถ้าต้องการ
+  # ล้างพวกนี้ทีหลังให้เปิดชั่วคราวแล้วรัน dart fix (ดูตัวที่ mark "dart fix ได้")
   rules:
-    # avoid_print: false  # Uncomment to disable the `avoid_print` rule
-    # prefer_single_quotes: true  # Uncomment to enable the `prefer_single_quotes` rule
+    # --- ชื่อ identifier สะท้อน key ของ JSON จาก API ห้าม rename ---
+    # c_pvat, c_nvat, ser_in, docno_in, unit_con, total_sum, user_name ฯลฯ
+    # เปลี่ยนชื่อแล้ว map กับ response ไม่ตรง
+    non_constant_identifier_names: false
+    constant_identifier_names: false
+
+    # --- ชื่อไฟล์เดิมเป็น PascalCase/ผสม (GetCustomer_Model.dart, pay_Model.dart)
+    # --- เปลี่ยนชื่อต้องไล่แก้ import ทุกที่ เสี่ยงเกินประโยชน์
+    file_names: false
+
+    # --- โมเดลที่ generate มา ประกาศ field ไม่ระบุ type ---
+    prefer_typing_uninitialized_variables: false
+    strict_top_level_inference: false
+
+    # --- print ใช้เป็น diagnostic บน web โดยตั้งใจ (main.dart ปิด hook เอง) ---
+    avoid_print: false
+
+    # --- catch ว่างโดยตั้งใจ (fire-and-forget ตอน startup / cleanup) ---
+    empty_catches: false
+
+    # --- สไตล์ล้วน ไม่ได้บ่งชี้ bug ---
+    prefer_is_empty: false
+    prefer_is_not_empty: false
+    unnecessary_string_interpolations: false
+    annotate_overrides: false
+
+    # --- dart fix ได้ (เปิดชั่วคราวถ้าจะรัน dart fix ทีหลัง) ---
+    unnecessary_this: false # dart fix ได้
+    unnecessary_new: false # dart fix ได้
+    prefer_collection_literals: false # dart fix ได้
+
+    # --- widget เก่าเขียนด้วย Container/SizedBox สลับกัน + ไม่ได้ใส่ key ---
+    sized_box_for_whitespace: false
+    avoid_unnecessary_containers: false
+    unnecessary_const: false
+    use_key_in_widget_constructors: false
+    prefer_const_constructors_in_immutables: false
+
+    # --- async gap มีอยู่ทั่วโปรเจกต์ (await แล้วใช้ context) ---
+    use_build_context_synchronously: false
+
+    # --- pattern createState() คืน State<X> แบบเดิม ---
+    library_private_types_in_public_api: false
+    no_leading_underscores_for_local_identifiers: false
+
+    # --- if บรรทัดเดียวไม่ใส่ {} ใช้ทั่วโปรเจกต์ ---
+    curly_braces_in_flow_control_structures: false
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

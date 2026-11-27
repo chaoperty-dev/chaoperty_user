@@ -1,8 +1,11 @@
 # Chaoperty User - Apache Cache Control
 # อัปโหลดไฟล์นี้ไปที่โฟลเดอร์ /user/ บน server พร้อมกับ build output
 
-# ไม่ cache index.html และ service worker เด็ดขาด
-<FilesMatch "^(index\.html|flutter_service_worker\.js)$">
+# ไม่ cache index.html เด็ดขาด
+# (ตัด flutter_service_worker.js ออก 2026-09-17: ปิด Service Worker แล้ว
+#  Flutter ไม่ generate ไฟล์นั้นอีก และตัวที่ค้างในเครื่องผู้ใช้จะถูก
+#  unregister จาก index.html)
+<FilesMatch "^index\.html$">
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
     Header set Expires "0"
@@ -17,3 +20,35 @@
 <FilesMatch "^manifest\.json$">
     Header set Cache-Control "no-cache"
 </FilesMatch>
+
+# ===== Compression =====
+# ก่อนเพิ่ม (2026-09-17) ไฟล์นี้ไม่มี directive compression เลย ทำให้
+# main.dart.js (8.4M) และ canvaskit.wasm (6.8M) ถูกส่งดิบ ๆ ทั้งก้อน
+# เปิดแล้วคาดว่า main.dart.js เหลือ ~1.8M (gzip) / ~1.5M (brotli)
+#
+# *** อ่านก่อนแก้ ***
+# ถ้า server ไม่มี module ที่อ้างถึง Apache จะ "500 ทั้งเว็บ" ไม่ใช่แค่ข้ามไป
+# จึงต้องครอบ <IfModule> ไว้เสมอ — และควรอัปไฟล์นี้ TEST ก่อนไฟล์อื่น
+# ถ้ายัง 500 ให้คอมเมนต์บล็อกล่างออกแล้วแจ้งผู้ดูแลโฮสต์ให้เปิด mod_deflate
+#
+# บีบเฉพาะ text/js/wasm/svg — ไม่บีบ png/jpg/gif/ttf/woff2 เพราะบีบมาแล้ว
+# (อัตราส่วนไม่คุ้ม เปลือง CPU ต่อ request)
+<IfModule mod_brotli.c>
+    AddOutputFilterByType BROTLI_COMPRESS text/html text/plain text/css
+    AddOutputFilterByType BROTLI_COMPRESS text/xml application/xml
+    AddOutputFilterByType BROTLI_COMPRESS application/javascript text/javascript
+    AddOutputFilterByType BROTLI_COMPRESS application/json
+    AddOutputFilterByType BROTLI_COMPRESS application/wasm
+    AddOutputFilterByType BROTLI_COMPRESS image/svg+xml
+</IfModule>
+
+# deflate (gzip) เป็น fallback ของ brotli — เบราว์เซอร์เก่า/LINE WebView บางรุ่น
+# ส่ง Accept-Encoding: gzip อย่างเดียว จึงต้องมีทั้งคู่
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css
+    AddOutputFilterByType DEFLATE text/xml application/xml
+    AddOutputFilterByType DEFLATE application/javascript text/javascript
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE application/wasm
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>

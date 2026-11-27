@@ -632,6 +632,15 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
       }
       final sumTranFineIn = sumInvoiceFine;
 
+      // summary.fineTotal รวมค่าปรับราย invoice ที่โหลดตั้งแต่หน้าแรกแล้ว
+      // แต่ sumTranFineIn ก็รวม invoice fine ก้อนเดียวกันไว้แล้ว
+      // จึงต้องส่งเฉพาะค่าธรรมเนียมของ payment method เข้า fineTotal
+      // ไม่อย่างนั้น invoice fine จะถูกบวกซ้ำ: 220 + 250 + 250 = 720
+      final summaryFine = _state.summary.fineTotal.toDouble();
+      final paymentMethodFine = summaryFine > sumInvoiceFine
+          ? summaryFine - sumInvoiceFine
+          : 0.0;
+
       final requestedTotal = PaymentIntentPayload.requestedTotal(
         sumPvat: 0,
         sumTranFine: 0,
@@ -639,7 +648,7 @@ class PaymentSubV4ViewModel extends ChangeNotifier {
         sumTranFineIn: sumTranFineIn,
         sumDiscount: PaymentIntentPayload.legacyLastDiscount(allTrans),
         sumDisIn: PaymentIntentPayload.legacySumDisIn,
-        fineTotal: _state.summary.fineTotal.toDouble(),
+        fineTotal: paymentMethodFine,
         disSumPakan: 0,
       );
 

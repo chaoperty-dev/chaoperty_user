@@ -4,7 +4,7 @@ import 'dart:convert';
 // import 'dart:ui' as ui;
 // import 'dart:ui_web' as ui_web;
 import 'package:auto_size_text/auto_size_text.dart';
-import 'package:ficonsax/ficonsax.dart';
+// import 'package:ficonsax/ficonsax.dart';  // ถอด 2026-09-19: เปลี่ยนเป็น Icons.info_outline แล้ว
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -98,7 +98,7 @@ class _SelectCidState extends State<SelectCid> {
 
   Future<Null> checkPreferance() async {
     DateTime currentDate = DateTime.now();
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
     // '${Uri.base.toString().substring(0, Uri.base.toString().length - 8)}/chao_api';
 
     //print('>>>>>>>>>>>>>$new_Url');
@@ -567,8 +567,11 @@ class _SelectCidState extends State<SelectCid> {
         foregroundColor: Colors.black54,
         backgroundColor: Colors.black54,
         child: const Icon(
-          IconsaxBold.information,
-          // Icons.support_agent,
+          // เปลี่ยนจาก IconsaxBold.information (2026-09-19) เพื่อถอด ficonsax
+          // ออก — package นั้น bundle ฟอนต์ 3 ตัว (Bold/Outline/Bulk) ~676K
+          // ทั้งที่ใช้ icon เดียว 2 จุด; MaterialIcons bundle อยู่แล้ว
+          Icons.info_outline,
+          // Icons.support_agent,   // ของเดิมก่อนเปลี่ยนเป็น Iconsax
           color: Colors.white,
         ),
       ),

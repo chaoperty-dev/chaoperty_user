@@ -223,9 +223,9 @@ class Pdfgen_BillingNoteInvlice_TP8_Choice {
       netImage.add(await networkImage('${newValuePDFimg[i]}'));
     }
     if (img1 == null || img1.toString() == '') {
-      netImage_QR.add(await networkImage(
-          '${MyConstant().domain_choice}/Awaitdownload/imagenot.png'));
-      // netImage_QR.add(iconImage);
+      final placeholder =
+          await rootBundle.load('assets/images/LogoBank/imagenot.png');
+      netImage_QR.add(pw.MemoryImage(placeholder.buffer.asUint8List()));
     } else {
       netImage_QR.add(await networkImage(
           '${MyConstant().domain_choice}/files/$foder/payment/${img1}'));

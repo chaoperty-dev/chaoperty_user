@@ -7,8 +7,7 @@ import 'package:auto_size_text/auto_size_text.dart';
 // import 'package:awesome_snackbar_content/awesome_snackbar_content.dart';
 // import 'package:bottom_sheet/bottom_sheet.dart';
 import 'package:carousel_slider/carousel_slider.dart';
-import 'package:chaoperty_user/screen/pay_bill_Mainscreen_Choice.dart';
-import 'package:chaoperty_user/screen/pay_bill_screen_Choice.dart';
+import 'package:chaoperty_user/screen/pay_bill_Mainscreen_Choice_new.dart';
 import 'package:chaoperty_user/screen/pay_scan_bill_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -179,9 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                       },
                       child: Image.network(imgList[i].image.toString(),
-                          fit: BoxFit.cover,
-                          width: 1500.0,
-                          cacheWidth: 480),
+                          fit: BoxFit.cover, width: 1500.0, cacheWidth: 480),
                     ),
                   ],
                 )),
@@ -270,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<Null> checkPreferance() async {
     DateTime currentDate = DateTime.now();
 
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
     //   '${Uri.base.toString().substring(0, Uri.base.toString().length - 8)}/chao_api';
     // Format the date as 'YYYY-MM-DD'
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
@@ -912,7 +909,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             : select_page == 2
                                 ? (renTal_user.toString() == '106' ||
                                         renTal_user.toString() == '50')
-                                    ? PaybillMainScreenChoice() //PayBillscreenChoice()
+                                    ? PaybillMainScreenChoiceNew()
                                     : PaybillMainScreen()
                                 // PayBillscreen()
                                 : select_page == 3
@@ -3035,7 +3032,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                                     maxFontSize:
                                                                         15,
                                                                     maxLines: 1,
-                                                                    '${DateFormat('dd-MM-yyyy').format(DateTime.parse('${_InvoiceHistoryModels[index].date} 00:00:00'))}', //${_InvoiceHistoryModels[index].date}
+                                                                    '${DateFormat('dd-MM').format(DateTime.parse('${_InvoiceHistoryModels[index].date} 00:00:00'))}-${DateTime.parse('${_InvoiceHistoryModels[index].date} 00:00:00').year + 543}', //${_InvoiceHistoryModels[index].date}
                                                                     textAlign:
                                                                         TextAlign
                                                                             .center,

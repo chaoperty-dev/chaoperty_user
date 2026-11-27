@@ -14,6 +14,8 @@ abstract final class PaymentSubV4Theme {
   static const primaryOrange = Color(0xFFF97316);
   static const primaryOrangeDark = Color(0xFFEA580C);
   static const skyAction = Color(0xFF0284C7);
+  static const primaryAction = Color(0xFF2563EB);
+  static const primaryActionDark = Color(0xFF1E40AF);
   static const skySoft = Color(0xFFF0F9FF);
   static const amberBackground = Color(0xFFFEF3C7);
   static const amberForeground = Color(0xFFB45309);

@@ -266,12 +266,12 @@ class _RentalScreenState extends State<RentalScreen>
         tType = d.ctype;
 
         if ((d.sdate ?? '').isNotEmpty) {
-          tStart.text = DateFormat('dd-MM-yyyy')
-              .format(DateTime.parse('${d.sdate} 00:00:00'));
+          final sd = DateTime.parse('${d.sdate} 00:00:00');
+          tStart.text = '${DateFormat('dd-MM').format(sd)}-${sd.year + 543}';
         }
         if ((d.ldate ?? '').isNotEmpty) {
-          tEnd.text = DateFormat('dd-MM-yyyy')
-              .format(DateTime.parse('${d.ldate} 00:00:00'));
+          final ld = DateTime.parse('${d.ldate} 00:00:00');
+          tEnd.text = '${DateFormat('dd-MM').format(ld)}-${ld.year + 543}';
         }
         tPeriod.text = d.period ?? '';
       }
@@ -657,7 +657,7 @@ class _RentalScreenState extends State<RentalScreen>
     if (_rentalSettings.isNotEmpty &&
         (_rentalSettings.first.imglogo?.trim().isNotEmpty ?? false)) {
       imgs.add(
-          '${MyConstant().domain_chao}/files/${_folderDb}/logo/${_rentalSettings.first.imglogo!.trim()}');
+          '${MyConstant().domain_chao_img}/files/${_folderDb}/logo/${_rentalSettings.first.imglogo!.trim()}');
     }
 
     final sp = await SharedPreferences.getInstance();

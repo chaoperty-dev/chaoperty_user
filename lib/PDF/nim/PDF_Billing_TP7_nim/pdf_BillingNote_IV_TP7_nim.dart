@@ -113,13 +113,13 @@ class Pdfgen_BillingNoteInvlice_TP7_nim {
     if (img1 == null || img1.toString().isEmpty) {
       netImage_QR.add(
         await networkImage(
-          '${MyConstant().domain}/Awaitdownload/imagenot.png',
+          '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png',
         ),
       );
     } else {
       netImage_QR.add(
         await networkImage(
-          '${MyConstant().domain}/files/$foder/payment/$img1',
+          '${MyConstant().domain_chao_img}/files/$foder/payment/$img1',
         ),
       );
     }

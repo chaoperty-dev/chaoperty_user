@@ -1,0 +1,14 @@
+{
+  "description": "Synthetic values for investigating distinct detail and QR aggregation paths; not a production response or approved accounting rule.",
+  "source_references": [
+    "lib/Account/Ac_Sub/Account_Bill_Invoce.dart:684",
+    "lib/Account/Ac_Sub/Account_Bill_Invoce.dart:6305",
+    "lib/Account/Ac_Sub/Account_Bill_Invoce.dart:8115"
+  ],
+  "rows": [
+    { "pvat": 100, "vat": 7, "wht": 3, "total": 104, "total_t": 104, "disendbill": 5 },
+    { "pvat": 200, "vat": 14, "wht": 6, "total": 208, "total_t": 215, "disendbill": 7 }
+  ],
+  "illustrative_comparison": { "raw_total_less_first_discount": 307, "total_t_less_last_discount": 312 },
+  "verification": "unverified against real data and accounting requirements"
+}

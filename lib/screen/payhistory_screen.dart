@@ -139,7 +139,7 @@ class _PayHistoryScreenState extends State<PayHistoryScreen> {
             bill_default = bill_defaultx;
             bill_tser = bill_tserx;
             imglogo_ =
-                '${MyConstant().domain}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
+                '${MyConstant().domain_chao_img}/files/$foder/logo/${renTalModel.imglogo!.trim()}';
             renTalModels.add(renTalModel);
             if (bill_defaultx == 'P') {
               bills_name_ = 'บิลธรรมดา';
@@ -4253,7 +4253,8 @@ class _PayHistoryScreenState extends State<PayHistoryScreen> {
                                                                     children: <Widget>[
                                                                       Image.network(
                                                                           '${MyConstant().domain_chao}/files/$foder/slip/${Slip_history}',
-                                                                          cacheWidth: 500)
+                                                                          cacheWidth:
+                                                                              500)
                                                                     ],
                                                                   ),
                                                                   actions: <Widget>[

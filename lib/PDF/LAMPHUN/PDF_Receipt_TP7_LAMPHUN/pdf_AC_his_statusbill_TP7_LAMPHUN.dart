@@ -160,7 +160,7 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
         signature.toString().isNotEmpty &&
         signature.toString() != 'null') {
       try {
-        final sigUrl = '${MyConstant().domain_chao}/${signature}';
+        final sigUrl = '${MyConstant().domain_img}/${signature}';
         print('signature URL: $sigUrl');
         final sigRes = await http.get(Uri.parse(sigUrl));
         if (sigRes.statusCode == 200) {
@@ -337,6 +337,25 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
       (e) => e.exp_dtype.toString() != 'KD',
     );
 
+    //--------> จำนวนรายการ KD (แสดงแยกบรรทัดเสมอ)
+    final int kdCount =
+        TransReBillHistory.where((e) => e.exp_dtype.toString() == 'KD').length;
+
+    ///---------------------> จำนวน "บรรทัดที่ถูกวาดจริง" ในตาราง (Rendered row count)
+    /// ต้องนับตาม billingFormat เพราะแบบย่อมีการรวบรายการ
+    ///  - แบบเต็ม : วาดทุกรายการ 1 บรรทัด/รายการ
+    ///  - แบบย่อ  : รวมรายการที่ไม่ใช่ KD เหลือ 1 บรรทัด + KD อีกรายการละ 1 บรรทัด
+    final int rowCount = (billingFormat == 'แบบเต็ม')
+        ? TransReBillHistory.length
+        : ((hasNotKd ? 1 : 0) + kdCount);
+
+    /// จำนวนบรรทัดสูงสุดที่ใส่ได้ในครึ่งหน้า A4 (ต้นฉบับ+คู่ฉบับ อยู่หน้าเดียวกัน)
+    /// เกินกว่านี้ pw.Page จะตัดเนื้อหาทิ้งเพราะขยายหน้าไม่ได้
+    /// → ต้องสลับไปใช้ MultiPage แยกเป็นหน้าเต็มอย่างละ 1 ชุดแทน
+    const int kMaxRowsHalfPage = 4;
+
+    final bool isCompactLayout = rowCount <= kMaxRowsHalfPage;
+
     final totalqty = "1";
 
     final totalpri = TransReBillHistory.fold<double>(0, (sum, e) {
@@ -371,13 +390,19 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
     });
 
     // หาวันที่จาก KR ก่อน ถ้าไม่มีค่อยหาจาก exp_dtype != 'KD'
-    final targetRecord = TransReBillHistory.firstWhere(
-      (e) => e.exp_dtype.toString() == 'KR' && e.date != null,
-      orElse: () => TransReBillHistory.firstWhere(
-        (e) => e.exp_dtype.toString() != 'KD' && e.date != null,
-        orElse: () => TransReBillHistory.first, // ถ้าไม่เจอเลย
-      ),
-    );
+    // กัน list ว่าง: .first บน list ว่างจะ throw "Bad state: No element"
+    // -> เช็ค isNotEmpty ก่อน ถ้าไม่มีเลยคืน null ให้ totallist ขึ้น '-'
+    final kr = TransReBillHistory.where(
+        (e) => e.exp_dtype.toString() == 'KR' && e.date != null);
+    final notKd = TransReBillHistory.where(
+        (e) => e.exp_dtype.toString() != 'KD' && e.date != null);
+    final targetRecord = kr.isNotEmpty
+        ? kr.first
+        : notKd.isNotEmpty
+            ? notKd.first
+            : (TransReBillHistory.isNotEmpty
+                ? TransReBillHistory.first // ถ้าไม่เจอเลย
+                : null);
 
     final totallist = (targetRecord != null && targetRecord.duedate != null)
         ? '${DateFormat('MMM', 'th').format(DateTime.parse(targetRecord.duedate!))} ${DateTime.parse(targetRecord.duedate!).year + 543}'
@@ -983,18 +1008,29 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
       );
     }
 
+    // ความสูงแถว "ลงชื่อ" ของทั้ง 2 คอลัมน์ (มีลายเซ็น = สูงเท่ารูป)
+    final double _signRowH =
+        (signatureBytes != null && signatureBytes.isNotEmpty)
+            ? 20
+            : font_Size * 1.6;
+
     pw.Widget _signCol1(String title) {
       return pw.Expanded(
         child: pw.Column(
           mainAxisAlignment: pw.MainAxisAlignment.start,
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
-            pw.Text(
-                'ลงชื่อ..................................................................($title)',
-                style: pw.TextStyle(
-                    font: ttf, fontSize: font_Size, color: PdfColors.grey800)),
-            if (signatureBytes != null && signatureBytes.isNotEmpty)
-              pw.SizedBox(height: 4 * PdfPageFormat.mm),
+            // สูงเท่าแถวลายเซ็นของ _signCol2 -> บรรทัดทั้ง 2 ฝั่งตรงกัน
+            pw.Container(
+              height: _signRowH,
+              alignment: pw.Alignment.bottomCenter,
+              child: pw.Text(
+                  'ลงชื่อ..................................................................($title)',
+                  style: pw.TextStyle(
+                      font: ttf,
+                      fontSize: font_Size,
+                      color: PdfColors.grey800)),
+            ),
             pw.Text(
                 '(........................................................)',
                 style: pw.TextStyle(
@@ -1009,34 +1045,49 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
     }
 
     pw.Widget _signCol2(String title) {
+      final signStyle = pw.TextStyle(
+          font: ttf, fontSize: font_Size, color: PdfColors.grey800);
+      final hasSign = signatureBytes != null && signatureBytes.isNotEmpty;
       return pw.Expanded(
         child: pw.Column(
           mainAxisAlignment: pw.MainAxisAlignment.start,
           crossAxisAlignment: pw.CrossAxisAlignment.center,
           children: [
+            // แถวเดียว: ลงชื่อ ....[ลายเซ็นทับเส้นจุด].... (ผู้รับเงิน)
+            // เส้นจุดแสดงเสมอ -> ความยาวเท่าฝั่งผู้จัดการทั้งมี/ไม่มีลายเซ็น
+            pw.Container(
+              height: _signRowH,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.center,
+                crossAxisAlignment: pw.CrossAxisAlignment.end,
+                children: [
+                  pw.Text('ลงชื่อ', style: signStyle),
+                  pw.Stack(
+                    alignment: pw.Alignment.bottomCenter,
+                    children: [
+                      pw.Text(
+                          '..................................................................',
+                          style: signStyle),
+                      if (hasSign)
+                        pw.Padding(
+                          // ยกรูปขึ้นนิดให้ลายเซ็นวางบนเส้นจุด
+                          padding: pw.EdgeInsets.only(bottom: font_Size * 0.3),
+                          child: pw.Image(
+                            pw.MemoryImage(signatureBytes),
+                            width: 80,
+                            height: _signRowH,
+                            fit: pw.BoxFit.contain,
+                          ),
+                        ),
+                    ],
+                  ),
+                  pw.Text('($title)', style: signStyle),
+                ],
+              ),
+            ),
             pw.Text(
-                'ลงชื่อ..................................................................($title)',
-                style: pw.TextStyle(
-                    font: ttf, fontSize: font_Size, color: PdfColors.grey800)),
-            if (signatureBytes != null && signatureBytes.isNotEmpty)
-              pw.SizedBox(height: 2 * PdfPageFormat.mm),
-            if (signatureBytes != null && signatureBytes.isNotEmpty)
-              pw.Transform.translate(
-                offset: const PdfPoint(0, 6),
-                child: pw.Image(
-                  pw.MemoryImage(signatureBytes),
-                  width: 80,
-                  height: 20,
-                  fit: pw.BoxFit.contain,
-                ),
-              )
-            else
-              pw.Text(
-                  '(........................................................)',
-                  style: pw.TextStyle(
-                      font: ttf,
-                      fontSize: font_Size,
-                      color: PdfColors.grey800)),
+                '(........................................................)',
+                style: signStyle),
             pw.Text(
                 'วันที่/Date........................................................',
                 style: pw.TextStyle(
@@ -1116,8 +1167,8 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
                   final index = entry.key;
                   final item = entry.value;
                   final expText = (item.unitser.toString() == '6')
-                      ? '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.date!))} ${DateTime.parse('${item.date}').year + 543} [ หน่วยที่ใช้ไป ${item.ovalue}-${item.nvalue} ]'
-                      : '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.date!))} ${DateTime.parse('${item.date}').year + 543}';
+                      ? '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.duedate!))} ${DateTime.parse('${item.duedate}').year + 543} [ หน่วยที่ใช้ไป ${item.ovalue}-${item.nvalue} ]'
+                      : '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.duedate!))} ${DateTime.parse('${item.duedate}').year + 543}';
                   return pw.Row(
                     children: [
                       _cell('${index + 1}',
@@ -1178,7 +1229,7 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
                   final item = entry.value;
                   final rowIdx = hasNotKd ? index + 2 : index + 1;
                   final expText = (item.unitser.toString() == '6')
-                      ? '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.date!))} ${DateTime.parse('${item.date}').year + 543} [ หน่วยที่ใช้ไป ${item.ovalue}-${item.nvalue} ]'
+                      ? '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.duedate!))} ${DateTime.parse('${item.duedate}').year + 543} [ หน่วยที่ใช้ไป ${item.ovalue}-${item.nvalue} ]'
                       : '${item.expname} ${DateFormat('MMM', 'th').format(DateTime.parse(item.date!))} ${DateTime.parse('${item.date}').year + 543}';
                   return pw.Row(
                     children: [
@@ -1273,7 +1324,9 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
           },
         ),
       );
-    } else {
+    } else if (isCompactLayout) {
+      // รายการน้อย → ต้นฉบับ(บน) + คู่ฉบับ(ล่าง) อยู่ในหน้าเดียว
+      // Expanded แบ่งครึ่งจากพื้นที่ใช้งานจริง จึงไม่เกิดหน้าเปล่าท้ายเอกสาร
       pdf.addPage(
         pw.Page(
           pageFormat: buildFormat(),
@@ -1292,6 +1345,17 @@ class Pdfgen_his_statusbill_TP7_LAMPHUN {
           },
         ),
       );
+    } else {
+      // รายการเยอะ → แยกต้นฉบับ/คู่ฉบับ เป็นหน้าเต็มคนละชุด
+      // ใช้ MultiPage เพื่อให้ขยายหน้าต่อเองได้ ไม่ตัดรายการทิ้งแบบ pw.Page
+      for (final serpang in [1, 2]) {
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: buildFormat(),
+            build: (context) => [Body_data(serpang)],
+          ),
+        );
+      }
     }
 
     ///-------------------------------------------------->

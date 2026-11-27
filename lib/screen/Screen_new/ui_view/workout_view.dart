@@ -129,9 +129,9 @@ class WorkoutView extends StatelessWidget {
                             onPrivacyTap: () => Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const Privacy_Policy(
+                                builder: (_) => Privacy_Policy(
                                   Url:
-                                      'https://chaoperties.com/chao_api/Awaitdownload/Privacy_Policy.pdf',
+                                      '${MyConstant().domain_chao_img}/Awaitdownload/Privacy_Policy.pdf',
                                   title: ' เช่าเพอร์ตี้ Privacy Policy',
                                 ),
                               ),

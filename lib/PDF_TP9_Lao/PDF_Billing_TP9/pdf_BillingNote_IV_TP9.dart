@@ -113,11 +113,11 @@ class Pdfgen_BillingNoteInvlice_TP9_Lao {
     // }
     if (img1 == null || img1.toString() == '') {
       netImage_QR.add(await networkImage(
-          '${MyConstant().domain_chao}/Awaitdownload/imagenot.png'));
+          '${MyConstant().domain_chao_img}/Awaitdownload/imagenot.png'));
       // netImage_QR.add(iconImage);
     } else {
       netImage_QR.add(await networkImage(
-          '${MyConstant().domain_chao}/files/$foder/payment/${img1}'));
+          '${MyConstant().domain_chao_img}/files/$foder/payment/${img1}'));
     }
     final tableHeaders = [
       'ลำดับ',

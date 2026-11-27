@@ -15,6 +15,7 @@ InvoiceModel _inv({
   String? amtall,
   String? pvat,
   String? disendbill,
+  String? totalBill,
 }) {
   final m = InvoiceModel();
   m.docno = docno;
@@ -26,6 +27,7 @@ InvoiceModel _inv({
   m.amtall = amtall;
   m.pvat = pvat;
   m.disendbill = disendbill;
+  m.total_bill = totalBill;
   return m;
 }
 
@@ -298,13 +300,36 @@ void main() {
 
     test('late_fee carries the per-invoice fine', () {
       final entry = PaymentIntentPayload.buildInvoiceEntry(
-        inv: _inv(docno: 'INV-1', amt: '100', vat: '0', wht: '0', amtall: '100'),
+        inv:
+            _inv(docno: 'INV-1', amt: '100', vat: '0', wht: '0', amtall: '100'),
         history: const [],
         fine: const {'ok': false},
         invoiceFine: 25.5,
         payser: 1,
       );
       expect(entry['late_fee'], 25.5);
+    });
+
+    test('uses total_bill and adds fine to invoice total', () {
+      final entry = PaymentIntentPayload.buildInvoiceEntry(
+        inv: _inv(
+          docno: 'INV-220',
+          amt: '205.6075',
+          vat: '14.3925',
+          wht: '0',
+          amtall: '205.6075',
+          totalBill: '220.00',
+        ),
+        history: const [],
+        fine: const {'ok': true, 'total': 250.0},
+        invoiceFine: 250.0,
+        payser: 40,
+      );
+
+      // ผู้ใช้ต้องชำระ 220 + 250 = 470 ไม่ใช่ 205.61 หรือ 234.39
+      expect(entry['amount'], 220.0);
+      expect(entry['late_fee'], 250.0);
+      expect(entry['total'], 470.0);
     });
 
     test('metadata and list_fee are populated from arguments', () {

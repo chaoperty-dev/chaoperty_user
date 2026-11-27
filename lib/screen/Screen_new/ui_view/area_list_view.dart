@@ -74,14 +74,6 @@ class _AreaListViewState extends State<AreaListView>
       pageRoot: 'REPAE',
       tooltip: 'แจ้งซ่อม',
     ),
-    AreaItem(
-      imagePath: 'assets/fitness_app/Smarthome.png',
-      titleTh: 'สมาร์ทโฮม',
-      titleEn: 'Smart Home',
-      pageRoot: 'SMART_HOME',
-      tooltip: 'สมาร์ทโฮม',
-      comingSoon: true,
-    ),
   ];
 
   @override

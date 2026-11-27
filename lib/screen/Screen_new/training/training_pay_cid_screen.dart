@@ -12,7 +12,7 @@ import '../../../Model/GetTeNant_Model.dart';
 import '../../../main.dart';
 import '../../../screen_Intents_V3/payment_mainV3_InvAll.dart';
 import '../../pay_bill_Mainscreen.dart';
-import '../../pay_bill_Mainscreen_Choice.dart';
+import '../../pay_bill_Mainscreen_Choice_new.dart';
 import '../../pay_bill_screen.dart';
 import '../../pay_bill_screen_Choice.dart';
 import '../fitness_app_theme.dart';
@@ -111,7 +111,7 @@ class _TrainingPayCidSelectScreenState extends State<TrainingPayCidSelectScreen>
 
   Future<Null> checkPreferance() async {
     DateTime currentDate = DateTime.now();
-    String new_Url = MyConstant().domain_chao;
+    String new_Url = MyConstant().domain_chao_img;
 
     String formattedDate = DateFormat('yyyy-MM-dd').format(currentDate);
 
@@ -314,7 +314,7 @@ class _TrainingPayCidSelectScreenState extends State<TrainingPayCidSelectScreen>
 
     listViews.add(
         (renTal_user.toString() == '106' || renTal_user.toString() == '50')
-            ? PaybillMainScreenChoice(
+            ? PaybillMainScreenChoiceNew(
                 mainScreenAnimation: Tween<double>(begin: 0.0, end: 1.0)
                     .animate(CurvedAnimation(
                         parent: widget.animationController!,

@@ -125,71 +125,76 @@ class TeNantRentalModel {
     this.wnote,
   });
 
+  /// API บาง endpoint ส่งค่าตัวเลขมาเป็น int/double ไม่ใช่ String
+  /// จึงต้องแปลงเป็น String ก่อนเก็บ ไม่เช่นนั้นจะเกิด cast error
+  /// แล้วข้อมูลทั้งก้อนถูกทิ้งไป (หน้าจอแสดง '-')
+  static String? _asString(dynamic value) => value?.toString();
+
   TeNantRentalModel.fromJson(Map<String, dynamic> json) {
-    ser = json['ser'];
-    datex = json['datex'];
-    timex = json['timex'];
-    rser = json['rser'];
-    zser = json['zser'];
-    lncode = json['lncode'];
-    ln = json['ln'];
-    area = json['area'];
-    rent = json['rent'];
-    st = json['st'];
-    img = json['img'];
-    tser = json['tser'];
-    tname = json['tname'];
-    cid = json['cid'];
-    dataUpdate = json['data_update'];
-    total = json['total'];
-    sdate = json['sdate'];
-    ldate = json['ldate'];
-    cdate = json['cdate'];
-    cname = json['cname'];
-    sname = json['sname'];
-    ln_c = json['ln_c'];
-    area_c = json['area_c'];
-    docno = json['docno'];
-    date = json['date'];
+    ser = _asString(json['ser']);
+    datex = _asString(json['datex']);
+    timex = _asString(json['timex']);
+    rser = _asString(json['rser']);
+    zser = _asString(json['zser']);
+    lncode = _asString(json['lncode']);
+    ln = _asString(json['ln']);
+    area = _asString(json['area']);
+    rent = _asString(json['rent']);
+    st = _asString(json['st']);
+    img = _asString(json['img']);
+    tser = _asString(json['tser']);
+    tname = _asString(json['tname']);
+    cid = _asString(json['cid']);
+    dataUpdate = _asString(json['data_update']);
+    total = _asString(json['total']);
+    sdate = _asString(json['sdate']);
+    ldate = _asString(json['ldate']);
+    cdate = _asString(json['cdate']);
+    cname = _asString(json['cname']);
+    sname = _asString(json['sname']);
+    ln_c = _asString(json['ln_c']);
+    area_c = _asString(json['area_c']);
+    docno = _asString(json['docno']);
+    date = _asString(json['date']);
 
-    cname_q = json['cname_q'];
-    sname_q = json['sname_q'];
-    ln_q = json['ln_q'];
-    ldate_q = json['ldate_q'];
-    sdate_q = json['sdate_q'];
-    area_q = json['area_q'];
-    quantity = json['quantity'];
-    period = json['period'];
-    period_q = json['period_q'];
-    rtname = json['rtname'];
-    rtname_q = json['rtname_q'];
-    stype = json['stype'];
-    stype_q = json['stype_q'];
-    attn = json['attn'];
-    addr = json['addr'];
-    tax = json['tax'];
-    tel = json['tel'];
-    email = json['email'];
-    ctype = json['ctype'];
-    zn = json['zn'];
-    aser = json['aser'];
-    qty = json['qty'];
-    count_bill = json['count_bill'];
-    invoice = json['invoice'];
-    expname = json['expname'];
-    ser_tran = json['ser_tran'];
+    cname_q = _asString(json['cname_q']);
+    sname_q = _asString(json['sname_q']);
+    ln_q = _asString(json['ln_q']);
+    ldate_q = _asString(json['ldate_q']);
+    sdate_q = _asString(json['sdate_q']);
+    area_q = _asString(json['area_q']);
+    quantity = _asString(json['quantity']);
+    period = _asString(json['period']);
+    period_q = _asString(json['period_q']);
+    rtname = _asString(json['rtname']);
+    rtname_q = _asString(json['rtname_q']);
+    stype = _asString(json['stype']);
+    stype_q = _asString(json['stype_q']);
+    attn = _asString(json['attn']);
+    addr = _asString(json['addr']);
+    tax = _asString(json['tax']);
+    tel = _asString(json['tel']);
+    email = _asString(json['email']);
+    ctype = _asString(json['ctype']);
+    zn = _asString(json['zn']);
+    aser = _asString(json['aser']);
+    qty = _asString(json['qty']);
+    count_bill = _asString(json['count_bill']);
+    invoice = _asString(json['invoice']);
+    expname = _asString(json['expname']);
+    ser_tran = _asString(json['ser_tran']);
 
-    custno_1 = json['custno_1'];
-    custno_2 = json['custno_2'];
-    duedate = json['duedate'];
-    amt = json['amt'];
+    custno_1 = _asString(json['custno_1']);
+    custno_2 = _asString(json['custno_2']);
+    duedate = _asString(json['duedate']);
+    amt = _asString(json['amt']);
 
-    amt_expser1 = json['amt_expser1'];
-    amt_expser9 = json['amt_expser9'];
-    amt_expser10 = json['amt_expser10'];
-    amt_expser11 = json['amt_expser11'];
-    amt_expser12 = json['amt_expser12'];
-    wnote = json['wnote'];
+    amt_expser1 = _asString(json['amt_expser1']);
+    amt_expser9 = _asString(json['amt_expser9']);
+    amt_expser10 = _asString(json['amt_expser10']);
+    amt_expser11 = _asString(json['amt_expser11']);
+    amt_expser12 = _asString(json['amt_expser12']);
+    wnote = _asString(json['wnote']);
   }
 
   Map<String, dynamic> toJson() {

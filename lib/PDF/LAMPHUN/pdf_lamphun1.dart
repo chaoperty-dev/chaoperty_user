@@ -56,8 +56,10 @@ class Pdfgen_Agreementlamphun1 {
     FormName1_choice,
     FormName2_choice,
     FormName3_choice,
-    FormName4_choice,
-  ) async {
+    FormName4_choice, {
+    // ข้อมูลพื้นที่จาก GC_tenantlookAS_LPJATUJAK
+    lpAreaModels,
+  }) async {
     ////
 
     final pdf = pw.Document();
@@ -160,23 +162,46 @@ class Pdfgen_Agreementlamphun1 {
     final totalpakan = nFormat.format(totalpakanNumber);
 
     // additional info
-    // ขนาด/เนื้อที่รวม จาก quotxSelectModels (รายการแรกที่มีค่า)
-    final _areaItem =
-        quotxSelectModels.isNotEmpty ? quotxSelectModels.first : null;
-    // ขนาด = area_width x area_length เช่น "3.00 x 3.00" (ถ้าไม่มีใช้ Form_area เดิม)
-    final areaDimText = (_areaItem?.area_width != null &&
-            '${_areaItem?.area_width}'.trim().isNotEmpty)
-        ? '${_areaItem?.area_width} x ${_areaItem?.area_length ?? ''}'
-        : ' - ';
-    // เนื้อที่รวม = area เช่น "18"
-    final areaTotalText =
-        (_areaItem?.area != null && '${_areaItem?.area}'.trim().isNotEmpty)
-            ? '${_areaItem?.area}'
-            : ' - ';
-    // ค่าเช่า ใช้ area_rent จาก quotxSelectModels (ถ้าไม่มีใช้ totalchao เดิม)
+    // ขนาด/เนื้อที่รวม: ไล่หาแหล่งข้อมูลตามลำดับ
+    // lpAreaModels (GC_tenantlookAS_LPJATUJAK) -> teNantModels -> quotxSelectModels
+    // แล้วเลือก "ทีละ field" ที่มีค่าจริง (เดิมเลือกทั้ง list ทำให้ list แรกที่ไม่ว่างแต่ field ว่างมาบัง)
+    final _areaSources = <dynamic>[
+      if (lpAreaModels != null && lpAreaModels.isNotEmpty) lpAreaModels.first,
+      if (teNantModels.isNotEmpty) teNantModels.first,
+      if (quotxSelectModels.isNotEmpty) quotxSelectModels.first,
+    ];
+    String _pickArea(dynamic Function(dynamic) get) {
+      for (var s in _areaSources) {
+        var v = '';
+        try {
+          v = '${get(s) ?? ''}'.trim();
+        } catch (_) {}
+        if (v.isNotEmpty && v != 'null') return v;
+      }
+      return '';
+    }
+
+    final _areaWidth = _pickArea((s) => s.area_width);
+    final _areaLength = _pickArea((s) => s.area_length);
+    final _areaSize = _pickArea((s) => s.area_size);
+    // ขนาด = area_width x area_length เช่น "3.00 x 3.00"
+    // ถ้า API ไม่ส่ง width/length มา ใช้ area_size (ขนาดต่อล็อค) แทน
+    final areaDimText = (_areaWidth.isNotEmpty && _areaLength.isNotEmpty)
+        ? '$_areaWidth x $_areaLength'
+        : (_areaSize.isNotEmpty ? _areaSize : ' - ');
+    // เนื้อที่รวม = area เช่น "6"
+    final _areaTotal = _pickArea((s) => s.area);
+    final areaTotalText = _areaTotal.isNotEmpty ? _areaTotal : ' - ';
+    // // ค่าเช่า ใช้ area_rent (ถ้าไม่มีใช้ totalchao เดิม)
+    // final _areaRent = _pickArea((s) => s.area_rent);
+    // // totalchaoNumber เป็น double อยู่แล้ว ไม่ต้อง parse ซ้ำ
+    // final double areaRentNumber = totalchaoNumber;
+    // final areaRentText = nFormat.format(areaRentNumber);
+
+    // ค่าเช่า ใช้ area_rent อย่างเดียว (ไม่ fallback ไป totalchao)
+    final _areaRent = _pickArea((s) => s.area_rent);
     final areaRentNumber =
-        double.tryParse('${_areaItem?.area_rent ?? ''}'.replaceAll(',', '')) ??
-            totalchaoNumber;
+        double.tryParse(_areaRent.replaceAll(',', '')) ?? 0.00;
     final areaRentText = nFormat.format(areaRentNumber);
 
     pw.Widget Textx({
@@ -491,7 +516,7 @@ class Pdfgen_Agreementlamphun1 {
             pw.Row(children: [
               Textx(
                   value:
-                      '${' ' * 24}ผู้ให้เช่าตาลงให้เช่าและผู้เช่าตกลงเช่า ห้องเช่าในตลาดลำพูนจตุจักรเลขที่ ',
+                      '${' ' * 24}ผู้ให้เช่าตกลงให้เช่าและผู้เช่าตกลงเช่า ห้องเช่าในตลาดลำพูนจตุจักรเลขที่ ',
                   font: ttf),
               labeledLine1(value: bill_addr, font: ttf, flex: 1),
             ]),
@@ -562,7 +587,7 @@ class Pdfgen_Agreementlamphun1 {
             pw.Row(children: [
               Textx(
                   value:
-                      'แจ้งเตือนผู้เช่าให้ชำระค่าเช่าค่าเช่าหรือให้กลับมาขายสินค้าภายในเวลาที่ผู้ให้เช่ากำหนดแล้ว ผู้เช่ายังไม่ชำระค่าเช่าหรือไม่กลับมาขายสินค้า ให้ถือว่าสัญญาเช่านี้เป็นอัน',
+                      'แจ้งเตือนผู้เช่าให้ชำระค่าเช่าหรือให้กลับมาขายสินค้าภายในเวลาที่ผู้ให้เช่ากำหนดแล้ว ผู้เช่ายังไม่ชำระค่าเช่าหรือไม่กลับมาขายสินค้า ให้ถือว่าสัญญาเช่านี้เป็นอัน',
                   font: ttf)
             ]),
             Textx(value: 'สิ้นสุดลง', font: ttf),
@@ -583,7 +608,7 @@ class Pdfgen_Agreementlamphun1 {
                       '${' ' * 30}(ก) ผู้เช่าจะต้องไม่ทำการแต่งเติม หรือดัดแปลง "พื้นที่เช่า" ฝ่าฝืนต่อข้อบัญญัติขององค์การบริหารส่วนท้องถิ่นหรือข้อบังคับของสาธารณสุขหรือ',
                   font: ttf),
             ]),
-            Textx(value: 'กฏหมายอื่นใดที่เกี่ยวข้อง', font: ttf),
+            Textx(value: 'กฎหมายอื่นใดที่เกี่ยวข้อง', font: ttf),
             pw.Row(children: [
               Textx(
                   value:
@@ -599,13 +624,13 @@ class Pdfgen_Agreementlamphun1 {
             pw.Row(children: [
               Textx(
                   value:
-                      '${' ' * 30}3.1.2 ในกณีที่ผู้ให้เช่ามิได้ยินยอมแต่ผู้เช่าฝ่าฝืนทำการแต่งเติม ดัดแปลง "พื้นที่เช่า" เมื่อผู้ให้เช่าพบและแจ้งให้ผู้เช่ารื้อถอนส่วนที่ต่อเติมดังแปลง',
+                      '${' ' * 30}3.1.2 ในกรณีที่ที่ผู้ให้เช่ามิได้ยินยอมแต่ผู้เช่าฝ่าฝืนทำการแต่งเติม ดัดแปลง "พื้นที่เช่า" เมื่อผู้ให้เช่าพบและแจ้งให้ผู้เช่ารื้อถอนส่วนที่ต่อเติมดัดแปลง',
                   font: ttf),
             ]),
             pw.Row(children: [
               Textx(
                   value:
-                      'นั้นแล้วผู้เช่าจะต้องปฏิบัติตามคำสั่งของผู้ให้เช่าภายในเวลาที่กำหนด  โดยผู้เช่าจะต้องเป็นผู้ออกค่าใช้จ่ายเองเอง   ทั้งยังจะต้องรับผิดต่อผู้ให้เช่าในความเสียหายที่เกิดขึ้น',
+                      'นั้นแล้วผู้เช่าจะต้องปฏิบัติตามคำสั่งของผู้ให้เช่าภายในเวลาที่กำหนด  โดยผู้เช่าจะต้องเป็นผู้ออกค่าใช้จ่ายเอง   ทั้งยังจะต้องรับผิดต่อผู้ให้เช่าในความเสียหายที่เกิดขึ้น',
                   font: ttf),
             ]),
             Textx(value: 'เพราะการฝ่าฝืนนั้น', font: ttf),
@@ -619,7 +644,7 @@ class Pdfgen_Agreementlamphun1 {
             pw.Row(children: [
               Textx(
                   value:
-                      '${' ' * 24}3.3 ผู้เช่าจะไม่ทำการหรือยินยอมให้มีการกระทำใดๆ ใน "พื้นที่เช่า" อันเป็นการขัดต่อกฎหมาย ขัดต่อความสงบเรียบร้อยหรือศิลธรรมอันดีหรือก่อให้',
+                      '${' ' * 24}3.3 ผู้เช่าจะไม่ทำการหรือยินยอมให้มีการกระทำใดๆ ใน "พื้นที่เช่า" อันเป็นการขัดต่อกฎหมาย ขัดต่อความสงบเรียบร้อยหรือศีลธรรมอันดีหรือก่อให้',
                   font: ttf),
             ]),
             Textx(
@@ -628,7 +653,7 @@ class Pdfgen_Agreementlamphun1 {
                 font: ttf),
             Textx(
                 value:
-                    '${' ' * 24}3.4 ผู้เช่าจะปฏิบัติตามกฏ ระเบียบ ข้อบังคับของตลาดลำพูนจตุจักร โดยเคร่งครัด',
+                    '${' ' * 24}3.4 ผู้เช่าจะปฏิบัติตามกฎ ระเบียบ ข้อบังคับของตลาดลำพูนจตุจักร โดยเคร่งครัด',
                 font: ttf),
             pw.Row(children: [
               Textx(
@@ -653,12 +678,12 @@ class Pdfgen_Agreementlamphun1 {
                   flex: 2),
               Textx(
                   value:
-                      ' หากผู้เช่าตรวจพบว่าผู้เช่าหรือบริวารฝ่าฝืน ผู้ให้เช่าถือว่ามีเจตนาผิดสัญญาเช่าในส่วนที่เป็น',
+                      ' หากผู้ให้เช่าตรวจพบว่าผู้เช่าหรือบริวารฝ่าฝืน ผู้ให้เช่าถือว่ามีเจตนาผิดสัญญาเช่าในส่วนที่เป็น',
                   font: ttf),
             ]),
             Textx(
                 value:
-                    'สาระสำคัญหากหากเป็นการฝ่าฝืนครั้งที่สองสัญญาเช่านี้เป็นอันระงับลงทันที',
+                    'สาระสำคัญหากเป็นการฝ่าฝืนครั้งที่สองสัญญาเช่านี้เป็นอันระงับลงทันที',
                 font: ttf),
             pw.Spacer(),
             pw.Align(

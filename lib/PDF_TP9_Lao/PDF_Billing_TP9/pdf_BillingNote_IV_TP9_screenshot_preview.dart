@@ -219,7 +219,7 @@ class _BillingNoteInvoiceTP9LaoScreenshotPreviewPageState
         widget.img1.toString() != '') {
       try {
         final resp = await http.get(Uri.parse(
-            '${MyConstant().domain_chao}/files/${widget.foder}/payment/${widget.img1}'));
+            '${MyConstant().domain_chao_img}/files/${widget.foder}/payment/${widget.img1}'));
         if (resp.statusCode == 200) _paymentQrImage = resp.bodyBytes;
       } catch (_) {}
     }
