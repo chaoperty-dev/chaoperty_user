@@ -56,7 +56,7 @@ class MyConstant {
   String get domain => _baseUrl + 'chao_api_user';
   String get domain_img =>
       'https://choice-pics.chaoperties.com/Choice/chao_api';
-  String get domain_chao => 'https://chaoperties.com/Choice/chao_api';
+  String get domain_chao => 'https://chaoperties.com/chao_api';
 
   ///////////------------------------------------------------------------->
   ///
