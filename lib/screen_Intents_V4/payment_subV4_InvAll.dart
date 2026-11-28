@@ -79,6 +79,7 @@ import 'package:qr/qr.dart' as qr_lib;
 import 'package:gal/gal.dart';
 
 import '../screen_Intents/APIS-V2/config-intents.dart';
+import 'payment_subV4/platform/slip_image_info.dart';
 
 class paymentSubV4InvAll extends StatefulWidget {
   final AnimationController? mainScreenAnimationController;
@@ -405,6 +406,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
       _localAnimation = AlwaysStoppedAnimation(1.0);
     }
 
+    if (const bool.fromEnvironment('SLIP_MEMORY_MOCK')) return;
+
     // splash loading 1 วินาที ตอนเข้าหน้าครั้งแรก
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) setState(() => _initialLoading = false);
@@ -631,6 +634,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
   @override
   void dispose() {
+    _cancelWebSlipSelection?.call();
+    _slipImageBytes = null;
+    _uploadedSlipData = null;
+    base64_Slip = null;
     if (_usingLocalController) {
       _localController.dispose();
     }
@@ -984,7 +991,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     // สำคัญกว่าที่คิด: body ด้านล่างรีเซ็ต sum_*_in = 0 ตั้งแต่ต้น (บรรทัด
     // ราว 978-986) ถ้ารอบสองเข้าไปจะล้างค่ากลางคันของรอบแรกที่กำลังจะใช้
     // คำนวณ requestedAmountTotalBill ⇒ ได้ยอด 0 หรือยอดผิด
-    if (_isCreatingPaymentItem) return;
+    if (_isCreatingPaymentItem || _isOpeningSlipSheet || _isSubmittingPayment) return;
     _isCreatingPaymentItem = true;
     try {
       showDialog(
@@ -1344,7 +1351,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
           jsonRes; // Support both {data: {...}} and direct {...}
       final newUuid = data['uuid'];
       setState(() {
-        numinvoice = newUuid;
+        _setSlipPaymentIntent(newUuid as String?);
         bankMerchantId = 0;
         ref1 = '';
         ref2 = '';
@@ -4541,23 +4548,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                           // (user แนบ slip ไปแล้ว รอ admin ตรวจ)
                           if (!_isAwaitingVerifyStatus(intent.status))
                             InkWell(
-                              onTap: () async {
-                                setState(() {
-                                  numinvoice = intent.intentUuid;
-                                  sum_amt = totalAmount;
-                                });
-                                await QrGenRef(
-                                  QR_Ref1: intent.ref1 ?? '',
-                                  QR_Ref2: intent.ref2 ?? '',
-                                  QR_Ref3: intent.ref3 ?? '',
-                                  softExpireAt:
-                                      intent.softExpireAt?.toIso8601String() ??
-                                          '',
-                                );
-                                if (!mounted) return;
-                                _showPaymentConfirmationSheet(context,
-                                    totalAmount: totalAmount);
-                              },
+                              onTap: () => _openIntentSlipSheet(context, intent, totalAmount),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 5),
@@ -4631,23 +4622,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                             }
 
                             return InkWell(
-                              onTap: () async {
-                                setState(() {
-                                  numinvoice = intent.intentUuid;
-                                  sum_amt = totalAmount;
-                                });
-                                await QrGenRef(
-                                  QR_Ref1: intent.ref1 ?? '',
-                                  QR_Ref2: intent.ref2 ?? '',
-                                  QR_Ref3: intent.ref3 ?? '',
-                                  softExpireAt:
-                                      intent.softExpireAt?.toIso8601String() ??
-                                          '',
-                                );
-                                if (!mounted) return;
-                                _showPaymentConfirmationSheet(context,
-                                    totalAmount: totalAmount);
-                              },
+                              onTap: () => _openIntentSlipSheet(context, intent, totalAmount),
                               child: Container(
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 5),
@@ -5336,6 +5311,34 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
   @override
   Widget build(BuildContext context) {
+    if (const bool.fromEnvironment('SLIP_MEMORY_MOCK')) {
+      Future<void> pickSlip() async {
+        await _pickSlipImage();
+        if (mounted) setState(() {});
+      }
+
+      final selectedBytes = _slipImageBytes;
+      return Scaffold(
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ElevatedButton(
+              onPressed: pickSlip,
+              child: const Text('เลือกรูปทดสอบ'),
+            ),
+            if (selectedBytes != null)
+              GestureDetector(
+                onTap: pickSlip,
+                child: _buildSelectedSlipStatus(selectedBytes.lengthInBytes),
+              ),
+            if (selectedBytes != null)
+              TextButton(
+                onPressed: () => _showCancelPaymentDialog(context),
+                child: const Text('ยกเลิกการชำระเงิน'),
+              ),
+          ]),
+        ),
+      );
+    }
     if (_initialLoading) {
       return Scaffold(
         backgroundColor: const Color(0xFFF2F3F8),
@@ -6372,7 +6375,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                               // กันเปิด sheet ซ้อน — กดรัว ๆ ตอนนี้
                                               // จะเปิด bottom sheet หลายชั้น แล้ว
                                               // ผู้ใช้ลากยืนยันได้หลายรอบ ⇒ ชำระซ้ำ
-                                              if (_isSubmittingPayment) return;
+                                              if (_isSubmittingPayment || _isOpeningSlipSheet) return;
                                               _showPaymentConfirmationSheet(
                                                   context,
                                                   totalAmount: double.parse(
@@ -6387,7 +6390,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                                   qr_softExpiresAt = null;
                                                   activeQrSessionSoftExpire =
                                                       null;
-                                                  numinvoice = null;
+                                                  _setSlipPaymentIntent(null);
                                                   gopay = 0;
                                                 });
                                               }
@@ -7312,191 +7315,6 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     }
   }
 
-  void _showSlideConfirmDialog() {
-    if (!mounted) return;
-    // กันเปิด dialog ซ้อนกับ bottom sheet ยืนยันที่เปิดอยู่ — ทั้งคู่เป็นทาง
-    // ยืนยันชำระเงิน ถ้าเปิดพร้อมกันผู้ใช้ยืนยันได้สองทาง
-    if (_isConfirmSheetOpen) return;
-    _isConfirmSheetOpen = true;
-    showDialog(
-      context: context, // uses this.context
-      // ห้ามปิดด้วยการแตะนอก dialog: เดิม barrierDismissible: true ทำให้ผู้ใช้
-      // แตะนอก → dialog ปิด → ไม่มีอะไรบอกว่า "กำลังประมวลผล" → กดปุ่มเดิมซ้ำ
-      // → เปิด dialog ใหม่ → ลากยืนยันอีก ระหว่างรอบแรกยังวิ่งอยู่
-      // ใช้ false ให้ตรงกับ _showPaymentConfirmationSheet ที่ตั้งไว้แล้ว
-      barrierDismissible: false,
-      builder: (BuildContext ctx) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 8, 0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(children: [
-                      Container(
-                        width: 4,
-                        height: 22,
-                        margin: const EdgeInsets.only(right: 10),
-                        decoration: BoxDecoration(
-                          color: Colors.indigo,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      Text(
-                        widget.cuslang == 'EN'
-                            ? 'Confirm Payment'
-                            : 'ยืนยันการชำระเงิน',
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.deepPurple),
-                      ),
-                    ]),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.grey),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              const SizedBox(height: 14),
-              if (_uploadedSlipData != null)
-                Container(
-                  height: 240,
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(13),
-                    child: InteractiveViewer(
-                      panEnabled: true,
-                      minScale: 0.1,
-                      maxScale: 4.0,
-                      child:
-                          Image.memory(_uploadedSlipData!, fit: BoxFit.contain),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 12),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.indigo.shade50,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.indigo.shade200),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.check_circle_rounded,
-                        color: Colors.green, size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      widget.cuslang == 'EN'
-                          ? 'Slip attached'
-                          : 'หลักฐานแนบแล้ว',
-                      style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.green.shade700,
-                          fontFamily: Font_.Fonts_T,
-                          fontWeight: FontWeight.bold),
-                    ),
-                    const Spacer(),
-                    Flexible(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          widget.cuslang == 'EN'
-                              ? "${nFormat.format(double.parse(Form_payment1.text))} THB"
-                              : "${nFormat.format(double.parse(Form_payment1.text))} บาท",
-                          style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.indigo),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-                child: _SlideToConfirm(
-                  label: widget.cuslang == 'EN'
-                      ? 'Slide to Confirm'
-                      : 'เลื่อนเพื่อยืนยัน',
-                  enabled: true,
-                  onConfirmation: () async {
-                    // reentry guard: กันลากยืนยันซ้ำระหว่างที่รอบแรกยังอัปโหลด
-                    // สลิป/ยิง API อยู่ ⇒ กันรายการชำระซ้ำที่ชั้น logic
-                    // (ชั้น widget _SlideToConfirm กัน gesture ซ้ำให้อีกชั้น)
-                    if (_isSubmittingPayment) return;
-                    _isSubmittingPayment = true;
-                    // Trigger file picker
-                    // final success = await _pickSlipImage();
-                    if (base64_Slip != null) {
-                      if (!mounted) return;
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (BuildContext context) {
-                          return const Center(
-                            child: CircularProgressIndicator(),
-                          );
-                        },
-                      );
-                      final successUp = await _uploadSlipImage(
-                          amtRawSlip: sum_amt.toString());
-                      if (mounted) {
-                        Navigator.of(context).pop(); // Close dialog
-                        Navigator.of(context).pop(); // Close dialog
-                        Navigator.pushAndRemoveUntil(context,
-                            MaterialPageRoute(builder: (context) {
-                          return FitnessAppHomeScreen(custno_s: custno);
-                        }), (route) => false);
-                        if (successUp) {
-                          Fluttertoast.showToast(
-                              timeInSecForIosWeb: 3,
-                              msg: widget.cuslang == 'EN'
-                                  ? "Slip upload successful"
-                                  : 'อัปโหลดสลิปสำเร็จ',
-                              backgroundColor: Colors.black,
-                              textColor: Colors.white,
-                              webPosition: "center",
-                              webBgColor: "#000000",
-                              toastLength: Toast.LENGTH_SHORT);
-                        }
-                      }
-                    } else {
-                      // ไม่มีสลิปให้ส่ง — คืน flag ให้กดใหม่ได้
-                      _isSubmittingPayment = false;
-                    }
-                    // _processPaymentConfirmation(ctx);
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-      // คืน flag เมื่อ dialog ถูกปิดไม่ว่าทางใด (ปุ่มปิด / navigate ออก)
-      // ถ้าไม่คืน ผู้ใช้จะเปิด dialog ยืนยันอีกไม่ได้เลยหลังปิดครั้งแรก
-    ).whenComplete(() => _isConfirmSheetOpen = false);
-  }
 
   Future<Map<String, dynamic>?> _DetailsPaymentIntentsReload() async {
     String _toU16(String? v) => (v ?? '0').trim();
@@ -7772,179 +7590,499 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     );
   }
 
-  Future<bool> _pickSlipImage() async {
-    final completer = Completer<bool>();
-    var isProcessingVisible = false;
+  static const int _maxSlipBytes = 1500 * 1000;
+  static const int _maxSlipPreviewPixels = 16 * 1000 * 1000;
+  bool _isPickingSlip = false;
+  bool _isCancellingPayment = false;
+  bool _slipSubmissionAccepted = false;
+  VoidCallback? _cancelWebSlipSelection;
+  int _slipPaymentRevision = 0;
+  int? _slipDraftRevision;
 
-    // Helper to show loading
-    void _showProcessing() {
-      if (isProcessingVisible || !mounted) return;
-      isProcessingVisible = true;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (BuildContext context) {
-          return Center(
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "กำลังรวมรูปภาพ...",
-                    style: TextStyle(
-                      fontFamily: Font_.Fonts_T,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      );
+  void _setSlipPaymentIntent(String? uuid) {
+    if (numinvoice == uuid) return;
+    numinvoice = uuid;
+    return_qr_refapi3 = null;
+    _intentsSlipData = null;
+    intentsAttacheSlipNo = null;
+    _slipSubmissionAccepted = false;
+    _slipPaymentRevision++;
+    _cancelWebSlipSelection?.call();
+    _clearSlipDraft();
+  }
+
+  void _clearSlipDraft() {
+    _slipDraftRevision = null;
+    _slipImageBytes = null;
+    _slipImageName = null;
+    _uploadedSlipData = null;
+    base64_Slip = null;
+  }
+
+  bool _hasSlipDraft(int revision) =>
+      revision == _slipPaymentRevision &&
+      revision == _slipDraftRevision &&
+      _slipImageBytes != null &&
+      _slipImageName != null;
+
+  Future<html.File?> _selectWebSlip(Route<dynamic>? ownerRoute) async {
+    final input = html.FileUploadInputElement()
+      ..accept = 'image/jpeg,image/png'
+      ..multiple = false
+      ..style.display = 'none';
+    final selection = Completer<html.File?>();
+    void cancel() {
+      if (!selection.isCompleted) selection.complete(null);
     }
 
-    // Helper to request close loading
-    void _hideProcessing() {
-      if (!isProcessingVisible || !mounted) return;
-      isProcessingVisible = false;
-      Navigator.of(context, rootNavigator: true).pop();
+    final change = input.onChange.listen((_) {
+      if (selection.isCompleted) return;
+      final files = input.files;
+      selection.complete(files == null || files.isEmpty ? null : files.first);
+    });
+    final cancelEvent = const html.EventStreamProvider<html.Event>('cancel')
+        .forTarget(input)
+        .listen((_) => cancel());
+    _cancelWebSlipSelection = cancel;
+    VoidCallback? cancelPendingSelection = cancel;
+    ownerRoute?.popped.then((_) => cancelPendingSelection?.call());
+    try {
+      html.document.body?.append(input);
+      input.click();
+      return await selection.future.timeout(const Duration(minutes: 2));
+    } finally {
+      cancelPendingSelection = null;
+      _cancelWebSlipSelection = null;
+      input.remove();
+      await change.cancel();
+      await cancelEvent.cancel();
+    }
+  }
+
+  Future<Uint8List> _readWebSlipBlob(
+    html.Blob blob, {
+    required Duration timeout,
+  }) async {
+    final reader = html.FileReader();
+    final finished = Completer<void>();
+    final subscription = reader.onLoadEnd.listen((_) {
+      if (!finished.isCompleted) finished.complete();
+    });
+    try {
+      reader.readAsArrayBuffer(blob);
+      await finished.future.timeout(timeout);
+      final raw = reader.result;
+      if (raw is Uint8List && raw.isNotEmpty) return raw;
+      if (raw is ByteBuffer && raw.lengthInBytes > 0) return raw.asUint8List();
+      throw StateError('Empty or unreadable image');
+    } on TimeoutException {
+      reader.abort();
+      rethrow;
+    } finally {
+      await subscription.cancel();
+    }
+  }
+
+  Future<bool> _pickSlipImage({
+    BuildContext? ownerContext,
+    int? revision,
+  }) async {
+    if (!mounted) return false;
+    final owner = ownerContext ?? context;
+    if (!owner.mounted) return false;
+    final route = ModalRoute.of(owner);
+    final paymentRevision = revision ?? _slipPaymentRevision;
+    bool isCurrentSelection() =>
+        mounted &&
+        owner.mounted &&
+        (route == null || route.isActive) &&
+        paymentRevision == _slipPaymentRevision;
+
+    if (_isPickingSlip ||
+        _isSubmittingPayment ||
+        _isCancellingPayment ||
+        !isCurrentSelection()) {
+      return false;
+    }
+    _isPickingSlip = true;
+    final isEn = widget.cuslang == 'EN';
+    final tooLarge = isEn
+        ? 'Image must not exceed 1,500 KB.'
+        : 'รูปต้องมีขนาดไม่เกิน 1,500 KB';
+    DialogRoute<void>? processing;
+
+    void showError(String message) {
+      if (isCurrentSelection()) Fluttertoast.showToast(msg: message);
     }
 
-    if (kIsWeb) {
-      // Web: use FileUploadInputElement
-      final uploadInput = html.FileUploadInputElement();
-      uploadInput.accept = 'image/*';
-      uploadInput.multiple = true; // Allow multiple files
-      uploadInput.click();
-
-      uploadInput.onChange.listen((e) async {
-        final files = uploadInput.files;
-        if (files == null || files.isEmpty) {
-          return; // Cancelled or empty
-        }
-
-        _showProcessing();
-
-        try {
-          List<Uint8List> images = [];
-          for (var file in files) {
-            final reader = html.FileReader();
-            reader.readAsArrayBuffer(file);
-            await reader.onLoadEnd.first;
-            if (reader.result != null) {
-              images.add(reader.result as Uint8List);
-            }
-          }
-
-          if (images.isNotEmpty) {
-            final Uint8List? finalImage =
-                images.length == 1 ? images.first : await _mergeImages(images);
-
-            if (finalImage != null) {
-              if (mounted) {
-                setState(() {
-                  _slipImageBytes = finalImage;
-                  _slipImageName =
-                      files.length > 1 ? "merged_slip.jpg" : "slip_upload.jpg";
-                  _uploadedSlipData = _slipImageBytes;
-                  base64_Slip = 'ready';
-                  extension_ = 'jpg';
-                });
-                _hideProcessing();
-              }
-              completer.complete(true);
-            } else {
-              if (mounted) {
-                _hideProcessing();
-                Fluttertoast.showToast(msg: "Failed to process images");
-              }
-              completer.complete(false);
-            }
-          } else {
-            _hideProcessing();
-            completer.complete(false);
-          }
-        } catch (e) {
-          debugPrint("Error picking web images: $e");
-          _hideProcessing();
-          completer.complete(false);
-        }
-      });
-    } else {
-      // Mobile/Desktop: use ImagePicker
-      final ImagePicker picker = ImagePicker();
-      try {
-        final List<XFile> images = await picker.pickMultiImage(
+    try {
+      final html.File? webFile;
+      final XFile? localFile;
+      if (kIsWeb) {
+        webFile = await _selectWebSlip(route);
+        localFile = null;
+      } else {
+        webFile = null;
+        localFile = await ImagePicker().pickImage(
+          source: ImageSource.gallery,
           imageQuality: 55,
           maxWidth: 700,
           maxHeight: 700,
         );
+      }
+      if (!isCurrentSelection() || (webFile == null && localFile == null)) {
+        return false;
+      }
+      final size = webFile?.size ?? await localFile!.length();
+      if (!isCurrentSelection()) return false;
+      if (size > _maxSlipBytes) {
+        showError(tooLarge);
+        return false;
+      }
 
-        if (images.isNotEmpty) {
-          _showProcessing();
-          await Future.delayed(const Duration(milliseconds: 80));
-
-          final List<Uint8List> imageBytesList = await Future.wait(
-            images.map((imgFile) => imgFile.readAsBytes()),
-          );
-
-          final Uint8List? finalImage = imageBytesList.length == 1
-              ? imageBytesList.first
-              : await _mergeImages(imageBytesList);
-
-          if (finalImage != null) {
-            if (mounted) {
-              setState(() {
-                _slipImageBytes = finalImage;
-                _slipImageName =
-                    images.length > 1 ? "merged_slip.jpg" : "slip_upload.jpg";
-                _uploadedSlipData = _slipImageBytes;
-                base64_Slip = 'ready';
-                extension_ = 'jpg';
-              });
-              _hideProcessing();
-            }
-            completer.complete(true);
-          } else {
-            if (mounted) {
-              _hideProcessing();
-              Fluttertoast.showToast(msg: "Failed to merge images");
-            }
-            completer.complete(false);
-          }
-        } else {
-          completer.complete(false);
-        }
-      } catch (e) {
-        debugPrint("Error picking mobile images: $e");
-        _hideProcessing();
-        completer.complete(false);
+      final processingRoute = DialogRoute<void>(
+        context: owner,
+        barrierDismissible: false,
+        builder: (_) => Dialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          constraints: const BoxConstraints(maxWidth: 320),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: Colors.indigo,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Flexible(
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      isEn ? 'Preparing payment slip…' : 'กำลังเตรียมสลิป…',
+                      style: const TextStyle(
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF192242),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      processing = processingRoute;
+      Navigator.of(owner, rootNavigator: true).push(processingRoute);
+      final minimumProgressTime =
+          Future<void>.delayed(const Duration(seconds: 1));
+      final bytes = webFile != null
+          ? await _readWebSlipBlob(webFile, timeout: const Duration(seconds: 30))
+          : await localFile!.readAsBytes();
+      if (!isCurrentSelection()) return false;
+      if (bytes.length > _maxSlipBytes) {
+        showError(tooLarge);
+        return false;
+      }
+      final info = SlipImageInfo.inspect(bytes);
+      if (info == null) {
+        showError(isEn
+            ? 'Please select a valid JPG or PNG image.'
+            : 'กรุณาเลือกรูป JPG หรือ PNG ที่เปิดได้');
+        return false;
+      }
+      await minimumProgressTime;
+      if (!isCurrentSelection()) return false;
+      setState(() {
+        _slipDraftRevision = paymentRevision;
+        _slipImageBytes = bytes;
+        _slipImageName = 'slip_upload.${info.extension}';
+        _uploadedSlipData = bytes;
+        base64_Slip = 'ready';
+        extension_ = info.extension;
+      });
+      return true;
+    } on TimeoutException {
+      showError(isEn
+          ? 'Image selection took too long. Please try again.'
+          : 'ใช้เวลาเตรียมรูปนานเกินไป กรุณาเลือกรูปอีกครั้ง');
+      return false;
+    } catch (error) {
+      debugPrint('Error picking slip image: $error');
+      showError(isEn
+          ? 'Could not read the image. Please try again.'
+          : 'ไม่สามารถอ่านรูปได้ กรุณาเลือกรูปอีกครั้ง');
+      return false;
+    } finally {
+      _isPickingSlip = false;
+      if (processing != null && processing.isActive) {
+        processing.navigator?.removeRoute(processing);
       }
     }
-
-    return completer.future;
   }
 
-  Future<Uint8List?> _mergeImages(List<Uint8List> images) async {
-    return compute(_processSlipMergeImages, SlipMergeParams(images: images))
-        .timeout(
-      const Duration(seconds: 12),
-      onTimeout: () {
-        debugPrint('Slip image processing timed out');
-        return images.isNotEmpty ? images.first : null;
-      },
+  Widget _buildSelectedSlipStatus(int byteCount) {
+    final isEn = widget.cuslang == 'EN';
+    final fileSize = byteCount < 1000
+        ? '$byteCount ${isEn ? 'B' : 'ไบต์'}'
+        : '${NumberFormat('#,##0.#', 'en_US').format(byteCount / 1000)} KB';
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.check_circle_rounded,
+            color: Color(0xFF25843D), size: 40),
+        const SizedBox(height: 6),
+        Text(
+          isEn ? 'File selected' : 'เลือกไฟล์แล้ว',
+          style: const TextStyle(
+            color: Color(0xFF192242),
+            fontFamily: Font_.Fonts_T,
+            fontWeight: FontWeight.w700,
+            fontSize: 15,
+          ),
+        ),
+        Text(
+          isEn ? 'File size $fileSize' : 'ขนาดไฟล์ $fileSize',
+          style: const TextStyle(
+            color: Color(0xFF4C5874),
+            fontFamily: Font_.Fonts_T,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 4),
+        TextButton.icon(
+          onPressed: _showSelectedSlipPreview,
+          style: TextButton.styleFrom(foregroundColor: Colors.indigo.shade700),
+          icon: const Icon(Icons.visibility_outlined, size: 18),
+          label: Text(isEn ? 'View image' : 'ดูรูป'),
+        ),
+        Text(
+          isEn ? 'Tap to change image' : 'แตะเพื่อเปลี่ยนรูป',
+          style: const TextStyle(
+            color: Color(0xFF4C5874),
+            fontFamily: Font_.Fonts_T,
+            fontSize: 13,
+          ),
+        ),
+      ],
     );
+  }
+
+  bool _isSlipPreviewOpen = false;
+
+  Future<void> _showSelectedSlipPreview() async {
+    if (_isSlipPreviewOpen || _isSubmittingPayment) return;
+    final bytes = _slipPreviewBytes();
+    if (bytes == null) return;
+    final isEn = widget.cuslang == 'EN';
+    final errorMessage = isEn
+        ? 'Could not preview this file. Try another JPG or PNG image.'
+        : 'แสดงตัวอย่างไฟล์นี้ไม่ได้ ลองเลือกรูป JPG หรือ PNG อื่น';
+    final info = SlipImageInfo.inspect(bytes);
+    if (info == null) {
+      Fluttertoast.showToast(msg: errorMessage);
+      return;
+    }
+    if (info.width > _maxSlipPreviewPixels ~/ info.height) {
+      Fluttertoast.showToast(msg: isEn
+          ? 'This image is too large to preview. You can still confirm it.'
+          : 'ความละเอียดสูงเกินกว่าจะแสดงตัวอย่าง แต่ยังยืนยันรูปที่เลือกได้');
+      return;
+    }
+    _isSlipPreviewOpen = true;
+    final preview =
+        kIsWeb ? _createWebSlipThumbnail(bytes) : Future.value(bytes);
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierColor: const Color(0xA6162039),
+        builder: (dialogContext) => Dialog(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(16),
+          constraints: const BoxConstraints(maxWidth: 460),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEEF1FC),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.receipt_long_outlined,
+                        color: Colors.indigo,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Semantics(
+                        header: true,
+                        child: Text(
+                          isEn ? 'Selected payment slip' : 'สลิปที่เลือก',
+                          style: const TextStyle(
+                            color: Color(0xFF192242),
+                            fontFamily: Font_.Fonts_T,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: isEn ? 'Close' : 'ปิด',
+                      onPressed: () => Navigator.pop(dialogContext),
+                      icon: const Icon(Icons.close_rounded, size: 22),
+                      color: const Color(0xFF4C5874),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Flexible(
+                  child: Container(
+                    height: 520,
+                    padding: const EdgeInsets.all(10),
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF3F5FA),
+                      border: Border.all(color: const Color(0xFFE3E8F3)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: FutureBuilder<Uint8List>(
+                      future: preview,
+                      builder: (context, snapshot) {
+                        final error = Center(
+                          child: Text(errorMessage, textAlign: TextAlign.center),
+                        );
+                        if (snapshot.hasError) return error;
+                        if (!snapshot.hasData) {
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.indigo,
+                              semanticsLabel:
+                                  isEn ? 'Loading image' : 'กำลังโหลดรูป',
+                            ),
+                          );
+                        }
+                        return InteractiveViewer(
+                          child: Image.memory(
+                            snapshot.data!,
+                            fit: BoxFit.contain,
+                            cacheWidth: 600,
+                            semanticLabel:
+                                isEn ? 'Payment slip' : 'รูปสลิปชำระเงิน',
+                            errorBuilder: (_, __, ___) => error,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  children: [
+                    const Icon(Icons.zoom_in_rounded,
+                        size: 17, color: Color(0xFF4C5874)),
+                    Text(
+                      isEn
+                          ? 'Pinch or scroll to zoom'
+                          : 'บีบนิ้วหรือเลื่อนเมาส์เพื่อซูม',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFF4C5874),
+                        fontFamily: Font_.Fonts_T,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } finally {
+      try {
+        final previewBytes = await preview;
+        await ResizeImage.resizeIfNeeded(600, null, MemoryImage(previewBytes))
+            .evict();
+      } catch (_) {
+        // The dialog displays preview errors.
+      } finally {
+        _isSlipPreviewOpen = false;
+      }
+    }
+  }
+
+  Future<Uint8List> _createWebSlipThumbnail(Uint8List bytes) async {
+    final url = html.Url.createObjectUrlFromBlob(html.Blob([bytes]));
+    final image = html.ImageElement();
+    html.CanvasElement? canvas;
+    StreamSubscription<html.Event>? loadSubscription;
+    StreamSubscription<html.Event>? errorSubscription;
+    try {
+      final loaded = Completer<void>();
+      loadSubscription = image.onLoad.listen((_) {
+        if (!loaded.isCompleted) loaded.complete();
+      });
+      errorSubscription = image.onError.listen((_) {
+        if (!loaded.isCompleted) {
+          loaded.completeError(Exception('Image decode failed'));
+        }
+      });
+      image.src = url;
+      await loaded.future.timeout(const Duration(seconds: 15));
+      final width = image.naturalWidth.toInt();
+      final height = image.naturalHeight.toInt();
+      if (width == 0 || height == 0) {
+        throw Exception('Invalid image dimensions');
+      }
+      final longest = width > height ? width : height;
+      final scale = longest > 600 ? 600 / longest : 1.0;
+      canvas = html.CanvasElement(
+        width: max(1, (width * scale).round()),
+        height: max(1, (height * scale).round()),
+      );
+      canvas.context2D.drawImageScaled(
+          image, 0, 0, canvas.width!, canvas.height!);
+      final blob = await canvas.toBlob('image/jpeg', 0.8)
+          .timeout(const Duration(seconds: 15));
+      return await _readWebSlipBlob(blob, timeout: const Duration(seconds: 15));
+    } finally {
+      await loadSubscription?.cancel();
+      await errorSubscription?.cancel();
+      image.removeAttribute('src');
+      if (canvas != null) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+      html.Url.revokeObjectUrl(url);
+    }
   }
 
   Uint8List? _slipPreviewBytes() {
@@ -7961,123 +8099,119 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
     }
   }
 
-// Upload slip image to server
-  Future<bool> _uploadSlipImage({required String amtRawSlip}) async {
-    if (_slipImageBytes == null || _slipImageName == null) return false;
-
-    // Show loading message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('กำลังอัปโหลดสลิป...'),
-        backgroundColor: Colors.blue,
-        duration: Duration(seconds: 2),
-      ),
+  Future<bool> _submitSlipWithProgress(
+    BuildContext owner, {
+    required int revision,
+    required String amount,
+  }) async {
+    if (!mounted || !owner.mounted) return false;
+    final ownerRoute = ModalRoute.of(owner);
+    if ((ownerRoute != null && !ownerRoute.isActive) ||
+        _isPickingSlip ||
+        _isSubmittingPayment ||
+        _isCancellingPayment ||
+        !_hasSlipDraft(revision)) {
+      return false;
+    }
+    _isSubmittingPayment = true;
+    final progress = DialogRoute<void>(
+      context: owner,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
     );
+    try {
+      Navigator.of(owner, rootNavigator: true).push(progress);
+      return await _uploadSlipImage(
+        amtRawSlip: amount,
+        revision: revision,
+        ownerRoute: ownerRoute,
+      );
+    } finally {
+      _isSubmittingPayment = false;
+      if (progress.isActive) progress.navigator?.removeRoute(progress);
+    }
+  }
+
+  Future<bool> _uploadSlipImage({
+    required String amtRawSlip,
+    required int revision,
+    required Route<dynamic>? ownerRoute,
+  }) async {
+    if (!_hasSlipDraft(revision)) return false;
+    final uuid = numinvoice;
+    if (uuid == null || uuid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(widget.cuslang == 'EN'
+            ? 'Payment record not found. Reopen the payment and try again.'
+            : 'ไม่พบรายการชำระ กรุณาเปิดรายการใหม่แล้วลองอีกครั้ง'),
+      ));
+      return false;
+    }
+    final bytes = _slipImageBytes!;
+    final fileName = _slipImageName!;
+    final transferRef = return_qr_refapi3 ?? '';
 
     try {
-      // Get selected payment intent UUID
-      final uuid = numinvoice ?? '';
-      if (uuid.isEmpty) {
-        throw Exception('ไม่พบ Payment Intent UUID');
-      }
       final headers = await MyHeadersIntents.build();
-
+      if (!mounted ||
+          !_hasSlipDraft(revision) ||
+          (ownerRoute != null && !ownerRoute.isActive)) return false;
       final uri = Uri.parse(
           '${MyconfigIntents().domainIntents}/v1/payment/intent/$uuid/upload/slip');
-
       final request = http.MultipartRequest('POST', uri);
-
-      // Add form fields
-      final now = DateTime.now();
-      final dateStr = DateFormat('yyyy-MM-dd').format(now);
-      print("uri : $uri");
-      print({
-        'amount': amtRawSlip,
-        'transfer_date': dateStr,
-        'transfer_ref_no': return_qr_refapi3 ?? '',
-        'transfer_type': 'bank_transfer',
-        'notes': 'อัปโหลดจาก QR Sheet',
-      });
+      final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
       request.fields.addAll({
         'amount': amtRawSlip,
         'transfer_date': dateStr,
-        'transfer_ref_no': return_qr_refapi3 ?? '',
+        'transfer_ref_no': transferRef,
         'transfer_type': 'bank_transfer',
         'notes': 'อัปโหลดจาก QR Sheet',
       });
-
-      // Detect MIME type from file extension to avoid 'application/octet-stream'
-      String contentType = 'image/jpeg'; // default
-      final extension = _slipImageName!.toLowerCase().split('.').last;
-      if (extension == 'png') {
-        contentType = 'image/png';
-      } else if (extension == 'jpg' || extension == 'jpeg') {
-        contentType = 'image/jpeg';
-      }
-
-      debugPrint('📎 File: $_slipImageName, Type: $contentType');
-
-      // Add image file from bytes (for web compatibility)
       request.files.add(
         http.MultipartFile.fromBytes(
           'file',
-          _slipImageBytes!,
-          filename: _slipImageName!,
-          contentType: MediaType.parse(contentType),
+          bytes,
+          filename: fileName,
+          contentType: MediaType.parse(
+            fileName.endsWith('.png') ? 'image/png' : 'image/jpeg',
+          ),
         ),
       );
-
       request.headers.addAll(headers);
-
-      // Send request
       final response = await request.send();
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseBody = await response.stream.bytesToString();
-        debugPrint('✅ Upload success: $responseBody');
-
-        final jsonResponse = jsonDecode(responseBody);
-        setState(() {
-          _slipImageBytes = null;
-          _slipImageName = null;
-          intentsAttacheSlipNo =
-              jsonResponse['slip_no'] ?? intentsAttacheSlipNo;
-        });
-
-        if (!mounted) return false;
-        String _toU16(String? v) => (v ?? '0').trim();
-
-        String? custno16Bit = _toU16('$custno').toString();
-        final ren16Bit = _toU16('$renTal_user');
-
-        // User requirement: "await redPaymentIntents(); ให้เสร็จก่อน"
-        // await Future.delayed(const Duration(
-        //     seconds: 2)); // Simulate loading delay
-        // await redPaymentIntents(
-        //     cusno: custno16Bit, propertyno: ren16Bit.toString() ?? '');
-        // Reload payment intents to reflect updated status
-        // await redPaymentIntents();
-        return true;
-      } else {
-        final errorBody = await response.stream.bytesToString();
-        debugPrint('❌ Upload failed: ${response.statusCode} - $errorBody');
-
-        throw Exception('Upload failed: ${response.statusCode}');
+      final responseBody = await response.stream.bytesToString();
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        throw StateError('Upload failed (${response.statusCode})');
       }
-    } catch (e, stackTrace) {
-      debugPrint('❌ Upload error: $e\n$stackTrace');
-
-      if (!mounted) return false;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('เกิดข้อผิดพลาด: ${e.toString()}'),
+      if (!mounted || !_hasSlipDraft(revision)) return false;
+      // A successful HTTP response has already accepted the slip. Metadata is optional.
+      String? slipNo;
+      try {
+        final payload = jsonDecode(responseBody);
+        if (payload is Map && payload['slip_no'] is String) {
+          slipNo = payload['slip_no'] as String;
+        }
+      } on FormatException {
+        debugPrint('Slip upload response had no metadata');
+      }
+      setState(() {
+        _clearSlipDraft();
+        _slipSubmissionAccepted = true;
+        intentsAttacheSlipNo = slipNo ?? intentsAttacheSlipNo;
+      });
+      return true;
+    } catch (error) {
+      debugPrint('Slip upload failed: $error');
+      if (mounted && _hasSlipDraft(revision)) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(widget.cuslang == 'EN'
+              ? 'Could not upload the slip. Please try again.'
+              : 'อัปโหลดสลิปไม่สำเร็จ กรุณาลองส่งอีกครั้ง'),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+        ));
+      }
+      return false;
     }
-    return false;
   }
 
   String _getStatusText(String? status) {
@@ -8122,6 +8256,89 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
         ],
       ),
     );
+  }
+
+  bool get _hasSubmittedSlip {
+    final uuid = numinvoice;
+    return _slipSubmissionAccepted ||
+        _intentsSlipData != null ||
+        (uuid != null &&
+            paymentIntents.any((intent) =>
+                intent.intentUuid == uuid &&
+                (intent.latestSlip != null ||
+                    intent.systemStatus?.toLowerCase() == 'slip_uploaded')));
+  }
+
+  Future<bool> _cancelPayment(BuildContext owner) async {
+    if (_hasSubmittedSlip || _isSubmittingPayment || _isCancellingPayment) {
+      return false;
+    }
+
+    final isEn = widget.cuslang == 'EN';
+    final uuid = numinvoice;
+    if (uuid == null || uuid.isEmpty) {
+      Fluttertoast.showToast(
+        msg: isEn
+            ? 'No payment found to cancel. Reopen the payment and try again.'
+            : 'ไม่พบรายการชำระที่ต้องการยกเลิก กรุณาเปิดรายการใหม่แล้วลองอีกครั้ง',
+      );
+      return false;
+    }
+
+    _isCancellingPayment = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted || !owner.mounted || uuid != numinvoice || _hasSubmittedSlip) {
+        return false;
+      }
+      final ren = prefs.getString('renTalSer');
+      final customerNo = _TransModels.isNotEmpty
+          ? '${_TransModels.first.custno ?? ''}'
+          : (prefs.getString('custno') ?? '');
+      final response = await DeletePaymentIntents_UuidCanceled(
+        cusNo: _toU16(customerNo).toString(),
+        propertyNo: _toU16('$ren').toString(),
+        intentsUuid: uuid,
+        bankMerchantId: bankMerchantId ?? 0,
+      );
+      if (response != null &&
+          response.statusCode >= 200 &&
+          response.statusCode < 300) {
+        Fluttertoast.showToast(
+          timeInSecForIosWeb: 3,
+          msg: isEn
+              ? 'Payment cancelled successfully.'
+              : 'ยกเลิกการชำระเงินสำเร็จแล้ว',
+          backgroundColor: Colors.black,
+          textColor: Colors.white,
+          webPosition: 'center',
+          webBgColor: '#000000',
+          toastLength: Toast.LENGTH_SHORT,
+        );
+        if (mounted && owner.mounted) {
+          Navigator.pushAndRemoveUntil(
+            owner,
+            MaterialPageRoute(
+                builder: (_) => FitnessAppHomeScreen(custno_s: custno)),
+            (route) => false,
+          );
+        }
+        return true;
+      }
+    } catch (error) {
+      debugPrint('Cancel payment failed: $error');
+    } finally {
+      _isCancellingPayment = false;
+    }
+
+    if (mounted && owner.mounted) {
+      Fluttertoast.showToast(
+        msg: isEn
+            ? 'Could not cancel the payment. Please try again.'
+            : 'ยกเลิกการชำระเงินไม่สำเร็จ กรุณาลองอีกครั้ง',
+      );
+    }
+    return false;
   }
 
   Future<void> _showCancelPaymentDialog(BuildContext ctx) {
@@ -8194,8 +8411,8 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
             step(
                 3,
                 widget.cuslang == 'EN'
-                    ? 'Once you have attached the proof of transfer, you will not be able to cancel the payment.'
-                    : 'หากแนบหลักฐานการโอนเงินแล้ว จะไม่สามารถยกเลิกการชำระเงินได้'),
+                    ? 'Once you have submitted the proof of transfer, you will not be able to cancel the payment.'
+                    : 'เมื่อส่งหลักฐานการโอนเงินแล้ว จะไม่สามารถยกเลิกการชำระเงินได้'),
           ],
         ),
       );
@@ -8233,7 +8450,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                       ),
                       IconButton(
                         icon: Icon(Icons.close, color: Colors.grey),
-                        onPressed: () => Navigator.pop(ctx),
+                        onPressed: () => Navigator.pop(dialogCtx),
                       ),
                     ],
                   ),
@@ -8261,50 +8478,10 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                         label: widget.cuslang == 'EN'
                             ? 'Confirm Cancellation and Restart'
                             : 'ยืนยันการยกเลิกและเริ่มต้นใหม่',
-                        enabled: base64_Slip == null || base64_Slip == '',
-                        onConfirmation: () async {
-                          try {
-                            final prefs = await SharedPreferences.getInstance();
-                            final ren = prefs.getString('renTalSer');
-                            final ren16Bit = _toU16('$ren').toString();
-                            final String custnoLocal = _TransModels.isNotEmpty
-                                ? '${_TransModels.first.custno ?? ''}'
-                                : (prefs.getString('custno') ?? '');
-                            final custno16Bit = _toU16(custnoLocal).toString();
-                            final response =
-                                await DeletePaymentIntents_UuidCanceled(
-                                    cusNo: custno16Bit,
-                                    propertyNo: ren16Bit,
-                                    intentsUuid: numinvoice.toString(),
-                                    bankMerchantId: bankMerchantId ?? 0);
-                            if (response != null &&
-                                response.statusCode >= 200 &&
-                                response.statusCode < 300) {
-                              Fluttertoast.showToast(
-                                  timeInSecForIosWeb: 3,
-                                  msg: widget.cuslang == 'EN'
-                                      ? "Payment cancelled successfully."
-                                      : 'ยกเลิกการชำระเงินสำเร็จแล้ว',
-                                  backgroundColor: Colors.black,
-                                  textColor: Colors.white,
-                                  webPosition: "center",
-                                  webBgColor: "#000000",
-                                  toastLength: Toast.LENGTH_SHORT);
-                              if (!mounted) return;
-                              Navigator.pushAndRemoveUntil(ctx,
-                                  MaterialPageRoute(builder: (context) {
-                                return FitnessAppHomeScreen(custno_s: custno);
-                              }), (route) => false);
-                            } else {
-                              Navigator.pop(ctx);
-                              Navigator.pop(ctx);
-                            }
-                          } catch (e) {
-                            debugPrint('❌ Cancel Payment Exception: $e');
-                            Navigator.pop(ctx);
-                            Navigator.pop(ctx);
-                          }
-                        },
+                        enabled: !_hasSubmittedSlip &&
+                            !_isSubmittingPayment &&
+                            !_isCancellingPayment,
+                        onConfirmation: () => _cancelPayment(ctx),
                       ),
                     ),
                   ),
@@ -8466,12 +8643,47 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
   /// การแตะฉากหลัง ไม่กันการเรียกซ้ำ ⇒ กดปุ่มรัวจะเปิด sheet ซ้อนหลายชั้น
   /// แล้วผู้ใช้ลากยืนยันได้หลายรอบ
   bool _isConfirmSheetOpen = false;
+  bool _isOpeningSlipSheet = false;
+
+  Future<void> _openIntentSlipSheet(
+    BuildContext owner,
+    PaymentIntent intent,
+    double amount,
+  ) async {
+    if (_isOpeningSlipSheet ||
+        _isConfirmSheetOpen ||
+        _isSubmittingPayment ||
+        _isCreatingPaymentItem) return;
+    _isOpeningSlipSheet = true;
+    try {
+      setState(() {
+        _setSlipPaymentIntent(intent.intentUuid);
+        sum_amt = amount;
+      });
+      final revision = _slipPaymentRevision;
+      await QrGenRef(
+        QR_Ref1: intent.ref1 ?? '',
+        QR_Ref2: intent.ref2 ?? '',
+        QR_Ref3: intent.ref3 ?? '',
+        softExpireAt: intent.softExpireAt?.toIso8601String() ?? '',
+      );
+      if (mounted && owner.mounted && revision == _slipPaymentRevision) {
+        _showPaymentConfirmationSheet(owner, totalAmount: amount);
+      }
+    } finally {
+      _isOpeningSlipSheet = false;
+    }
+  }
+
 
   void _showPaymentConfirmationSheet(BuildContext context,
       {required double totalAmount}) {
     // กันเปิดซ้อน: sheet เปิดอยู่แล้วให้เพิกเฉย
     if (_isConfirmSheetOpen) return;
     _isConfirmSheetOpen = true;
+    final revision = _slipPaymentRevision;
+    final amountForUpload = sum_amt.toString();
+    var retryReattachment = false;
 
     Widget chip(String text, Color bg, Color fg) => Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -8666,92 +8878,42 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                                       child:
                                                           OutlinedButton.icon(
                                                         onPressed: () async {
-                                                          // Reset uploaded data to allow new upload
-                                                          setState(() {
-                                                            _uploadedSlipData =
-                                                                null;
+                                                          if (_isSubmittingPayment ||
+                                                              revision != _slipPaymentRevision) {
+                                                            return;
+                                                          }
+                                                          final retry = retryReattachment && _hasSlipDraft(revision);
+                                                          if (!retry && !await _pickSlipImage(
+                                                            ownerContext: context,
+                                                            revision: revision,
+                                                          )) {
+                                                            return;
+                                                          }
+                                                          if (!mounted || !context.mounted) return;
+                                                          final success = await _submitSlipWithProgress(
+                                                            context,
+                                                            revision: revision,
+                                                            amount: amountForUpload,
+                                                          );
+                                                          if (!mounted || !context.mounted) return;
+                                                          setStateSheet(() {
+                                                            retryReattachment = !success && _hasSlipDraft(revision);
                                                           });
-                                                          // Trigger file picker
-                                                          final success =
-                                                              await _pickSlipImage();
-                                                          if (success &&
-                                                              _slipImageBytes !=
-                                                                  null) {
-                                                            if (!mounted)
-                                                              return;
-                                                            showDialog(
-                                                              context: context,
-                                                              barrierDismissible:
-                                                                  false,
-                                                              builder:
-                                                                  (BuildContext
-                                                                      context) {
-                                                                return Center(
-                                                                  child: Stack(
-                                                                    alignment:
-                                                                        Alignment
-                                                                            .center,
-                                                                    children: [
-                                                                      const Padding(
-                                                                        padding:
-                                                                            EdgeInsets.all(8.0),
-                                                                        child:
-                                                                            CircleAvatar(
-                                                                          backgroundColor:
-                                                                              Colors.transparent,
-                                                                          radius:
-                                                                              30,
-                                                                          backgroundImage:
-                                                                              AssetImage('assets/images/Icon-chao.png'),
-                                                                        ),
-                                                                      ),
-                                                                      LoadingAnimationWidget
-                                                                          .inkDrop(
-                                                                        color: Colors
-                                                                            .indigo,
-                                                                        size:
-                                                                            70,
-                                                                      ),
-                                                                    ],
-                                                                  ),
-                                                                );
-                                                              },
-                                                            );
-                                                            final successUp =
-                                                                await _uploadSlipImage(
-                                                                    amtRawSlip:
-                                                                        sum_amt
-                                                                            .toString());
-                                                            if (mounted) {
-                                                              Navigator.of(
-                                                                      context)
-                                                                  .pop(); // Close dialog
-                                                              if (successUp) {
-                                                                ScaffoldMessenger.of(
-                                                                        context)
-                                                                    .showSnackBar(
-                                                                  SnackBar(
-                                                                    content: Text(widget.cuslang ==
-                                                                            'EN'
-                                                                        ? 'Slip upload successful!'
-                                                                        : 'อัปโหลดสลิปสำเร็จ!'),
-                                                                    backgroundColor:
-                                                                        Colors
-                                                                            .indigo,
-                                                                  ),
-                                                                );
-                                                              }
-                                                            }
+                                                          if (success) {
+                                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                                              content: Text(widget.cuslang == 'EN'
+                                                                  ? 'Slip upload successful!'
+                                                                  : 'อัปโหลดสลิปสำเร็จ!'),
+                                                            ));
                                                           }
                                                         },
                                                         icon: const Icon(
                                                             Icons.refresh,
                                                             size: 16),
                                                         label: Text(
-                                                            widget.cuslang ==
-                                                                    'EN'
-                                                                ? 'Re-attach'
-                                                                : 'แนบอีกครั้ง',
+                                                            retryReattachment && _hasSlipDraft(revision)
+                                                                ? (widget.cuslang == 'EN' ? 'Retry upload' : 'ลองส่งอีกครั้ง')
+                                                                : (widget.cuslang == 'EN' ? 'Re-attach' : 'แนบอีกครั้ง'),
                                                             style: TextStyle(
                                                                 fontSize: 12)),
                                                         style: OutlinedButton
@@ -9253,15 +9415,12 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
                                   GestureDetector(
                                     onTap: () async {
-                                      // await uploadFile_Slip();
-                                      final success = await _pickSlipImage();
-
-                                      // Force rebuild of the sheet to show the image
-                                      setStateSheet(() {});
-
-                                      // Show auto dialog removed - using Slider instead
-                                      if (success) {
-                                        _showSlideConfirmDialog();
+                                      final selected = await _pickSlipImage(
+                                        ownerContext: context,
+                                        revision: revision,
+                                      );
+                                      if (selected && mounted && context.mounted) {
+                                        setStateSheet(() {});
                                       }
                                     },
                                     child: Container(
@@ -9282,7 +9441,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                           ),
                                         ],
                                       ),
-                                      child: _slipPreviewBytes() == null
+                                      child: !_hasSlipDraft(revision)
                                           ? Column(
                                               mainAxisAlignment:
                                                   MainAxisAlignment.center,
@@ -9316,7 +9475,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                                 ),
                                                 const SizedBox(height: 4),
                                                 Text(
-                                                  "JPG, PNG (Max 10MB)",
+                                                  "JPG, PNG (Max 1,500 KB)",
                                                   style: TextStyle(
                                                       color: Colors
                                                           .indigo.shade300,
@@ -9324,63 +9483,9 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                                 ),
                                               ],
                                             )
-                                          : ClipRRect(
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              child: Stack(
-                                                fit: StackFit.expand,
-                                                children: [
-                                                  InteractiveViewer(
-                                                    panEnabled: true,
-                                                    minScale: 0.1,
-                                                    maxScale: 4.0,
-                                                    child: Image.memory(
-                                                      _slipPreviewBytes()!,
-                                                      fit: BoxFit.cover,
-                                                    ),
-                                                  ),
-                                                  Container(
-                                                    color: Colors.black
-                                                        .withValues(alpha: 0.3),
-                                                    child: Center(
-                                                      child: Container(
-                                                        padding: EdgeInsets
-                                                            .symmetric(
-                                                                horizontal: 16,
-                                                                vertical: 8),
-                                                        decoration: BoxDecoration(
-                                                            color: Colors.white
-                                                                .withValues(
-                                                                    alpha: 0.8),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        20)),
-                                                        child: Row(
-                                                          mainAxisSize:
-                                                              MainAxisSize.min,
-                                                          children: [
-                                                            Icon(Icons.edit,
-                                                                size: 16),
-                                                            SizedBox(width: 4),
-                                                            Text(
-                                                              widget.cuslang ==
-                                                                      'EN'
-                                                                  ? "Change"
-                                                                  : "เปลี่ยนรูป",
-                                                              style: TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontFamily: Font_
-                                                                      .Fonts_T),
-                                                            )
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  )
-                                                ],
+                                          : Center(
+                                              child: _buildSelectedSlipStatus(
+                                                _slipImageBytes!.lengthInBytes,
                                               ),
                                             ),
                                     ),
@@ -9463,71 +9568,28 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                                   label: widget.cuslang == 'EN'
                                       ? 'Slide to Confirm'
                                       : 'เลื่อนเพื่อยืนยันการชำระเงิน',
-                                  enabled: base64_Slip != null ||
-                                      _slipImageBytes != null,
+                                  enabled: _hasSlipDraft(revision),
                                   onConfirmation: () async {
-                                    // reentry guard: กันลากยืนยันซ้ำระหว่างที่รอบแรก
-                                    // ยังอัปโหลดสลิปอยู่ ⇒ กันอัปโหลดซ้ำ/รายการชำระซ้ำ
-                                    if (_isSubmittingPayment) return;
-                                    // Trigger file picker
-                                    // final success = await _pickSlipImage();
-                                    if (base64_Slip != null ||
-                                        _slipImageBytes != null) {
-                                      _isSubmittingPayment = true;
-                                      if (!mounted) return;
-                                      showDialog(
-                                        context: context,
-                                        barrierDismissible: false,
-                                        builder: (BuildContext context) {
-                                          return const Center(
-                                            child: CircularProgressIndicator(),
-                                          );
-                                        },
-                                      );
-                                      final successUp = await _uploadSlipImage(
-                                          amtRawSlip: sum_amt.toString());
-                                      if (mounted) {
-                                        Navigator.of(context)
-                                            .pop(); // Close dialog
-                                        Navigator.pushAndRemoveUntil(context,
-                                            MaterialPageRoute(
-                                                builder: (context) {
-                                          return FitnessAppHomeScreen(
-                                              custno_s: custno);
-                                        }), (route) => false);
-                                        if (successUp) {
-                                          Fluttertoast.showToast(
-                                              timeInSecForIosWeb: 3,
-                                              msg: widget.cuslang == 'EN'
-                                                  ? "Slip upload successful"
-                                                  : 'อัปโหลดสลิปสำเร็จ',
-                                              backgroundColor: Colors.black,
-                                              textColor: Colors.white,
-                                              webPosition: "center",
-                                              webBgColor: "#000000",
-                                              toastLength: Toast.LENGTH_SHORT);
-                                        }
-                                      }
+                                    final success = await _submitSlipWithProgress(
+                                      context,
+                                      revision: revision,
+                                      amount: amountForUpload,
+                                    );
+                                    if (!success ||
+                                        !mounted ||
+                                        !context.mounted ||
+                                        revision != _slipPaymentRevision) {
+                                      return false;
                                     }
-                                    // Confirm Logic
-                                    // List newValuePDFimg = [];
-                                    // for (int index = 0; index < 1; index++) {
-                                    //   if (renTalModels[0].imglogo!.trim() != '') {
-                                    //     newValuePDFimg.add(
-                                    //         '${MyConstant().domain_chao}/files/$foder/logo/${renTalModels[0].imglogo!.trim()}');
-                                    //   }
-                                    // }
-                                    // try {
-                                    //   sucress();
-                                    //   OKuploadFile_Slip(newValuePDFimg).then(
-                                    //       (value) => in_Trans_invoice(newValuePDFimg));
-                                    //   Navigator.pop(
-                                    //       context); // Close sheet after success
-                                    // } catch (e) {
-                                    //   _showMyDialogPay_Error(widget.cuslang == 'EN'
-                                    //       ? "An error occurred. Please check the information. Please try again!"
-                                    //       : 'เกิดข้อผิดพลาด ตรวจสอบความถูกต้อง กรุณาลองอีกครั้ง!');
-                                    // }
+                                    Fluttertoast.showToast(msg: widget.cuslang == 'EN'
+                                        ? 'Slip upload successful'
+                                        : 'อัปโหลดสลิปสำเร็จ');
+                                    Navigator.pushAndRemoveUntil(context,
+                                      MaterialPageRoute(builder: (_) =>
+                                        FitnessAppHomeScreen(custno_s: custno)),
+                                      (_) => false,
+                                    );
+                                    return true;
                                   },
                                 ),
                               ),
@@ -9618,36 +9680,16 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
                   children: [
                     ElevatedButton.icon(
                       onPressed: () async {
-                        // Reset uploaded data to allow new upload
-                        setState(() {
-                          _uploadedSlipData = null;
-                        });
-                        // Trigger file picker
-                        final success = await _pickSlipImage();
-                        if (success && _slipImageBytes != null) {
-                          if (!mounted) return;
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (BuildContext context) {
-                              return const Center(
-                                child: CircularProgressIndicator(),
-                              );
-                            },
-                          );
-                          final successUp =
-                              await _uploadSlipImage(amtRawSlip: amount);
-                          if (mounted) {
-                            Navigator.of(context).pop(); // Close dialog
-                            if (successUp) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('อัปโหลดสลิปสำเร็จ!'),
-                                  backgroundColor: Colors.green,
-                                ),
-                              );
-                            }
-                          }
+                        final revision = _slipPaymentRevision;
+                        if (!await _pickSlipImage(revision: revision) || !mounted) return;
+                        final success = await _submitSlipWithProgress(
+                          context, revision: revision, amount: amount,
+                        );
+                        if (success && mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content: Text('อัปโหลดสลิปสำเร็จ!'),
+                            backgroundColor: Colors.green,
+                          ));
                         }
                       },
                       icon: const Icon(Icons.refresh, size: 16),
@@ -9766,7 +9808,7 @@ class _paymentSubV4InvAllState extends State<paymentSubV4InvAll>
 
 // Custom Slide to Confirm Widget
 class _SlideToConfirm extends StatefulWidget {
-  final VoidCallback onConfirmation;
+  final Future<bool> Function() onConfirmation;
   final String label;
   final Color color;
   final bool enabled;
@@ -9790,12 +9832,7 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
   final double _height = 56.0;
   final double _handleWidth = 48.0;
 
-  /// true ตั้งแต่ลากผ่าน threshold ครั้งแรกจน widget ถูก dispose
-  ///
-  /// กัน "ลากซ้ำ" ระหว่างที่ onConfirmation รอบแรกยังทำงานอยู่ (dialog ยัง
-  /// ไม่ปิด) — เดิม _confirmed เป็น true แล้วแต่ handler ยังเรียก
-  /// widget.onConfirmation() ได้อีกถ้าลากใหม่ ⇒ ยืนยันชำระซ้ำ ⇒ สร้าง
-  /// payment intent ซ้ำ
+  // Reset the handle after a failed confirmation so the user can retry.
   bool _confirmationSent = false;
 
   @override
@@ -9869,11 +9906,8 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
                             (_position + details.delta.dx).clamp(0.0, maxDrag);
                       });
                     },
-                    onHorizontalDragEnd: (_) {
+                    onHorizontalDragEnd: (_) async {
                       if (!widget.enabled) return;
-                      // กันลากซ้ำ: ส่งได้ครั้งเดียวจนกว่า widget จะถูก dispose
-                      // (dialog ปัจจุบันปิดแบบ not-dismissible จึง dispose
-                      //  ตอนผู้ใช้ปิดเองหรือ navigate ออก)
                       if (_confirmationSent) return;
                       if (_position >= maxDrag * 0.72) {
                         setState(() {
@@ -9882,7 +9916,18 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
                           _confirmed = true;
                           _confirmationSent = true;
                         });
-                        widget.onConfirmation();
+                        var success = false;
+                        try {
+                          success = await widget.onConfirmation();
+                        } finally {
+                          if (mounted && !success) {
+                            setState(() {
+                              _confirmationSent = false;
+                              _confirmed = false;
+                              _position = 0.0;
+                            });
+                          }
+                        }
                       } else {
                         setState(() {
                           _isDragging = false;
@@ -9931,52 +9976,6 @@ class __SlideToConfirmState extends State<_SlideToConfirm> {
         );
       },
     );
-  }
-}
-
-class SlipMergeParams {
-  final List<Uint8List> images;
-
-  const SlipMergeParams({required this.images});
-}
-
-Future<Uint8List?> _processSlipMergeImages(SlipMergeParams params) async {
-  try {
-    const int maxWidth = 450;
-    final decodedImages = <img.Image>[];
-    var totalHeight = 0;
-
-    for (final bytes in params.images) {
-      var decoded = img.decodeImage(bytes);
-      if (decoded == null) continue;
-
-      if (decoded.width > maxWidth) {
-        decoded = img.copyResize(
-          decoded,
-          width: maxWidth,
-          interpolation: img.Interpolation.nearest,
-        );
-      }
-
-      decodedImages.add(decoded);
-      totalHeight += decoded.height;
-    }
-
-    if (decodedImages.isEmpty) return null;
-
-    final mergedDisplay = img.Image(width: maxWidth, height: totalHeight);
-    img.fill(mergedDisplay, color: img.ColorRgb8(255, 255, 255));
-
-    var currentY = 0;
-    for (final image in decodedImages) {
-      img.compositeImage(mergedDisplay, image, dstX: 0, dstY: currentY);
-      currentY += image.height;
-    }
-
-    return Uint8List.fromList(img.encodeJpg(mergedDisplay, quality: 35));
-  } catch (e) {
-    debugPrint("Error merging images in isolate: $e");
-    return null;
   }
 }
 
@@ -10141,4 +10140,3 @@ void showIOSSaveOverlay(Uint8List bytes, {required bool isEN}) {
   overlay.children.addAll([img, hint, closeBtn]);
   html.document.body?.append(overlay);
 }
-
