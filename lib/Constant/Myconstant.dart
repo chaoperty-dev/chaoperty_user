@@ -45,20 +45,18 @@ class MyConstant {
 
     if (url.contains('/user_test/')) {
       return 'https://chaoperties.com/user_test/';
-    } else if (url.contains('/Choice/user/')) {
-      return 'https://chaoperties.com/Choice/user/';
     } else if (url.contains('/user_intents/')) {
       return 'https://chaoperties.com/user_intents/';
     } else {
       // return 'http://192.168.1.227/';
-      return 'https://chaoperties.com/Choice/user/';
+      return 'https://chaoperties.com/user/';
     }
   }
 
   String get domain => _baseUrl + 'chao_api_user';
   String get domain_img =>
       'https://choice-pics.chaoperties.com/Choice/chao_api';
-  String get domain_chao => 'https://chaoperties.com/Choice/chao_api';
+  String get domain_chao => 'https://chaoperties.com/chao_api';
 
   ///////////------------------------------------------------------------->
   ///
